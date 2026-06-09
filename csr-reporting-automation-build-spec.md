@@ -163,5 +163,5 @@ Rule: reading is allowed, reacting is not — the only output is a delegated ins
 - ✅ **Inquiry Sheet (DONE):** `INQUIRY_SHEET_ID` set to "Client Daily Inquiries". Conversion wired (profile-grain, status-based). Caveat: ~10 tabs with inconsistent headers and no CSR column → conversion is per-profile; add a CSR column to inquiry tabs if per-CSR conversion is wanted.
 - ⬜ **ClickUp retrofit (NOT DONE):** add `CSR`, `Profile`, `Fiverr Order ID` custom fields (workspace-level, required at creation). Field creation is a ClickUp admin/UI step (not exposed via the MCP tools available here). Until done, production attribution is blank.
 - ⬜ **Order Sheet:** no Fiverr Order ID column (it lives only on Fiverr) → per-order linkage uses client-name fallback.
-- ◧ **CSR Pulse patch:** code received (`csr-pulse-main`, single `src/CSRPulse.jsx`). §7b render/PDF extension still to build.
+- ✅ **CSR Pulse patch (BUILT):** `src/CSRPulse.jsx` extended with Conversion + Production dashboard panels and CEO-PDF sections; reads the two sync-written tabs via gviz. `vite build` passes. Conversion shows once the sync runs (no ClickUp needed); Production fills after the retrofit + webhook.
 - ⬜ SLA thresholds per stage; per-profile revenue floors and cost inputs.
