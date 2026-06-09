@@ -1,8 +1,13 @@
 # CSR Reporting Automation — Build Spec (v2)
 
 **Owner:** Abdul Haseeb
-**Status:** Architecture locked. Grounded against the live ClickUp workspace AND the CSR Pulse codebase.
-**Supersedes v1.** Key change: CSR Pulse is already a live, auto-syncing CEO dashboard — not a prototype. The revenue view is already automated. The build is now much smaller.
+**Status:** Built. Grounded against the live ClickUp workspace.
+
+> **v3 architecture change (current):** reporting lives in a **standalone Reports app**
+> (`reports-app/`), NOT as a patch to CSR Pulse. CSR Pulse stays the separate revenue
+> dashboard. The Apps Script pipeline (`*.gs`) writes report tabs to a Google Sheet; the
+> Reports app reads them via gviz. The §7b "extend CSR Pulse" plan below is **superseded** —
+> kept for history. The data design (§3–§6, §8–§12) is unchanged and still applies.
 
 ---
 

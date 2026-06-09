@@ -56,10 +56,18 @@ needs neither ClickUp nor the webhook — it works as soon as this runs.
 
 ---
 
-## Step 4 — CSR Pulse frontend
+## Step 4 — Reports app (this repo, `reports-app/`)
 
-Once the §7b patch is merged, CSR Pulse auto-syncs the two new tabs via its existing
-gviz mechanism and renders the Conversion + Production panels. No extra config.
+The reporting lives in its **own** app — not CSR Pulse (that stays your revenue dashboard).
+
+1. In `reports-app/src/Reports.jsx`, set `REPORTS.workbookUrl` to the workbook the sync
+   writes to (Step 3's `OUTPUT_WORKBOOK_ID`). Share that workbook **"Anyone with the link can view."**
+2. `cd reports-app && npm install && npm run build`, then deploy `dist/` to Vercel (same as CSR Pulse).
+3. Open it → Overview shows the exception line; Conversion + Designers populate immediately;
+   CSR tab fills once Step 1 is done.
+
+> Optional clean separation: create a dedicated "CSR Reports" Google Sheet, set both the
+> sync's `OUTPUT_WORKBOOK_ID` and the app's `REPORTS.workbookUrl` to it. Defaults work without this.
 
 ---
 
