@@ -616,6 +616,7 @@ export default function CSRPulse({ onLogout }) {
   const [orders, setOrders] = useState([]);
   const [conversion, setConversion] = useState([]); // 'Profile Conversion' tab (profile-grain, from Inquiry sheet)
   const [production, setProduction] = useState([]);  // 'CSR Production' tab (CSR×Profile, from ClickUp)
+  const [designerProd, setDesignerProd] = useState([]); // 'Designer Production' tab (LIVE from ClickUp, no retrofit)
   const [roster, setRoster] = useState(DEFAULT_ROSTER);
   const [profiles, setProfiles] = useState(DEFAULT_PROFILES);
   const [shiftHistory, setShiftHistory] = useState([]); // [{csrId, fromShift, toShift, changedOn}]
@@ -1452,12 +1453,13 @@ export default function CSRPulse({ onLogout }) {
   // Management workbook). Returns [] for a tab that doesn't exist yet — never throws.
   const fetchProductionAndConversion = async () => {
     const ids = SHARED_SYNC.workbookUrls.map(extractSheetId).filter(Boolean);
-    let conversion = [], production = [];
+    let conversion = [], production = [], designer = [];
     for (const id of ids) {
       if (!conversion.length) conversion = await fetchAuxTab(id, 'Profile Conversion');
       if (!production.length) production = await fetchAuxTab(id, 'CSR Production');
+      if (!designer.length) designer = await fetchAuxTab(id, 'Designer Production');
     }
-    return { conversion, production };
+    return { conversion, production, designer };
   };
 
   // Core fetch — pulls every profile tab from the given workbook sheet IDs and
@@ -1595,9 +1597,10 @@ export default function CSRPulse({ onLogout }) {
       // Aux tabs (conversion + production) are independent of orders. Only overwrite when
       // present, so a missing/empty tab never wipes existing data.
       try {
-        const { conversion: convRows, production: prodRows } = await fetchProductionAndConversion();
+        const { conversion: convRows, production: prodRows, designer: desRows } = await fetchProductionAndConversion();
         if (convRows.length) setConversion(convRows);
         if (prodRows.length) setProduction(prodRows);
+        if (desRows.length) setDesignerProd(desRows);
       } catch (_) { /* aux tabs are best-effort */ }
       if (allRows.length === 0 && tabsRead.every(t => !t.matched)) {
         // Don't wipe any cached data on a failed pull.
@@ -2064,6 +2067,46 @@ export default function CSRPulse({ onLogout }) {
         }
         if (col === 1 || i === reportProfileBreak.length - 1) y += 11;
       });
+
+      // ═══════════════════════════════════════════════════════════════
+      //  DESIGNER PRODUCTION — by designer (live from ClickUp)
+      // ═══════════════════════════════════════════════════════════════
+      if (designerProd && designerProd.length) {
+        const nD = (v) => parseFloat(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
+        const dRows = designerProd
+          .map((r) => ({ designer: r.Designer || '', tasks: nD(r.Tasks), inRev: nD(r['In Revision']), completed: nD(r.Completed), sla: nD(r['SLA Breaches']) }))
+          .filter((r) => r.designer)
+          .sort((a, b) => b.tasks - a.tasks);
+        if (dRows.length) {
+          ensureSpace(28 + dRows.length * 7.5);
+          sectionHeader('Production', 'Designer throughput', 'from ClickUp');
+          const drawDHead = () => {
+            setText(MUTED); doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setCharSpace(0.6);
+            doc.text('DESIGNER', M, y + 3);
+            doc.text('TASKS', M + 105, y + 3, { align: 'right' });
+            doc.text('IN REV', M + 135, y + 3, { align: 'right' });
+            doc.text('DONE', M + 162, y + 3, { align: 'right' });
+            doc.text('SLA', W - M, y + 3, { align: 'right' });
+            doc.setCharSpace(0); hairline(y + 5); y += 8;
+          };
+          drawDHead();
+          dRows.forEach((r) => {
+            if (y + 7.5 > PAGE_BOTTOM) { newPage(); sectionHeader('Production', 'Designer throughput (cont.)', 'from ClickUp'); drawDHead(); }
+            setText(INK); doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+            doc.text(truncate(r.designer, 30), M, y + 4);
+            setText(BODY); doc.setFontSize(8.5);
+            doc.text(fmtNum(r.tasks), M + 105, y + 4, { align: 'right' });
+            setText(r.inRev > 0 ? VIOLET : BODY);
+            doc.text(fmtNum(r.inRev), M + 135, y + 4, { align: 'right' });
+            setText(MINT);
+            doc.text(fmtNum(r.completed), M + 162, y + 4, { align: 'right' });
+            setText(r.sla > 0 ? AMBER : MUTED); doc.setFont('helvetica', r.sla > 0 ? 'bold' : 'normal');
+            doc.text(fmtNum(r.sla), W - M, y + 4, { align: 'right' });
+            hairline(y + 7.5); y += 7.5;
+          });
+          y += 6;
+        }
+      }
 
       // ═══════════════════════════════════════════════════════════════
       //  CONVERSION — inquiries → orders, by profile (from the Inquiry sheet)
@@ -2636,6 +2679,54 @@ export default function CSRPulse({ onLogout }) {
                       })}
                     </div>
                   </>
+                );
+              })()}
+            </div>
+
+            {/* ── Designer Production · LIVE from ClickUp (no retrofit) ── */}
+            <div className="mt-8">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-sm font-semibold" style={{ color: C.text }}>
+                  Designer Production <span className="font-normal" style={{ color: C.textDim }}>· throughput · revision load · SLA</span>
+                </h3>
+                <span className="text-[10px] uppercase tracking-wider" style={{ color: C.textDim }}>by designer · ClickUp (live)</span>
+              </div>
+              {designerProd.length === 0 ? (
+                <div className="rounded-xl p-5 text-xs" style={{ background: C.bgCard, border: `1px solid ${C.border}`, color: C.textMuted }}>
+                  No designer data yet — run the Apps Script sync; it writes the Designer Production tab straight from ClickUp. No retrofit needed.
+                </div>
+              ) : (() => {
+                const n = (v) => parseFloat(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
+                const rows = designerProd
+                  .map((r) => ({ designer: r.Designer || '', tasks: n(r.Tasks), inProgress: n(r['In Progress']), inRevision: n(r['In Revision']), awaiting: n(r['Awaiting Client']), completed: n(r.Completed), revisions: n(r.Revisions), sla: n(r['SLA Breaches']) }))
+                  .filter((r) => r.designer)
+                  .sort((a, b) => b.tasks - a.tasks);
+                return (
+                  <div className="overflow-x-auto rounded-xl" style={{ border: `1px solid ${C.border}` }}>
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr style={{ background: C.bgRaised }}>
+                          {['Designer', 'Tasks', 'In Progress', 'In Revision', 'Awaiting', 'Completed', 'Revisions', 'SLA'].map((h, i) => (
+                            <th key={h} className={`px-3 py-2 font-semibold uppercase ${i < 1 ? 'text-left' : 'text-right'}`} style={{ color: C.textDim, fontSize: '10px', letterSpacing: '0.1em' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((r, i) => (
+                          <tr key={i} style={{ borderTop: `1px solid ${C.border}` }}>
+                            <td className="px-3 py-2" style={{ color: C.text }}>{r.designer}</td>
+                            <td className="px-3 py-2 text-right font-mono" style={{ color: C.text }}>{r.tasks}</td>
+                            <td className="px-3 py-2 text-right font-mono" style={{ color: C.textMuted }}>{r.inProgress}</td>
+                            <td className="px-3 py-2 text-right font-mono" style={{ color: r.inRevision > 0 ? C.violetGlow : C.textMuted }}>{r.inRevision}</td>
+                            <td className="px-3 py-2 text-right font-mono" style={{ color: C.textMuted }}>{r.awaiting}</td>
+                            <td className="px-3 py-2 text-right font-mono" style={{ color: C.mint }}>{r.completed}</td>
+                            <td className="px-3 py-2 text-right font-mono" style={{ color: C.textMuted }}>{r.revisions}</td>
+                            <td className="px-3 py-2 text-right font-mono" style={{ color: r.sla > 0 ? C.coral : C.textMuted }}>{r.sla}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 );
               })()}
             </div>

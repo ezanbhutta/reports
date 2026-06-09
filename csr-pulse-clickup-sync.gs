@@ -33,7 +33,8 @@ const CONFIG = {
   ],
   INQUIRY_SHEET_ID: '1Pp6RhsR96FzGfB3MV--CYj7Idja2-iyF7BNPhJ9Md_A', // "Client Daily Inquiries" (verified)
   OUTPUT_WORKBOOK_ID: '1kHw1DB7r4RhgBpF4l4CtapBdgtozJwJXtF-egVBZGUE', // CSR Pulse already syncs this one
-  PRODUCTION_TAB: 'CSR Production',     // CSR × Profile (ClickUp) — gviz-readable by CSR Pulse
+  DESIGNER_TAB: 'Designer Production', // Per-designer (ClickUp) — LIVE today, no retrofit needed
+  PRODUCTION_TAB: 'CSR Production',     // CSR × Profile (ClickUp) — needs the retrofit fields
   CONVERSION_TAB: 'Profile Conversion', // Profile-level (inquiry sheet) — gviz-readable by CSR Pulse
 
   // The 10 profiles = the tab names in each workbook (must match exactly across ClickUp + sheets)
@@ -98,7 +99,8 @@ function runDailySync() {
 
   // 1. ClickUp production, keyed CSR x Profile. Best-effort: if ClickUp isn't set up yet
   //    (no token / no retrofit), conversion + orders must still publish, so this can't abort.
-  const prod = {}; // key "Profile||CSR" -> {revisions, deliveries, slaBreaches}
+  const prod = {};        // "Profile||CSR" -> {...}  (needs the retrofit to be non-blank)
+  const byDesigner = {};  // designer -> {...}  ← available NOW; the space is one list per designer
   let taskCount = 0;
   try {
     const tasks = fetchSpaceTasks_(CONFIG.CLICKUP_SPACE_ID, since);
@@ -106,24 +108,29 @@ function runDailySync() {
     // True revision ROUNDS come from the webhook event log (see csr-pulse-clickup-webhook.gs).
     const txn = CONFIG.REVISION_METHOD === 'webhook' ? readTransitionCounts_() : null;
     tasks.forEach(t => {
+      // time_in_status drives SLA + (in fallback modes) the binary flags. One fetch, reused.
+      const hist = fetchTimeInStatus_(t.id);
+      Utilities.sleep(CONFIG.THROTTLE_MS);
+
+      // ── CSR × Profile grain (custom fields; blank until the retrofit) ──
       const csr = cfValue_(t, CONFIG.CF_CSR);
       const profile = cfValue_(t, CONFIG.CF_PROFILE);
       const key = (profile || '—') + '||' + (csr || '—');
       if (!prod[key]) prod[key] = { revisions: 0, deliveries: 0, slaBreaches: 0 };
-
-      // time_in_status drives SLA + (in fallback modes) the binary flags.
-      const hist = fetchTimeInStatus_(t.id);
-      Utilities.sleep(CONFIG.THROTTLE_MS);
       if (txn) {
         const c = txn[t.id] || { revisions: 0, deliveries: 0 };
-        prod[key].revisions  += c.revisions;   // exact rounds from the event log
-        prod[key].deliveries += c.deliveries;  // exact client deliveries from the event log
+        prod[key].revisions  += c.revisions;
+        prod[key].deliveries += c.deliveries;
       } else {
-        const r = countDeliveries_(t, hist);   // binary flags (status_flag / tag)
+        const r = countDeliveries_(t, hist);
         prod[key].deliveries += r.deliveries;
         prod[key].revisions  += r.revisions;
       }
-      if (slaBreached_(hist)) prod[key].slaBreaches += 1;
+      const breached = slaBreached_(hist);
+      if (breached) prod[key].slaBreaches += 1;
+
+      // ── Designer grain (list name = designer; LIVE today, no retrofit needed) ──
+      accrueDesigner_(byDesigner, t, hist, txn, breached);
     });
   } catch (e) {
     Logger.log('ClickUp pull skipped/failed (' + e + '). Conversion + orders still publish.');
@@ -135,10 +142,13 @@ function runDailySync() {
   //     'Order Status' (Placed / Not Placed / Direct Order). conv = placed / total.
   const conversion = countInquiriesByProfile_(CONFIG.INQUIRY_SHEET_ID, since);
 
-  // 3. Write two tabs (different grains): CSR×Profile production + by-profile conversion.
+  // 3. Write the tabs (three grains): designer production (live), CSR×Profile production
+  //    (retrofit), and by-profile conversion (live).
+  writeDesignerTab_(byDesigner);
   writeProductionTab_(prod, orders);
   writeConversionTab_(conversion);
-  Logger.log('Sync done. ClickUp tasks: ' + taskCount + '; profiles w/ inquiries: ' + Object.keys(conversion).length);
+  Logger.log('Sync done. ClickUp tasks: ' + taskCount + '; designers: ' + Object.keys(byDesigner).length +
+             '; profiles w/ inquiries: ' + Object.keys(conversion).length);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -220,6 +230,31 @@ function countDeliveries_(task, hist) {
   const delivered   = CONFIG.CLIENT_DELIVERY_STATUSES.map(lc).some(s => present[s]) ? 1 : 0;
   const everRevised = (CONFIG.REVISION_STATUSES || ['revision']).map(lc).some(s => present[s]) ? 1 : 0;
   return { deliveries: delivered, revisions: everRevised };
+}
+
+// Designer-grain production — keyed by the LIST name (the space is one list per designer),
+// so it works TODAY with zero retrofit. Buckets by current status + counts revisions
+// (exact from the webhook log when present, else binary "ever revised").
+function accrueDesigner_(byDesigner, t, hist, txn, breached) {
+  const designer = (t.list && t.list.name ? String(t.list.name).trim() : '') ||
+                   (t.assignees && t.assignees[0] && t.assignees[0].username) || '—';
+  if (!byDesigner[designer]) byDesigner[designer] =
+    { tasks: 0, inProgress: 0, inRevision: 0, awaitingClient: 0, completed: 0, revisions: 0, slaBreaches: 0 };
+  const D = byDesigner[designer];
+  const st = (t.status && t.status.status || '').toLowerCase();
+  D.tasks += 1;
+  if (st === 'revision') D.inRevision += 1;
+  else if (st === 'deliver to client' || st === 'client response' || st === 'revision complete') D.awaitingClient += 1;
+  else if (st === 'complete' || st === 'completed' || st === 'complete projects') D.completed += 1;
+  else D.inProgress += 1; // pickup your projects / in progress / pending
+  if (txn) {
+    D.revisions += (txn[t.id] ? txn[t.id].revisions : 0);
+  } else {
+    const present = {};
+    (hist && hist.status_history ? hist.status_history : []).forEach(h => { present[(h.status || '').toLowerCase()] = true; });
+    if (present['revision']) D.revisions += 1;
+  }
+  if (breached) D.slaBreaches += 1;
 }
 
 /**
@@ -409,6 +444,20 @@ function freshTab_(name) {
   if (!sh) sh = ss.insertSheet(name);
   sh.clearContents();
   return sh;
+}
+
+// Designer-grain production (LIVE today — no retrofit). Sorted by load (task count).
+function writeDesignerTab_(byDesigner) {
+  const sh = freshTab_(CONFIG.DESIGNER_TAB);
+  const header = ['Designer','Tasks','In Progress','In Revision','Awaiting Client','Completed','Revisions','SLA Breaches','Updated'];
+  const out = [header];
+  const now = new Date();
+  Object.keys(byDesigner).sort((a, b) => byDesigner[b].tasks - byDesigner[a].tasks).forEach(d => {
+    const x = byDesigner[d];
+    out.push([d, x.tasks, x.inProgress, x.inRevision, x.awaitingClient, x.completed, x.revisions, x.slaBreaches, now]);
+  });
+  sh.getRange(1, 1, out.length, header.length).setValues(out);
+  Logger.log('Wrote ' + (out.length - 1) + ' designer rows to "' + CONFIG.DESIGNER_TAB + '".');
 }
 
 // ════════════════════════════════════════════════════════════════
