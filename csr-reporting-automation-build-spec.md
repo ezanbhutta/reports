@@ -104,6 +104,12 @@ Lives in the Order Management workbook (browser can't call ClickUp: CORS + key e
 4. Read the **Inquiry Sheet**; compute conversion per CSR × Profile (orders ÷ inquiries).
 5. Write a **`Production & Conversion`** tab into the workbook (standardized headers, gviz-readable), keyed `CSR × Profile × Fiverr Order ID`.
 
+### 7a-bis. ClickUp status webhook — the event log (CHOSEN for revision rounds)
+`csr-pulse-clickup-webhook.gs`, deployed as a Web App. ClickUp POSTs every `taskStatusUpdated` event; we append `{timestamp, task_id, from, to, user}` to a **`Status Transitions`** tab. This **is** the event log the whole system was missing — revision rounds = entries into `revision`, client deliveries = entries into `deliver to client`, both **exact**. The sync reads it via `readTransitionCounts_()` when `REVISION_METHOD='webhook'`.
+- Forward-only: counts past events only from deployment day; pre-existing rounds aren't backfilled.
+- Auth: a `?token=` shared secret in the endpoint URL (Apps Script web apps can't read the `X-Signature` header to verify ClickUp's HMAC).
+- Setup: Script Property `WEBHOOK_TOKEN`, deploy web app, run `registerClickUpWebhook()`.
+
 ### 7b. CSR Pulse extension — small, reuses everything
 - Add the new tab to its existing gviz sync (same mechanism already in `SHARED_SYNC` / `autoSyncFromGSheets`).
 - Render conversion, revisions-per-order, and SLA panels alongside the existing revenue panels.
@@ -145,7 +151,7 @@ Rule: reading is allowed, reacting is not — the only output is a delegated ins
 ## 11. Rollout
 
 1. **Week 1 (near-zero build):** add the 3 ClickUp fields (required); confirm the Inquiry Sheet structure; stop CSRs typing production lines in chat.
-2. **Week 2:** Apps Script — ClickUp pull + revision count + conversion → `Production & Conversion` tab. Validate revision counts against a known task; pin the client-delivery status set.
+2. **Week 2:** deploy the status webhook (`csr-pulse-clickup-webhook.gs`) so the `Status Transitions` event log starts accruing immediately (revision rounds are forward-only, so the sooner it's live the better). Then the sync Apps Script — ClickUp pull + conversion + webhook-derived rounds → `Production & Conversion` tab. Validate against a known task.
 3. **Week 3:** extend CSR Pulse to sync + render the new tab and add the PDF rows. Kill the chat report.
 
 ---
@@ -153,7 +159,7 @@ Rule: reading is allowed, reacting is not — the only output is a delegated ins
 ## 12. Open items to confirm at build
 
 - ✅ **ClickUp status names (RESOLVED, Jun 2026):** live space uses `pickup your projects → deliver to client → client response → revision → revision complete → complete`. Pinned in the script.
-- ⚠️ **Revision-ROUND count (NEEDS A DECISION):** `time_in_status` is **aggregate** (one row per status) — it gives binary `everRevised?` + time-in-status, NOT round counts. Choose: `webhook` (recommended, accurate, forward-only), `attachments` (approximate), or accept the binary flag. SLA/time-in-status signals DO work cleanly from the API.
+- ✅ **Revision-ROUND count (DECIDED → webhook):** `time_in_status` is aggregate (no round counts), so rounds come from a ClickUp status webhook → `Status Transitions` event log (`csr-pulse-clickup-webhook.gs`, §7a-bis). Exact + forward-only. SLA/time-in-status still come from the API.
 - ✅ **Inquiry Sheet (CONFIRMED to exist):** provide its Google Sheet ID for `INQUIRY_SHEET_ID` in the script (still `TODO_PASTE_INQUIRY_SHEET_ID`).
 - ⬜ **ClickUp retrofit (NOT DONE):** add `CSR`, `Profile`, `Fiverr Order ID` custom fields (workspace-level, required at creation). Field creation is a ClickUp admin/UI step (not exposed via the MCP tools available here). Until done, production attribution is blank.
 - ⬜ **Order Sheet:** confirm a Fiverr Order ID column exists (for per-order ClickUp linkage / de-dup).

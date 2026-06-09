@@ -52,7 +52,9 @@ const CONFIG = {
   // To count true rounds, pick a REVISION_METHOD (see §Revisions; 'webhook' recommended).
   REVISION_STATUSES: ['revision'],                 // presence => task hit revision (binary flag)
   CLIENT_DELIVERY_STATUSES: ['deliver to client'], // presence => task was delivered (binary flag)
-  REVISION_METHOD: 'status_flag',                  // 'status_flag' (default, binary) | 'tag' | 'attachments' | 'webhook'
+  REVISION_METHOD: 'webhook',                      // CHOSEN: true rounds from the event log (csr-pulse-clickup-webhook.gs).
+                                                   //   Reads 0 until the webhook is deployed + events accrue (forward-only).
+                                                   //   Fallbacks: 'status_flag' (binary) | 'tag' | 'attachments'.
 
   // SLA thresholds (hours) for the stalled-production leak — adjust to your standard
   SLA_TO_DO_HOURS: 24,           // 'pickup your projects' — assigned but not started
@@ -94,18 +96,27 @@ function runDailySync() {
 
   // 1. ClickUp production, keyed CSR x Profile
   const tasks = fetchSpaceTasks_(CONFIG.CLICKUP_SPACE_ID, since);
-  const prod = {}; // key "Profile||CSR" -> {revisions, deliveries, slaBreaches, orders:0}
+  // True revision ROUNDS come from the webhook event log (see csr-pulse-clickup-webhook.gs).
+  const txn = CONFIG.REVISION_METHOD === 'webhook' ? readTransitionCounts_() : null;
+  const prod = {}; // key "Profile||CSR" -> {revisions, deliveries, slaBreaches}
   tasks.forEach(t => {
     const csr = cfValue_(t, CONFIG.CF_CSR);
     const profile = cfValue_(t, CONFIG.CF_PROFILE);
     const key = (profile || '—') + '||' + (csr || '—');
     if (!prod[key]) prod[key] = { revisions: 0, deliveries: 0, slaBreaches: 0 };
 
+    // time_in_status drives SLA + (in fallback modes) the binary flags.
     const hist = fetchTimeInStatus_(t.id);
     Utilities.sleep(CONFIG.THROTTLE_MS);
-    const { deliveries, revisions } = countDeliveries_(t, hist);
-    prod[key].deliveries += deliveries;
-    prod[key].revisions  += revisions;
+    if (txn) {
+      const c = txn[t.id] || { revisions: 0, deliveries: 0 };
+      prod[key].revisions  += c.revisions;   // exact rounds from the event log
+      prod[key].deliveries += c.deliveries;  // exact client deliveries from the event log
+    } else {
+      const r = countDeliveries_(t, hist);   // binary flags (status_flag / tag)
+      prod[key].deliveries += r.deliveries;
+      prod[key].revisions  += r.revisions;
+    }
     if (slaBreached_(hist)) prod[key].slaBreaches += 1;
   });
 
@@ -197,6 +208,33 @@ function countDeliveries_(task, hist) {
   const delivered   = CONFIG.CLIENT_DELIVERY_STATUSES.map(lc).some(s => present[s]) ? 1 : 0;
   const everRevised = (CONFIG.REVISION_STATUSES || ['revision']).map(lc).some(s => present[s]) ? 1 : 0;
   return { deliveries: delivered, revisions: everRevised };
+}
+
+/**
+ * REVISION_METHOD='webhook': read the "Status Transitions" event log written by
+ * csr-pulse-clickup-webhook.gs and count, per task, the number of entries INTO a
+ * revision status (= true revision rounds) and into a delivery status (= client
+ * deliveries). Forward-only: only transitions logged since the webhook was deployed.
+ * Returns { taskId: { revisions, deliveries } }.
+ */
+function readTransitionCounts_() {
+  const counts = {};
+  let ss;
+  try { ss = SpreadsheetApp.openById(CONFIG.OUTPUT_WORKBOOK_ID); } catch (e) { Logger.log('webhook log: cannot open workbook'); return counts; }
+  const sh = ss.getSheetByName('Status Transitions');
+  if (!sh || sh.getLastRow() < 2) { Logger.log('webhook log: no "Status Transitions" rows yet'); return counts; }
+  const rows = sh.getDataRange().getValues(); // [Timestamp, Task ID, Event, From, To, User]
+  const revSet = (CONFIG.REVISION_STATUSES || ['revision']).map(s => s.toLowerCase());
+  const delSet = CONFIG.CLIENT_DELIVERY_STATUSES.map(s => s.toLowerCase());
+  for (let i = 1; i < rows.length; i++) {
+    const taskId = String(rows[i][1] || '').trim();
+    const to = String(rows[i][4] || '').toLowerCase().trim();
+    if (!taskId) continue;
+    if (!counts[taskId]) counts[taskId] = { revisions: 0, deliveries: 0 };
+    if (revSet.indexOf(to) !== -1) counts[taskId].revisions += 1;
+    if (delSet.indexOf(to) !== -1) counts[taskId].deliveries += 1;
+  }
+  return counts;
 }
 
 function slaBreached_(hist) {
