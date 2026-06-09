@@ -89,7 +89,13 @@ const ROSTER = [
   ['Zubair','Night'],['Ezan','Night'],
 ];
 // TODO (optional but recommended): copy CSR_ALIASES from CSRPulse.jsx so name variants match.
-const CSR_ALIASES = { /* e.g. 'basit':'Abdul Basit', 'hasnain':'Hasnain Gillani' */ };
+// Name-variant map (mirrors CSR Pulse), keyed alias -> canonical ROSTER name.
+const CSR_ALIASES = {
+  'ali': 'Ali Shakeel', 'shakeel': 'Ali Shakeel',
+  'basit': 'Abdul Basit', 'abdul': 'Abdul Basit',
+  'gillani': 'Hasnain Gillani', 'hasnain': 'Hasnain Gillani', 'husnain': 'Hasnain Gillani',
+  'hasan': 'Hassan', 'hassaan': 'Hassan',
+};
 
 // ════════════════════════════════════════════════════════════════
 // MAIN
