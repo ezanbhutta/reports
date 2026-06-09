@@ -62,15 +62,18 @@ Everything to build is these two, surfaced inside the existing dashboard.
 
 ---
 
-## 5. Live ClickUp reality (verified)
+## 5. Live ClickUp reality (re-verified Jun 2026 via direct ClickUp API)
 
-- **Live production space:** `Designers Team` (`90187090116`). Work sits in per-designer lists; task title = client name; assignee = designer. Designer attribution is structural.
-- **Dead scaffolding (ignore):** the `Logo design` stage-pipeline space — test tasks only.
-- **Real status set:** `to do → client response → pending → delivered → cancelled` (plus custom statuses in history).
-- **Status history is rich** — a sampled revision task showed 10+ transitions. Revision counting from the log is viable.
-- **Package/QA state lives in tags** (`2 concepts`, `premium pack`, `approved qa`, `revision`, `delivered`); the `Deliverables` custom field exists but is ignored.
-- **No CSR field, no Profile field, no Order Value, no Fiverr Order ID.** Must be added.
-- **Hygiene risk:** heavy `cancelled` volume, inconsistent tagging. Enforce discipline before trusting numbers.
+- **Live production space:** `Designers Team` (`90187090116`) — confirmed live: 100+ current tasks with June 2026 due dates, client names matching the CSR daily reports (Ironhide Notary, 3D spools, SushiLab.ai, Axis Technologies, YoYu Group, Eden Studios, Thriving Kingdom Marriage…). Work sits in per-designer lists (Md Rashadul Haque, Amin Ullah, MD Rezaul, Nimeazad, Khubaib, Hamid, Owais Nadeem/Rehan, Abiha Imran, Atta Razaq, M. Tariq, Syed Mubahat, Abdullah, Md Dulal, Rejaul Karim, Shaoor Haider…); task title = client name; assignee = designer. Designer attribution is structural.
+- **Real status set (CORRECTED):** `pickup your projects → deliver to client → client response → revision → revision complete → complete`. The earlier locked value (`to do → client response → pending → delivered → cancelled`) was wrong — it came from the **stale** Design Department space, not the live floor.
+- **Revision signal:** explicit `revision` status — each ENTRY into `revision` = one revision round (cleaner than delivery-minus-one). Deliveries = entries into `deliver to client`. Pinned in the script.
+- **Status history is chronological & rich** — Zetted exposed 10+ ordered transitions (`status_history` indices 0–9). Revision counting from the log is viable **via raw REST**. ⚠️ The ClickUp MCP `time_in_status` tool fails output validation on `null` status colors; the Apps Script's raw `UrlFetchApp` call bypasses this. ✓
+- **Parallel/stale structures (ignore):**
+  - `Design Department` (`90188283242`) — a stage pipeline (To-Do → Delivery → Feedback & Revisions → Final). Last meaningful activity ~Jan 2026; now collecting test tasks ("logo test 1"). **Zetted lives here** and is NOT representative of the live floor. Status set here: `to do → pending → delivered → complete projects/completed`.
+  - `Logo design` (`90188148883`) — dead: 8 test tasks ("Subtasks Test", "Haider", "Alee").
+- **Package state lives in tags** (`2/3/4/5 concepts`, `basic/premium/elite/standard pack`, `social media kit`, `complete branding kit`, `approved qa`, `revision`, `delivered`, `my order`); the `Deliverables` custom field exists (Designers Team space) but is unused.
+- **No CSR field, no Profile field, no Order Value, no Fiverr Order ID** anywhere — workspace, space, and list custom fields all returned empty. The retrofit (§6) is genuinely required; until then production rows attribute to blank.
+- **Hygiene risk (confirmed):** duplicate tasks for one client across designers (e.g. `OOVERT` ×3 tagged `my order`, `VisaTalents` ×2), test tasks leaking into live lists, inconsistent tags. The `Fiverr Order ID` join key matters for **de-duplication**, not just the revenue join.
 
 ---
 
@@ -149,7 +152,10 @@ Rule: reading is allowed, reacting is not — the only output is a delegated ins
 
 ## 12. Open items to confirm at build
 
-- **Inquiry Sheet:** does it exist as a structured, gviz-readable sheet with CSR + Profile + buyer username + date? Conversion depends on it. If inquiries live only in chat today, this is the one new sheet to stand up.
-- **Order Sheet:** is there a Fiverr Order ID column (for per-order ClickUp linkage)?
-- Exact ClickUp status name(s) representing "delivered to client" (pins the revision count).
-- SLA thresholds per stage; per-profile revenue floors and cost inputs.
+- ✅ **ClickUp status names (RESOLVED, Jun 2026):** live space uses `pickup your projects → deliver to client → client response → revision → revision complete → complete`. Revision count = entries into `revision`; delivery count = entries into `deliver to client`. Pinned in the script.
+- ✅ **Revision-count feasibility (RESOLVED):** status history is chronological → viable via raw REST. (The ClickUp MCP `time_in_status` tool has a null-color validation bug; the Apps Script bypasses it with `UrlFetchApp`.)
+- ✅ **Inquiry Sheet (CONFIRMED to exist):** provide its Google Sheet ID for `INQUIRY_SHEET_ID` in the script (still `TODO_PASTE_INQUIRY_SHEET_ID`).
+- ⬜ **ClickUp retrofit (NOT DONE):** add `CSR`, `Profile`, `Fiverr Order ID` custom fields (workspace-level, required at creation). Field creation is a ClickUp admin/UI step (not exposed via the MCP tools available here). Until done, production attribution is blank.
+- ⬜ **Order Sheet:** confirm a Fiverr Order ID column exists (for per-order ClickUp linkage / de-dup).
+- ⬜ **CSR Pulse patch:** the CSR Pulse codebase is not in this repo — provide it (or its repo) to build the §7b render/PDF extension.
+- ⬜ SLA thresholds per stage; per-profile revenue floors and cost inputs.

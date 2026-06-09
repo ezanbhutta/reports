@@ -21,7 +21,9 @@
 const CONFIG = {
   // ClickUp
   CLICKUP_TEAM_ID: '9018453434',        // workspace/team id (verified)
-  CLICKUP_SPACE_ID: '90187090116',      // Designers Team — live production space (verified)
+  CLICKUP_SPACE_ID: '90187090116',      // Designers Team — LIVE production space (re-verified Jun 2026: 100+ current tasks)
+  // Ignore: 90188283242 (Design Department — stale ~Jan 2026, where Zetted lives) and
+  //         90188148883 (Logo design — dead, only test tasks).
 
   // Sheets (workbook IDs)
   ORDER_SHEET_IDS: [
@@ -41,13 +43,18 @@ const CONFIG = {
   CF_PROFILE: 'Profile',
   CF_ORDER_ID: 'Fiverr Order ID',
 
-  // Revision counting (see §Revisions). Each ENTRY into one of these statuses = a client delivery.
-  CLIENT_DELIVERY_STATUSES: ['client response'],   // confirm via debugClickUpStatuses()
+  // ── Revision counting (status names re-verified against LIVE space 90187090116, Jun 2026) ──
+  // Live status flow: pickup your projects → deliver to client → client response
+  //                   → revision → revision complete → complete
+  // The spec's earlier guess (to do / delivered / client response) came from the STALE
+  // Design Department space. On the live floor, each ENTRY into 'revision' = one revision round.
+  REVISION_STATUSES: ['revision'],                 // count entries into these = revision rounds (recommended)
+  CLIENT_DELIVERY_STATUSES: ['deliver to client'], // count entries into these = client deliveries
   REVISION_METHOD: 'history',                       // 'history' (preferred) | 'tag' (crude fallback)
 
   // SLA thresholds (hours) for the stalled-production leak — adjust to your standard
-  SLA_TO_DO_HOURS: 24,           // assigned but not started
-  SLA_CLIENT_RESPONSE_HOURS: 48, // delivered but no movement
+  SLA_TO_DO_HOURS: 24,           // 'pickup your projects' — assigned but not started
+  SLA_CLIENT_RESPONSE_HOURS: 48, // 'client response' — delivered but no movement
 
   // Column name candidates in the sheets (case-insensitive, first match wins)
   COLS: {
@@ -172,10 +179,18 @@ function countDeliveries_(task, hist) {
     return { deliveries: hasRev ? 2 : 1, revisions: hasRev ? 1 : 0 }; // crude floor
   }
   const arr = hist && hist.status_history ? hist.status_history : [];
-  const wanted = CONFIG.CLIENT_DELIVERY_STATUSES.map(s => s.toLowerCase());
-  let deliveries = 0;
-  arr.forEach(h => { if (wanted.indexOf((h.status || '').toLowerCase()) !== -1) deliveries += 1; });
-  return { deliveries: deliveries, revisions: Math.max(0, deliveries - 1) };
+  const lc = s => (s || '').toLowerCase();
+  const deliveryStatuses = CONFIG.CLIENT_DELIVERY_STATUSES.map(lc);
+  const revisionStatuses = (CONFIG.REVISION_STATUSES || []).map(lc);
+  let deliveries = 0, revisionEntries = 0;
+  arr.forEach(h => {
+    const st = lc(h.status);
+    if (deliveryStatuses.indexOf(st) !== -1) deliveries += 1;
+    if (revisionStatuses.indexOf(st) !== -1) revisionEntries += 1;
+  });
+  // Prefer the explicit 'revision' status when configured; else fall back to deliveries-1.
+  const revisions = revisionStatuses.length ? revisionEntries : Math.max(0, deliveries - 1);
+  return { deliveries: deliveries, revisions: revisions };
 }
 
 function slaBreached_(hist) {
@@ -184,8 +199,8 @@ function slaBreached_(hist) {
   if (!cur || !cur.total_time) return false;
   const status = (cur.status || '').toLowerCase();
   const hours = (cur.total_time.by_minute || 0) / 60;
-  if (status === 'to do' && hours > CONFIG.SLA_TO_DO_HOURS) return true;
-  if (status === 'client response' && hours > CONFIG.SLA_CLIENT_RESPONSE_HOURS) return true;
+  if (status === 'pickup your projects' && hours > CONFIG.SLA_TO_DO_HOURS) return true; // assigned, not started
+  if (status === 'client response' && hours > CONFIG.SLA_CLIENT_RESPONSE_HOURS) return true; // delivered, awaiting client
   return false;
 }
 
@@ -305,14 +320,16 @@ function debugClickUpStatuses() {
   tasks.forEach(t => seen[(t.status && t.status.status) || '?'] = true);
   Logger.log('DISTINCT CURRENT STATUSES: ' + Object.keys(seen).join(', '));
 
-  // Inspect one known multi-revision task's history shape
-  const sample = '86evvxjrv'; // Zetted (tagged "revision")
+  // Inspect a LIVE multi-revision task's history shape (live space 90187090116).
+  // 86exdhp1v = "Thriving Kingdom Marriage" (status 'revision' at validation time). Swap if closed.
+  const sample = '86exdhp1v';
   const hist = fetchTimeInStatus_(sample);
   if (hist && hist.status_history) {
     const seq = hist.status_history.map(h => h.status);
-    Logger.log('Zetted status_history (' + seq.length + ' entries): ' + seq.join(' -> '));
-    Logger.log('If "client response" appears MULTIPLE times above, revision counting works. ' +
-               'If only ONCE, status_history is aggregate -> set REVISION_METHOD="tag".');
+    Logger.log('Sample status_history (' + seq.length + ' entries): ' + seq.join(' -> '));
+    Logger.log('Number of "revision" entries above = revision rounds. If each status appears ' +
+               'once-per-visit (chronological), counting works. If aggregated to one row per ' +
+               'status, set REVISION_METHOD="tag".');
   } else {
     Logger.log('No status_history returned. Enable the "Total time in Status" ClickApp, or use REVISION_METHOD="tag".');
   }
