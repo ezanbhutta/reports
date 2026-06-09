@@ -30,6 +30,7 @@ const WEBHOOK_CFG = {
   OUTPUT_WORKBOOK_ID: '1kHw1DB7r4RhgBpF4l4CtapBdgtozJwJXtF-egVBZGUE', // same workbook the sync writes to
   LOG_TAB: 'Status Transitions',
   CLICKUP_TEAM_ID: '9018453434',
+  CLICKUP_SPACE_ID: '90187090116', // scope events to Designers Team — keeps ops/attendance out of the log
   WEB_APP_URL: 'PASTE_YOUR_DEPLOYED_WEB_APP_/exec_URL', // fill after step 2
 };
 
@@ -91,11 +92,13 @@ function registerClickUpWebhook() {
   if (WEBHOOK_CFG.WEB_APP_URL.indexOf('http') !== 0) throw new Error('Set WEBHOOK_CFG.WEB_APP_URL to your deployed /exec URL first.');
 
   const endpoint = WEBHOOK_CFG.WEB_APP_URL + '?token=' + encodeURIComponent(token);
+  const payload = { endpoint: endpoint, events: ['taskStatusUpdated'] };
+  if (WEBHOOK_CFG.CLICKUP_SPACE_ID) payload.space_id = Number(WEBHOOK_CFG.CLICKUP_SPACE_ID);
   const res = UrlFetchApp.fetch('https://api.clickup.com/api/v2/team/' + WEBHOOK_CFG.CLICKUP_TEAM_ID + '/webhook', {
     method: 'post',
     contentType: 'application/json',
     headers: { Authorization: cuToken },
-    payload: JSON.stringify({ endpoint: endpoint, events: ['taskStatusUpdated'] }),
+    payload: JSON.stringify(payload),
     muteHttpExceptions: true,
   });
   Logger.log('register -> ' + res.getResponseCode() + ': ' + res.getContentText());

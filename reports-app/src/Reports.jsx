@@ -44,13 +44,18 @@ const num = (v) => parseFloat(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
 const fmtNum = (n) => new Intl.NumberFormat('en-US').format(Math.round(n || 0));
 const fmtPct = (n) => `${(n || 0).toFixed(1)}%`;
 
-async function fetchTab(sheetId, tabName) {
+async function fetchTab(sheetId, tabName, requiredCols = []) {
   const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
   const res = await fetch(url);
   if (!res.ok) return [];
   const text = await res.text();
   if (!text || text.startsWith('<') || /Sheet not found|invalid_query/i.test(text)) return [];
   const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+  // gviz silently returns the FIRST sheet when the named tab doesn't exist yet
+  // (e.g. before the sync's first run) — require the tab's signature columns so
+  // a fallback to an order tab is rejected instead of rendered as phantom rows.
+  const fields = (parsed.meta && parsed.meta.fields) || [];
+  if (requiredCols.some((c) => !fields.includes(c))) return [];
   return parsed.data || [];
 }
 
@@ -148,9 +153,9 @@ export default function Reports() {
     setLoading(true);
     try {
       const [d, c, s] = await Promise.all([
-        fetchTab(id, REPORTS.tabs.designer),
-        fetchTab(id, REPORTS.tabs.conversion),
-        fetchTab(id, REPORTS.tabs.csr),
+        fetchTab(id, REPORTS.tabs.designer, ['Designer', 'Tasks']),
+        fetchTab(id, REPORTS.tabs.conversion, ['Profile', 'Inquiries']),
+        fetchTab(id, REPORTS.tabs.csr, ['CSR', 'Deliveries']),
       ]);
       setDesigner(d); setConversion(c); setCsr(s);
       const any = d.length || c.length || s.length;

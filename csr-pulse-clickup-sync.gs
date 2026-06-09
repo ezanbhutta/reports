@@ -111,12 +111,14 @@ function runDailySync() {
   try {
     const tasks = fetchSpaceTasks_(CONFIG.CLICKUP_SPACE_ID, since);
     taskCount = tasks.length;
+    // One bulk call per 100 tasks instead of one call per task — keeps the run far
+    // under Apps Script's 6-minute execution cap and ClickUp's ~100 req/min limit.
+    const histMap = fetchBulkTimeInStatus_(tasks.map(t => t.id));
     // True revision ROUNDS come from the webhook event log (see csr-pulse-clickup-webhook.gs).
     const txn = CONFIG.REVISION_METHOD === 'webhook' ? readTransitionCounts_() : null;
     tasks.forEach(t => {
-      // time_in_status drives SLA + (in fallback modes) the binary flags. One fetch, reused.
-      const hist = fetchTimeInStatus_(t.id);
-      Utilities.sleep(CONFIG.THROTTLE_MS);
+      // time_in_status drives SLA + (in fallback modes) the binary flags.
+      const hist = histMap[t.id] || null;
 
       // ── CSR × Profile grain (custom fields; blank until the retrofit) ──
       const csr = cfValue_(t, CONFIG.CF_CSR);
@@ -191,12 +193,38 @@ function fetchTimeInStatus_(taskId) {
   return JSON.parse(res.getContentText());
 }
 
+// Bulk variant: up to 100 task ids per request. Returns { taskId: hist }.
+// Falls back to per-task fetches for any chunk the bulk endpoint rejects.
+function fetchBulkTimeInStatus_(taskIds) {
+  const map = {};
+  for (let i = 0; i < taskIds.length; i += 100) {
+    const chunk = taskIds.slice(i, i + 100);
+    if (chunk.length === 1) { map[chunk[0]] = fetchTimeInStatus_(chunk[0]); continue; }
+    const qs = chunk.map(id => 'task_ids=' + encodeURIComponent(id)).join('&');
+    const url = 'https://api.clickup.com/api/v2/task/bulk_time_in_status/task_ids?' + qs;
+    const res = UrlFetchApp.fetch(url, { headers: clickupHeaders_(), muteHttpExceptions: true });
+    if (res.getResponseCode() === 200) {
+      const body = JSON.parse(res.getContentText());
+      const data = body.tasks || body; // raw API returns the map directly; tolerate a wrapper
+      Object.keys(data).forEach(id => { map[id] = data[id]; });
+    } else {
+      Logger.log('Bulk time_in_status failed for a chunk (' + res.getResponseCode() + '); per-task fallback.');
+      chunk.forEach(id => { map[id] = fetchTimeInStatus_(id); Utilities.sleep(CONFIG.THROTTLE_MS); });
+    }
+    Utilities.sleep(CONFIG.THROTTLE_MS);
+  }
+  return map;
+}
+
 // Read a ClickUp custom field value by label (dropdowns return the selected option text)
 function cfValue_(task, label) {
   const cf = (task.custom_fields || []).find(f => (f.name || '').toLowerCase() === label.toLowerCase());
   if (!cf || cf.value === undefined || cf.value === null) return '';
   if (cf.type === 'drop_down' && cf.type_config && cf.type_config.options) {
-    const opt = cf.type_config.options[cf.value];
+    // value arrives as the option's uuid OR its orderindex, depending on how it was set
+    const opts = cf.type_config.options;
+    const byId = opts.filter(function (o) { return o.id === cf.value; })[0];
+    const opt = byId || opts[cf.value];
     return opt ? (opt.name || opt.label || '') : '';
   }
   return String(cf.value);

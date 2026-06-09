@@ -18,7 +18,8 @@ Inquiry ─┘   (csr-pulse-clickup-*.gs)   (3 report tabs)        (reports-app/
 | `csr-pulse-clickup-sync.gs` | Apps Script pipeline: pulls ClickUp + the inquiry sheet, writes `Designer Production`, `Profile Conversion`, `CSR Production` tabs. |
 | `csr-pulse-clickup-webhook.gs` | ClickUp status-change webhook → `Status Transitions` event log (for exact revision rounds). |
 | `csr-reporting-automation-build-spec.md` | Design spec, grounded against the live workspace. |
-| `DEPLOY.md` | Step-by-step go-live runbook. |
+| **`SETUP-STEPS.md`** | **Start here** — every click, in order, with checkpoints and troubleshooting. |
+| `DEPLOY.md` | Condensed go-live runbook (same steps, terser). |
 | `csr-pulse/` | Reference copy of the **separate** revenue app (CSR Pulse). Not deployed from here. |
 
 ## The three report grains

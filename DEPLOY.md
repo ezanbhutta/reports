@@ -30,29 +30,44 @@ Abdul Haseeb · Tariq Mahmood · Eikon Designs · Alee Studioz · Carpicon · Dy
 
 ---
 
-## Step 2 — Deploy the status webhook (event log)  ⏱ forward-only, so do it early
+## Step 2 — Create the Apps Script project (standalone — touches nothing existing)
 
-`csr-pulse-clickup-webhook.gs` → an Apps Script project (same project as the sync is fine).
+> ⚠️ Do **not** paste these scripts into a script already attached to one of your
+> sheets, and never clear an existing `Code.gs` — it may hold your own automations.
+> The sync opens every sheet **by ID**, so it doesn't need to live inside any sheet.
+> (CSR Pulse itself uses no Apps Script at all, so it can't be affected either way.)
 
-1. **Script Properties:** `WEBHOOK_TOKEN` = a long random string; `CLICKUP_TOKEN` = your ClickUp token (`pk_...`).
-2. **Deploy ▸ New deployment ▸ Web app** → Execute as **Me**, Access **Anyone**. Copy the `/exec` URL.
-3. Paste that URL into `WEBHOOK_CFG.WEB_APP_URL`, then run `registerClickUpWebhook()` once.
-4. Verify with `listClickUpWebhooks()`, then flip a task's status and watch the **`Status Transitions`** tab fill.
-
-> Revision rounds only count from deployment day forward — earlier rounds aren't backfilled.
+1. Go to **script.google.com → New project** — a fresh, empty, standalone project.
+2. Paste `csr-pulse-clickup-sync.gs` into its (empty) `Code.gs`.
+3. **+ → Script**, name it `Webhook`, paste `csr-pulse-clickup-webhook.gs`. Save.
+4. **Project Settings (gear) → Script Properties:** add `CLICKUP_TOKEN` = your ClickUp token (`pk_...`).
 
 ---
 
-## Step 3 — Deploy the sync
+## Step 3 — Deploy the status webhook (event log)  ⏱ forward-only, so do it early
 
-`csr-pulse-clickup-sync.gs` (same Apps Script project).
+In that same project:
 
-1. `CLICKUP_TOKEN` is already in Script Properties (step 2). `INQUIRY_SHEET_ID` is already set in the file.
-2. Run `runDailySync()` once manually — confirm it writes the **`CSR Production`** and **`Profile Conversion`** tabs into the Order Management workbook.
-3. Run `installTrigger()` to schedule it every 6h.
+1. **Script Properties:** add `WEBHOOK_TOKEN` = a long random string.
+2. **Deploy ▸ New deployment ▸ Web app** → Execute as **Me**, Access **Anyone**. Copy the `/exec` URL.
+3. Paste that URL into `WEBHOOK_CFG.WEB_APP_URL` (in the `Webhook` file), then run `registerClickUpWebhook()` once.
+4. Verify with `listClickUpWebhooks()`, then flip a task's status and watch the **`Status Transitions`** tab fill.
 
-`REVISION_METHOD` is set to `'webhook'` (reads the event log from step 2). Conversion
-needs neither ClickUp nor the webhook — it works as soon as this runs.
+> Revision rounds only count from deployment day forward — earlier rounds aren't backfilled.
+> The webhook is scoped to the Designers Team space, so ops/attendance changes never hit the log.
+
+---
+
+## Step 3b — Run the sync
+
+1. Function dropdown → `runDailySync` → **Run** (approve the one-time permission prompt) —
+   confirm it writes **`Designer Production`**, **`Profile Conversion`**, and **`CSR Production`**
+   tabs into the Order Management workbook.
+2. Run `installTrigger()` to schedule it every 6h.
+
+`REVISION_METHOD` is set to `'webhook'` (reads the event log from Step 3). Conversion and
+Designer Production need neither the webhook nor the ClickUp retrofit — they work as soon
+as this runs. Numbers cover a rolling `LOOKBACK_DAYS` window (default 7 — edit in CONFIG).
 
 ---
 
