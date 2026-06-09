@@ -614,6 +614,8 @@ function DateRangePicker({
 export default function CSRPulse({ onLogout }) {
   const [loaded, setLoaded] = useState(false);
   const [orders, setOrders] = useState([]);
+  const [conversion, setConversion] = useState([]); // 'Profile Conversion' tab (profile-grain, from Inquiry sheet)
+  const [production, setProduction] = useState([]);  // 'CSR Production' tab (CSR×Profile, from ClickUp)
   const [roster, setRoster] = useState(DEFAULT_ROSTER);
   const [profiles, setProfiles] = useState(DEFAULT_PROFILES);
   const [shiftHistory, setShiftHistory] = useState([]); // [{csrId, fromShift, toShift, changedOn}]
@@ -1431,6 +1433,33 @@ export default function CSRPulse({ onLogout }) {
     });
   };
 
+  // ── Aux tabs written by the Apps Script sync: 'Profile Conversion' (profile-grain) and
+  //    'CSR Production' (CSR×Profile). Single named tabs with their own schema, so they
+  //    bypass fetchOrdersFromSheets (which is order-shaped and date-header gated). ──
+  const fetchAuxTab = async (sheetId, tabName) => {
+    try {
+      const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
+      const res = await fetch(url);
+      if (!res.ok) return [];
+      const text = await res.text();
+      if (!text || text.startsWith('<') || /Sheet not found|invalid_query/i.test(text)) return [];
+      const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+      return parsed.data || [];
+    } catch { return []; }
+  };
+
+  // Finds the two tabs across the configured workbooks (the sync writes them to the Order
+  // Management workbook). Returns [] for a tab that doesn't exist yet — never throws.
+  const fetchProductionAndConversion = async () => {
+    const ids = SHARED_SYNC.workbookUrls.map(extractSheetId).filter(Boolean);
+    let conversion = [], production = [];
+    for (const id of ids) {
+      if (!conversion.length) conversion = await fetchAuxTab(id, 'Profile Conversion');
+      if (!production.length) production = await fetchAuxTab(id, 'CSR Production');
+    }
+    return { conversion, production };
+  };
+
   // Core fetch — pulls every profile tab from the given workbook sheet IDs and
   // normalizes rows. No state writes, so both the manual sync (which shows a
   // preview) and the auto-sync (which applies directly) can share it.
@@ -1563,6 +1592,13 @@ export default function CSRPulse({ onLogout }) {
     setSyncing(true);
     try {
       const { allRows, tabsRead } = await fetchOrdersFromSheets(sheetIds, SHARED_SYNC.firstTabs);
+      // Aux tabs (conversion + production) are independent of orders. Only overwrite when
+      // present, so a missing/empty tab never wipes existing data.
+      try {
+        const { conversion: convRows, production: prodRows } = await fetchProductionAndConversion();
+        if (convRows.length) setConversion(convRows);
+        if (prodRows.length) setProduction(prodRows);
+      } catch (_) { /* aux tabs are best-effort */ }
       if (allRows.length === 0 && tabsRead.every(t => !t.matched)) {
         // Don't wipe any cached data on a failed pull.
         setLastSync({
@@ -2030,6 +2066,91 @@ export default function CSRPulse({ onLogout }) {
       });
 
       // ═══════════════════════════════════════════════════════════════
+      //  CONVERSION — inquiries → orders, by profile (from the Inquiry sheet)
+      // ═══════════════════════════════════════════════════════════════
+      if (conversion && conversion.length) {
+        const nC = (v) => parseFloat(String(v ?? '').replace(/[^0-9.]/g, '')) || 0;
+        const cRows = conversion
+          .map((r) => ({ profile: r.Profile || r.profile || '', inq: nC(r.Inquiries), placed: nC(r.Placed) }))
+          .filter((r) => r.profile)
+          .sort((a, b) => (b.inq ? b.placed / b.inq : 0) - (a.inq ? a.placed / a.inq : 0));
+        if (cRows.length) {
+          ensureSpace(28 + cRows.length * 7.5);
+          sectionHeader('Conversion', 'Inquiries to orders', 'by profile');
+          const drawCHead = () => {
+            setText(MUTED); doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setCharSpace(0.6);
+            doc.text('PROFILE', M, y + 3);
+            doc.text('INQUIRIES', M + 100, y + 3, { align: 'right' });
+            doc.text('PLACED', M + 130, y + 3, { align: 'right' });
+            doc.text('CONV', W - M, y + 3, { align: 'right' });
+            doc.setCharSpace(0); hairline(y + 5); y += 8;
+          };
+          drawCHead();
+          let totI = 0, totP = 0;
+          cRows.forEach((r) => {
+            if (y + 7.5 > PAGE_BOTTOM) { newPage(); sectionHeader('Conversion', 'Inquiries to orders (cont.)', 'by profile'); drawCHead(); }
+            totI += r.inq; totP += r.placed;
+            const pct = r.inq ? (r.placed / r.inq) * 100 : 0;
+            setText(INK); doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+            doc.text(truncate(r.profile, 32), M, y + 4);
+            setText(BODY); doc.setFontSize(8.5);
+            doc.text(fmtNum(r.inq), M + 100, y + 4, { align: 'right' });
+            doc.text(fmtNum(r.placed), M + 130, y + 4, { align: 'right' });
+            setText(pct >= 30 ? MINT : (pct >= 15 ? AMBER : MUTED)); doc.setFont('helvetica', 'bold');
+            doc.text(`${pct.toFixed(1)}%`, W - M, y + 4, { align: 'right' });
+            hairline(y + 7.5); y += 7.5;
+          });
+          const tot = totI ? (totP / totI) * 100 : 0;
+          setText(VIOLET); doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
+          doc.text('OVERALL', M, y + 4);
+          doc.text(fmtNum(totI), M + 100, y + 4, { align: 'right' });
+          doc.text(fmtNum(totP), M + 130, y + 4, { align: 'right' });
+          doc.text(`${tot.toFixed(1)}%`, W - M, y + 4, { align: 'right' });
+          y += 12;
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════════
+      //  PRODUCTION — CSR × profile (from ClickUp)
+      // ═══════════════════════════════════════════════════════════════
+      if (production && production.length) {
+        const nP = (v) => parseFloat(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
+        const pRows = production
+          .map((r) => ({ profile: r.Profile || '', csr: r.CSR || '', orders: nP(r.Orders), deliveries: nP(r.Deliveries), revisions: nP(r.Revisions), sla: nP(r['SLA Breaches']) }))
+          .filter((r) => r.csr || r.profile)
+          .sort((a, b) => b.orders - a.orders || b.deliveries - a.deliveries);
+        if (pRows.length) {
+          ensureSpace(28 + pRows.length * 7.5);
+          sectionHeader('Production', 'CSR production', 'from ClickUp');
+          const drawPHead = () => {
+            setText(MUTED); doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setCharSpace(0.6);
+            doc.text('CSR', M, y + 3);
+            doc.text('PROFILE', M + 45, y + 3);
+            doc.text('ORDERS', M + 112, y + 3, { align: 'right' });
+            doc.text('DELIV', M + 138, y + 3, { align: 'right' });
+            doc.text('REV', M + 158, y + 3, { align: 'right' });
+            doc.text('SLA', W - M, y + 3, { align: 'right' });
+            doc.setCharSpace(0); hairline(y + 5); y += 8;
+          };
+          drawPHead();
+          pRows.forEach((r) => {
+            if (y + 7.5 > PAGE_BOTTOM) { newPage(); sectionHeader('Production', 'CSR production (cont.)', 'from ClickUp'); drawPHead(); }
+            setText(INK); doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+            doc.text(truncate(r.csr || '—', 22), M, y + 4);
+            setText(BODY); doc.setFontSize(8.5);
+            doc.text(truncate(r.profile, 26), M + 45, y + 4);
+            doc.text(fmtNum(r.orders), M + 112, y + 4, { align: 'right' });
+            doc.text(fmtNum(r.deliveries), M + 138, y + 4, { align: 'right' });
+            doc.text(fmtNum(r.revisions), M + 158, y + 4, { align: 'right' });
+            setText(r.sla > 0 ? AMBER : MUTED); doc.setFont('helvetica', r.sla > 0 ? 'bold' : 'normal');
+            doc.text(fmtNum(r.sla), W - M, y + 4, { align: 'right' });
+            hairline(y + 7.5); y += 7.5;
+          });
+          y += 6;
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════════
       //  ORDER LOG — every row
       // ═══════════════════════════════════════════════════════════════
       newPage();
@@ -2468,6 +2589,102 @@ export default function CSRPulse({ onLogout }) {
                   })}
                 </div>
               </div>
+            </div>
+
+            {/* ── Conversion · inquiries → orders (profile-level, from the Inquiry sheet) ── */}
+            <div className="mt-8">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-sm font-semibold" style={{ color: C.text }}>
+                  Conversion <span className="font-normal" style={{ color: C.textDim }}>· inquiries → orders</span>
+                </h3>
+                <span className="text-[10px] uppercase tracking-wider" style={{ color: C.textDim }}>by profile · Client Daily Inquiries</span>
+              </div>
+              {conversion.length === 0 ? (
+                <div className="rounded-xl p-5 text-xs" style={{ background: C.bgCard, border: `1px solid ${C.border}`, color: C.textMuted }}>
+                  No conversion data yet — run the Apps Script sync (it writes the Profile Conversion tab).
+                </div>
+              ) : (() => {
+                const n = (v) => parseFloat(String(v ?? '').replace(/[^0-9.]/g, '')) || 0;
+                const rows = conversion
+                  .map((r) => ({ profile: r.Profile || r.profile || '', inq: n(r.Inquiries), placed: n(r.Placed) }))
+                  .filter((r) => r.profile);
+                const totInq = rows.reduce((s, r) => s + r.inq, 0);
+                const totPlaced = rows.reduce((s, r) => s + r.placed, 0);
+                const overall = totInq ? (totPlaced / totInq) * 100 : 0;
+                const maxRate = Math.max(...rows.map((r) => (r.inq ? r.placed / r.inq : 0)), 0.0001);
+                return (
+                  <>
+                    <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-4">
+                      <StatCard label="Conversion" value={`${overall.toFixed(1)}%`} sub={`${fmtNum(totPlaced)} of ${fmtNum(totInq)} inquiries`} accent={C.mint} icon={TrendingUp} />
+                      <StatCard label="Inquiries" value={fmtNum(totInq)} sub="in window" accent={C.violetGlow} icon={Package} />
+                      <StatCard label="Placed" value={fmtNum(totPlaced)} sub="orders from inquiries" accent={C.mint} icon={Star} />
+                    </div>
+                    <div className="rounded-xl p-5" style={{ background: C.bgCard, border: `1px solid ${C.border}` }}>
+                      {rows.slice().sort((a, b) => (b.inq ? b.placed / b.inq : 0) - (a.inq ? a.placed / a.inq : 0)).map((r) => {
+                        const pct = r.inq ? (r.placed / r.inq) * 100 : 0;
+                        return (
+                          <div key={r.profile} className="mb-3 last:mb-0">
+                            <div className="mb-1 flex items-center justify-between text-xs">
+                              <span style={{ color: C.text }}>{r.profile}</span>
+                              <span className="font-mono" style={{ color: C.textMuted }}>{pct.toFixed(1)}% · {r.placed}/{r.inq}</span>
+                            </div>
+                            <div className="h-1.5 w-full rounded-full" style={{ background: C.border }}>
+                              <div className="h-1.5 rounded-full" style={{ width: `${((r.inq ? r.placed / r.inq : 0) / maxRate) * 100}%`, background: C.mint }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* ── Production · CSR × Profile (from ClickUp) ── */}
+            <div className="mt-8">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-sm font-semibold" style={{ color: C.text }}>
+                  Production <span className="font-normal" style={{ color: C.textDim }}>· deliveries · revisions · SLA</span>
+                </h3>
+                <span className="text-[10px] uppercase tracking-wider" style={{ color: C.textDim }}>CSR × profile · ClickUp</span>
+              </div>
+              {production.length === 0 ? (
+                <div className="rounded-xl p-5 text-xs" style={{ background: C.bgCard, border: `1px solid ${C.border}`, color: C.textMuted }}>
+                  No production data yet — add the ClickUp CSR/Profile fields, deploy the status webhook, then run the sync. (See DEPLOY.md.)
+                </div>
+              ) : (() => {
+                const n = (v) => parseFloat(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
+                const rows = production
+                  .map((r) => ({ profile: r.Profile || '', csr: r.CSR || '', shift: r.Shift || '', orders: n(r.Orders), deliveries: n(r.Deliveries), revisions: n(r.Revisions), sla: n(r['SLA Breaches']) }))
+                  .filter((r) => r.csr || r.profile)
+                  .sort((a, b) => b.orders - a.orders || b.deliveries - a.deliveries);
+                return (
+                  <div className="overflow-x-auto rounded-xl" style={{ border: `1px solid ${C.border}` }}>
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr style={{ background: C.bgRaised }}>
+                          {['Profile', 'CSR', 'Shift', 'Orders', 'Deliveries', 'Revisions', 'SLA'].map((h, i) => (
+                            <th key={h} className={`px-3 py-2 font-semibold uppercase ${i < 3 ? 'text-left' : 'text-right'}`} style={{ color: C.textDim, fontSize: '10px', letterSpacing: '0.1em' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((r, i) => (
+                          <tr key={i} style={{ borderTop: `1px solid ${C.border}` }}>
+                            <td className="px-3 py-2" style={{ color: C.textMuted }}>{r.profile}</td>
+                            <td className="px-3 py-2" style={{ color: C.text }}>{r.csr}</td>
+                            <td className="px-3 py-2" style={{ color: C.textMuted }}>{r.shift}</td>
+                            <td className="px-3 py-2 text-right font-mono" style={{ color: C.text }}>{r.orders}</td>
+                            <td className="px-3 py-2 text-right font-mono" style={{ color: C.text }}>{r.deliveries}</td>
+                            <td className="px-3 py-2 text-right font-mono" style={{ color: C.text }}>{r.revisions}</td>
+                            <td className="px-3 py-2 text-right font-mono" style={{ color: r.sla > 0 ? C.coral : C.textMuted }}>{r.sla}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* (Recent orders section removed — use Order Log tab) */}
