@@ -66,8 +66,8 @@ Everything to build is these two, surfaced inside the existing dashboard.
 
 - **Live production space:** `Designers Team` (`90187090116`) — confirmed live: 100+ current tasks with June 2026 due dates, client names matching the CSR daily reports (Ironhide Notary, 3D spools, SushiLab.ai, Axis Technologies, YoYu Group, Eden Studios, Thriving Kingdom Marriage…). Work sits in per-designer lists (Md Rashadul Haque, Amin Ullah, MD Rezaul, Nimeazad, Khubaib, Hamid, Owais Nadeem/Rehan, Abiha Imran, Atta Razaq, M. Tariq, Syed Mubahat, Abdullah, Md Dulal, Rejaul Karim, Shaoor Haider…); task title = client name; assignee = designer. Designer attribution is structural.
 - **Real status set (CORRECTED):** `pickup your projects → deliver to client → client response → revision → revision complete → complete`. The earlier locked value (`to do → client response → pending → delivered → cancelled`) was wrong — it came from the **stale** Design Department space, not the live floor.
-- **Revision signal:** explicit `revision` status — each ENTRY into `revision` = one revision round (cleaner than delivery-minus-one). Deliveries = entries into `deliver to client`. Pinned in the script.
-- **Status history is chronological & rich** — Zetted exposed 10+ ordered transitions (`status_history` indices 0–9). Revision counting from the log is viable **via raw REST**. ⚠️ The ClickUp MCP `time_in_status` tool fails output validation on `null` status colors; the Apps Script's raw `UrlFetchApp` call bypasses this. ✓
+- **⚠️ Revision ROUND counting is NOT available from the status log (CORRECTED).** `time_in_status` is **aggregate** — it returns one row per distinct status (`orderindex` = workflow position, `total_time` = cumulative across all visits), not a chronological list of visits. Verified via the bulk endpoint: a task that bounced `revision ↔ client response` many times shows each status exactly once. So you can derive **binary** `delivered?` / `everRevised?` and **time-in-status**, but **not** the number of rounds. (My earlier "10+ chronological transitions" read of the Zetted MCP error was wrong — those indices were distinct statuses, several with `null` colors, which is what tripped the MCP validator.)
+- **To count true revision rounds, choose a method:** `webhook` (recommended — a ClickUp status-change webhook logs each entry into `revision` to a sheet; accurate, forward-only), `attachments` (count `Rev #N` files per task — approximate, naming-dependent), or accept the binary `everRevised` flag (free, but counts *revised tasks*, not rounds). **What DOES work cleanly from the API:** time-in-status → the SLA / stalled-task leak, fully automatable.
 - **Parallel/stale structures (ignore):**
   - `Design Department` (`90188283242`) — a stage pipeline (To-Do → Delivery → Feedback & Revisions → Final). Last meaningful activity ~Jan 2026; now collecting test tasks ("logo test 1"). **Zetted lives here** and is NOT representative of the live floor. Status set here: `to do → pending → delivered → complete projects/completed`.
   - `Logo design` (`90188148883`) — dead: 8 test tasks ("Subtasks Test", "Haider", "Alee").
@@ -98,9 +98,9 @@ Keep designer as list membership. Resolve `Deliverables` vs tags — pick one. D
 ### 7a. Apps Script — the only new server-side component
 Lives in the Order Management workbook (browser can't call ClickUp: CORS + key exposure). On a time trigger:
 
-1. Pull ClickUp `Designers Team` tasks + **status history** via raw REST.
-2. **Revisions per task** = (entries into the client-delivery status) − 1, floor 0. In this workspace the client-delivery status surfaces as `client response`; confirm the exact status name(s) against a raw history dump and pin the set.
-3. Derive deliveries, current stage, and SLA timing (time in `to do`, time in `client response`) per task.
+1. Pull ClickUp `Designers Team` tasks (space `90187090116`) + `time_in_status` via raw REST.
+2. **Revision signal per task** (time_in_status is aggregate — see §5): default `status_flag` → binary `everRevised` (summed across tasks = # revised tasks). For true round counts switch `REVISION_METHOD` to `webhook` (recommended) or `attachments`.
+3. Derive `delivered?`, current status, and SLA timing (time in `pickup your projects`, time in `client response`) per task — this part is fully accurate from the API.
 4. Read the **Inquiry Sheet**; compute conversion per CSR × Profile (orders ÷ inquiries).
 5. Write a **`Production & Conversion`** tab into the workbook (standardized headers, gviz-readable), keyed `CSR × Profile × Fiverr Order ID`.
 
@@ -152,8 +152,8 @@ Rule: reading is allowed, reacting is not — the only output is a delegated ins
 
 ## 12. Open items to confirm at build
 
-- ✅ **ClickUp status names (RESOLVED, Jun 2026):** live space uses `pickup your projects → deliver to client → client response → revision → revision complete → complete`. Revision count = entries into `revision`; delivery count = entries into `deliver to client`. Pinned in the script.
-- ✅ **Revision-count feasibility (RESOLVED):** status history is chronological → viable via raw REST. (The ClickUp MCP `time_in_status` tool has a null-color validation bug; the Apps Script bypasses it with `UrlFetchApp`.)
+- ✅ **ClickUp status names (RESOLVED, Jun 2026):** live space uses `pickup your projects → deliver to client → client response → revision → revision complete → complete`. Pinned in the script.
+- ⚠️ **Revision-ROUND count (NEEDS A DECISION):** `time_in_status` is **aggregate** (one row per status) — it gives binary `everRevised?` + time-in-status, NOT round counts. Choose: `webhook` (recommended, accurate, forward-only), `attachments` (approximate), or accept the binary flag. SLA/time-in-status signals DO work cleanly from the API.
 - ✅ **Inquiry Sheet (CONFIRMED to exist):** provide its Google Sheet ID for `INQUIRY_SHEET_ID` in the script (still `TODO_PASTE_INQUIRY_SHEET_ID`).
 - ⬜ **ClickUp retrofit (NOT DONE):** add `CSR`, `Profile`, `Fiverr Order ID` custom fields (workspace-level, required at creation). Field creation is a ClickUp admin/UI step (not exposed via the MCP tools available here). Until done, production attribution is blank.
 - ⬜ **Order Sheet:** confirm a Fiverr Order ID column exists (for per-order ClickUp linkage / de-dup).

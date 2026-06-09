@@ -43,14 +43,16 @@ const CONFIG = {
   CF_PROFILE: 'Profile',
   CF_ORDER_ID: 'Fiverr Order ID',
 
-  // ── Revision counting (status names re-verified against LIVE space 90187090116, Jun 2026) ──
-  // Live status flow: pickup your projects → deliver to client → client response
+  // ── Revision / delivery signals (status names + history SHAPE re-verified vs LIVE space 90187090116, Jun 2026) ──
+  // Live status flow: pickup your projects → in progress → deliver to client → client response
   //                   → revision → revision complete → complete
-  // The spec's earlier guess (to do / delivered / client response) came from the STALE
-  // Design Department space. On the live floor, each ENTRY into 'revision' = one revision round.
-  REVISION_STATUSES: ['revision'],                 // count entries into these = revision rounds (recommended)
-  CLIENT_DELIVERY_STATUSES: ['deliver to client'], // count entries into these = client deliveries
-  REVISION_METHOD: 'history',                       // 'history' (preferred) | 'tag' (crude fallback)
+  // IMPORTANT: ClickUp's time_in_status is AGGREGATE — one row per distinct status, with
+  // cumulative time. It does NOT list visits chronologically, so it CANNOT yield the number
+  // of revision ROUNDS. It gives binary "delivered?/everRevised?" + time-in-status only.
+  // To count true rounds, pick a REVISION_METHOD (see §Revisions; 'webhook' recommended).
+  REVISION_STATUSES: ['revision'],                 // presence => task hit revision (binary flag)
+  CLIENT_DELIVERY_STATUSES: ['deliver to client'], // presence => task was delivered (binary flag)
+  REVISION_METHOD: 'status_flag',                  // 'status_flag' (default, binary) | 'tag' | 'attachments' | 'webhook'
 
   // SLA thresholds (hours) for the stalled-production leak — adjust to your standard
   SLA_TO_DO_HOURS: 24,           // 'pickup your projects' — assigned but not started
@@ -162,35 +164,39 @@ function cfValue_(task, label) {
 }
 
 /**
- * §Revisions
- * Each ENTRY into a client-delivery status = one delivery. revisions = deliveries - 1.
+ * §Revisions — VERIFIED Jun 2026 against the live workspace: time_in_status is AGGREGATE.
+ * `status_history` returns ONE row per distinct status (orderindex = workflow position,
+ * total_time = cumulative across ALL visits). Visits are NOT listed chronologically, so the
+ * number of revision ROUNDS is NOT derivable from it. (Confirmed via bulk time_in_status:
+ * e.g. a task that bounced revision↔client-response many times shows each status exactly once.)
  *
- * CAVEAT TO VALIDATE: ClickUp's time_in_status `status_history` may return either
- *   (a) one entry PER VISIT (chronological) -> this counts revisions correctly, or
- *   (b) one entry PER DISTINCT STATUS (aggregate) -> "client response" appears once,
- *       so revisions would read 0 (undercount).
- * Run debugClickUpStatuses() and check whether "client response" appears once or many
- * times for a known multi-revision task (e.g. Zetted, 86evvxjrv). If it's aggregate,
- * set REVISION_METHOD='tag' or switch to the task audit feed.
+ * Derivable per task (meaningful when SUMMED across tasks per CSR x Profile):
+ *   - delivered?   = 'deliver to client' present   -> summed = # tasks delivered
+ *   - everRevised? = 'revision' present             -> summed = # tasks that hit revision
+ *   - time in each status (SLA / stalled-task leak) -> see slaBreached_
+ *
+ * To count true revision ROUNDS, choose CONFIG.REVISION_METHOD:
+ *   'status_flag' (default) -> binary: 1 if task ever entered 'revision'. Summed = # revised
+ *                              tasks (NOT total rounds). Honest, free, no extra calls.
+ *   'tag'                   -> binary from the 'revision' tag (same limitation).
+ *   'attachments'           -> count attachments matching /rev(ision)?\s*#?\d+/i per task
+ *                              (needs a per-task fetch; depends on file-naming discipline).
+ *   'webhook'               -> RECOMMENDED for true rounds going forward: a ClickUp
+ *                              status-change webhook logs each entry into 'revision' to a
+ *                              sheet; rounds = count of logged transitions per task (forward-only).
  */
 function countDeliveries_(task, hist) {
-  if (CONFIG.REVISION_METHOD === 'tag') {
-    const hasRev = (task.tags || []).some(t => (t.name || '').toLowerCase() === 'revision');
-    return { deliveries: hasRev ? 2 : 1, revisions: hasRev ? 1 : 0 }; // crude floor
-  }
-  const arr = hist && hist.status_history ? hist.status_history : [];
   const lc = s => (s || '').toLowerCase();
-  const deliveryStatuses = CONFIG.CLIENT_DELIVERY_STATUSES.map(lc);
-  const revisionStatuses = (CONFIG.REVISION_STATUSES || []).map(lc);
-  let deliveries = 0, revisionEntries = 0;
-  arr.forEach(h => {
-    const st = lc(h.status);
-    if (deliveryStatuses.indexOf(st) !== -1) deliveries += 1;
-    if (revisionStatuses.indexOf(st) !== -1) revisionEntries += 1;
-  });
-  // Prefer the explicit 'revision' status when configured; else fall back to deliveries-1.
-  const revisions = revisionStatuses.length ? revisionEntries : Math.max(0, deliveries - 1);
-  return { deliveries: deliveries, revisions: revisions };
+  if (CONFIG.REVISION_METHOD === 'tag') {
+    const hasRev = (task.tags || []).some(t => lc(t.name) === 'revision');
+    return { deliveries: 1, revisions: hasRev ? 1 : 0 };
+  }
+  // 'status_flag' (default): binary flags read from the AGGREGATE status_history.
+  const present = {};
+  (hist && hist.status_history ? hist.status_history : []).forEach(h => { present[lc(h.status)] = true; });
+  const delivered   = CONFIG.CLIENT_DELIVERY_STATUSES.map(lc).some(s => present[s]) ? 1 : 0;
+  const everRevised = (CONFIG.REVISION_STATUSES || ['revision']).map(lc).some(s => present[s]) ? 1 : 0;
+  return { deliveries: delivered, revisions: everRevised };
 }
 
 function slaBreached_(hist) {
@@ -325,11 +331,11 @@ function debugClickUpStatuses() {
   const sample = '86exdhp1v';
   const hist = fetchTimeInStatus_(sample);
   if (hist && hist.status_history) {
-    const seq = hist.status_history.map(h => h.status);
-    Logger.log('Sample status_history (' + seq.length + ' entries): ' + seq.join(' -> '));
-    Logger.log('Number of "revision" entries above = revision rounds. If each status appears ' +
-               'once-per-visit (chronological), counting works. If aggregated to one row per ' +
-               'status, set REVISION_METHOD="tag".');
+    const seq = hist.status_history.map(h => h.status + '(' + (h.orderindex) + ')');
+    Logger.log('Sample status_history (' + seq.length + ' rows): ' + seq.join(', '));
+    Logger.log('VERIFIED: this is AGGREGATE — one row per status (orderindex = workflow ' +
+               'position), so it gives binary delivered?/everRevised? + time-in-status, NOT ' +
+               'revision-round counts. For true rounds use REVISION_METHOD="webhook"/"attachments".');
   } else {
     Logger.log('No status_history returned. Enable the "Total time in Status" ClickApp, or use REVISION_METHOD="tag".');
   }
