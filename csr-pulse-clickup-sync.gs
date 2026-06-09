@@ -6,13 +6,14 @@
  * - Pulls ClickUp "Designers Team" tasks + status history (UrlFetchApp).
  * - Counts revisions per project from the status log.
  * - Computes conversion (orders / inquiries) per CSR x Profile.
- * - Writes a "Production & Conversion" tab that CSR Pulse syncs via gviz.
+ * - Writes "CSR Production" (CSR×Profile) + "Profile Conversion" tabs that CSR Pulse syncs via gviz.
  *
- * SETUP (do these once — see the 4 TODOs):
- *  1. Project Settings > Script Properties: add CLICKUP_TOKEN = your ClickUp personal API token (pk_...).
- *  2. Fill INQUIRY_SHEET_ID below.
- *  3. Run debugClickUpStatuses() ONCE and read the log — confirm CLIENT_DELIVERY_STATUSES (see note in §Revisions).
+ * SETUP (once):
+ *  1. Script Properties: CLICKUP_TOKEN = your ClickUp personal API token (pk_...).
+ *  2. Deploy the webhook (csr-pulse-clickup-webhook.gs) so revision ROUNDS accrue (forward-only).
+ *  3. Add the ClickUp retrofit fields (CSR / Profile / Fiverr Order ID) — else production attributes to blank.
  *  4. Run installTrigger() once to schedule runDailySync() (or run runDailySync() manually).
+ * NOTE: INQUIRY_SHEET_ID is already set; conversion works today. Production fills once 2–3 are done.
  */
 
 // ════════════════════════════════════════════════════════════════
@@ -30,9 +31,10 @@ const CONFIG = {
     '1d7ZFWLmVPWK_UUXoxj2o7OJKj5hJHW87eClDC316fSY', // New Order Sheet
     '1kHw1DB7r4RhgBpF4l4CtapBdgtozJwJXtF-egVBZGUE', // Order Management Sheet (also the OUTPUT workbook)
   ],
-  INQUIRY_SHEET_ID: 'TODO_PASTE_INQUIRY_SHEET_ID',  // TODO 2
+  INQUIRY_SHEET_ID: '1Pp6RhsR96FzGfB3MV--CYj7Idja2-iyF7BNPhJ9Md_A', // "Client Daily Inquiries" (verified)
   OUTPUT_WORKBOOK_ID: '1kHw1DB7r4RhgBpF4l4CtapBdgtozJwJXtF-egVBZGUE', // CSR Pulse already syncs this one
-  OUTPUT_TAB: 'Production & Conversion',
+  PRODUCTION_TAB: 'CSR Production',     // CSR × Profile (ClickUp) — gviz-readable by CSR Pulse
+  CONVERSION_TAB: 'Profile Conversion', // Profile-level (inquiry sheet) — gviz-readable by CSR Pulse
 
   // The 10 profiles = the tab names in each workbook (must match exactly across ClickUp + sheets)
   PROFILES: ['Abdul Haseeb','Tariq Mahmood','Eikon Designs','Alee Studioz','Carpicon',
@@ -120,13 +122,16 @@ function runDailySync() {
     if (slaBreached_(hist)) prod[key].slaBreaches += 1;
   });
 
-  // 2. Conversion: orders / inquiries per CSR x Profile
-  const orders    = countRowsByCsrProfile_(CONFIG.ORDER_SHEET_IDS, since);
-  const inquiries = countRowsByCsrProfile_([CONFIG.INQUIRY_SHEET_ID], since);
+  // 2a. Orders per CSR x Profile (the Order sheets DO carry a CSR column).
+  const orders = countRowsByCsrProfile_(CONFIG.ORDER_SHEET_IDS, since);
+  // 2b. Conversion is PROFILE-level: inquiry tabs carry no CSR, but every row has an
+  //     'Order Status' (Placed / Not Placed / Direct Order). conv = placed / total.
+  const conversion = countInquiriesByProfile_(CONFIG.INQUIRY_SHEET_ID, since);
 
-  // 3. Merge + write
-  writeOutput_(prod, orders, inquiries);
-  Logger.log('Sync complete. Tasks processed: ' + tasks.length);
+  // 3. Write two tabs (different grains): CSR×Profile production + by-profile conversion.
+  writeProductionTab_(prod, orders);
+  writeConversionTab_(conversion);
+  Logger.log('Sync done. Tasks: ' + tasks.length + '; profiles w/ inquiries: ' + Object.keys(conversion).length);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -278,6 +283,40 @@ function countRowsByCsrProfile_(workbookIds, sinceMs) {
   return counts;
 }
 
+/**
+ * Conversion is computed entirely inside the Inquiry workbook ("Client Daily Inquiries").
+ * Each profile is its own TAB (no Profile column, no CSR column), but every row has an
+ * 'Order Status'. We enumerate ALL tabs, use the tab name as the profile, and tally:
+ *   inquiries = rows with a non-empty status in the window
+ *   placed    = rows whose status is 'placed' or 'direct order'
+ * Returns { profileTabName: { inquiries, placed } }. PROFILE-level (inquiries carry no CSR).
+ */
+function countInquiriesByProfile_(workbookId, sinceMs) {
+  const out = {};
+  if (!workbookId || workbookId.indexOf('TODO') === 0) { Logger.log('INQUIRY_SHEET_ID not set'); return out; }
+  let ss; try { ss = SpreadsheetApp.openById(workbookId); } catch (e) { Logger.log('Cannot open inquiry workbook'); return out; }
+  const PLACED = ['placed', 'direct order'];
+  ss.getSheets().forEach(sh => {
+    const profile = sh.getName().trim();
+    const rows = sh.getDataRange().getValues();
+    const { headerIdx, map } = locateHeader_(rows);
+    if (headerIdx < 0 || map.status < 0) return;
+    let inquiries = 0, placed = 0;
+    for (let r = headerIdx + 1; r < rows.length; r++) {
+      const status = String(rows[r][map.status] || '').toLowerCase().trim();
+      if (!status) continue;                       // blank status = not a real inquiry row
+      if (map.date >= 0) {
+        const d = parseDate_(rows[r][map.date]);
+        if (d && d.getTime() < sinceMs) continue;
+      }
+      inquiries += 1;
+      if (PLACED.indexOf(status) !== -1) placed += 1;
+    }
+    if (inquiries > 0) out[profile] = { inquiries: inquiries, placed: placed };
+  });
+  return out;
+}
+
 // Auto-detect header row (handles banner rows like Grid Designs) and map needed columns
 function locateHeader_(rows) {
   for (let i = 0; i < Math.min(rows.length, 5); i++) {
@@ -317,33 +356,52 @@ function parseDate_(v) {
 // ════════════════════════════════════════════════════════════════
 // OUTPUT
 // ════════════════════════════════════════════════════════════════
-function writeOutput_(prod, orders, inquiries) {
-  const ss = SpreadsheetApp.openById(CONFIG.OUTPUT_WORKBOOK_ID);
-  let sh = ss.getSheetByName(CONFIG.OUTPUT_TAB);
-  if (!sh) sh = ss.insertSheet(CONFIG.OUTPUT_TAB);
-  sh.clearContents();
-
-  const header = ['Profile','CSR','Shift','Inquiries','Orders','Conversion %',
-                  'Deliveries','Revisions','Avg Revisions/Order','SLA Breaches','Updated'];
+// CSR × Profile production (ClickUp) + orders (Order sheets). Revisions/Deliveries are
+// blank until the ClickUp retrofit (CSR/Profile fields) + webhook are live.
+function writeProductionTab_(prod, orders) {
+  const sh = freshTab_(CONFIG.PRODUCTION_TAB);
+  const header = ['Profile','CSR','Shift','Orders','Deliveries','Revisions','SLA Breaches','Updated'];
   const out = [header];
   const now = new Date();
 
   const keys = {};
-  [prod, orders, inquiries].forEach(obj => Object.keys(obj).forEach(k => keys[k] = true));
+  [prod, orders].forEach(obj => Object.keys(obj).forEach(k => keys[k] = true));
 
   Object.keys(keys).sort().forEach(key => {
     const [profile, csr] = key.split('||');
     const p = prod[key] || { revisions: 0, deliveries: 0, slaBreaches: 0 };
     const o = orders[key] || 0;
-    const inq = inquiries[key] || 0;
-    const conv = inq ? Math.round((o / inq) * 1000) / 10 : '';
-    const avgRev = o ? Math.round((p.revisions / o) * 100) / 100 : '';
-    const shift = (ROSTER.find(([n]) => n === csr) || [,''])[1];
-    out.push([profile, csr, shift, inq, o, conv, p.deliveries, p.revisions, avgRev, p.slaBreaches, now]);
+    const shift = (ROSTER.find(([n]) => n === csr) || [, ''])[1];
+    out.push([profile, csr, shift, o, p.deliveries, p.revisions, p.slaBreaches, now]);
   });
 
   sh.getRange(1, 1, out.length, header.length).setValues(out);
-  Logger.log('Wrote ' + (out.length - 1) + ' CSR x Profile rows to "' + CONFIG.OUTPUT_TAB + '".');
+  Logger.log('Wrote ' + (out.length - 1) + ' CSR×Profile rows to "' + CONFIG.PRODUCTION_TAB + '".');
+}
+
+// Profile-level conversion from the Inquiry sheet (placed / total).
+function writeConversionTab_(conversion) {
+  const sh = freshTab_(CONFIG.CONVERSION_TAB);
+  const header = ['Profile','Inquiries','Placed','Conversion %','Updated'];
+  const out = [header];
+  const now = new Date();
+
+  Object.keys(conversion).sort().forEach(profile => {
+    const c = conversion[profile];
+    const conv = c.inquiries ? Math.round((c.placed / c.inquiries) * 1000) / 10 : '';
+    out.push([profile, c.inquiries, c.placed, conv, now]);
+  });
+
+  sh.getRange(1, 1, out.length, header.length).setValues(out);
+  Logger.log('Wrote ' + (out.length - 1) + ' profile rows to "' + CONFIG.CONVERSION_TAB + '".');
+}
+
+function freshTab_(name) {
+  const ss = SpreadsheetApp.openById(CONFIG.OUTPUT_WORKBOOK_ID);
+  let sh = ss.getSheetByName(name);
+  if (!sh) sh = ss.insertSheet(name);
+  sh.clearContents();
+  return sh;
 }
 
 // ════════════════════════════════════════════════════════════════

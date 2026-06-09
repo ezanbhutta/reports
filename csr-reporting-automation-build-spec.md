@@ -55,10 +55,10 @@ Abdul Haseeb, Tariq Mahmood, Eikon Designs, Alee Studioz, Carpicon, Dygram Desig
 
 CSR Pulse sees completed orders only. It does NOT have:
 
-1. **Conversion** — inquiries → orders. Requires Inquiry Sheet data (CSR Pulse never ingests inquiries).
-2. **Production / revisions / SLA** — from ClickUp. CSR Pulse has no ClickUp link.
+1. **Conversion** — computable **today** and self-contained in the Inquiry sheet ("Client Daily Inquiries", `1Pp6RhsR96FzGfB3MV--CYj7Idja2-iyF7BNPhJ9Md_A`): every row has an `Order Status`, so conversion = `Placed`/(total) per profile. **Profile-grain only** — inquiry rows carry no CSR (and Profile is just the tab name), and the ~10 tabs have inconsistent headers. Verified counts: 354 Placed + 69 Direct Order vs 874 Not Placed (~29%).
+2. **Production / revisions / SLA** — from ClickUp. Needs the retrofit fields (CSR/Profile) + the status webhook before it carries data; blank until then.
 
-Everything to build is these two, surfaced inside the existing dashboard.
+Both surface inside the existing dashboard. Note the **grain split**: conversion is per-Profile, production is per-CSR×Profile.
 
 ---
 
@@ -124,8 +124,8 @@ CEO view = CSR Pulse extended: revenue + margin + leaderboard + shift (already l
 
 - Revenue (Order Sheet) is already attributed by CSR × Profile via the profile tabs + CSR column.
 - ClickUp production is attributed by CSR × Profile via the new fields.
-- **Per-order linkage** (revisions-per-order, "order assigned but no draft in SLA" leak) needs `Fiverr Order ID` on both the task and the Order Sheet. If the Order Sheet lacks an order-ID column, per-order linkage falls back to client-name match; the CSR × Profile aggregates still work without it.
-- Conversion joins inquiries to orders on **buyer username**.
+- **Per-order linkage** wanted `Fiverr Order ID` on both the task and the Order Sheet — but **Order ID lives only on Fiverr**, in neither sheet. So per-order linkage falls back to client-name match; CSR × Profile aggregates still work without it.
+- **Conversion needs no join** (revised): it's self-contained in the Inquiry sheet via the `Order Status` column (`Placed`/`Direct Order` ÷ total), tallied per profile-tab. No buyer-username join required. Per-CSR conversion is NOT available (inquiry rows have no CSR) unless a CSR column is added to the inquiry tabs.
 
 ---
 
@@ -160,8 +160,8 @@ Rule: reading is allowed, reacting is not — the only output is a delegated ins
 
 - ✅ **ClickUp status names (RESOLVED, Jun 2026):** live space uses `pickup your projects → deliver to client → client response → revision → revision complete → complete`. Pinned in the script.
 - ✅ **Revision-ROUND count (DECIDED → webhook):** `time_in_status` is aggregate (no round counts), so rounds come from a ClickUp status webhook → `Status Transitions` event log (`csr-pulse-clickup-webhook.gs`, §7a-bis). Exact + forward-only. SLA/time-in-status still come from the API.
-- ✅ **Inquiry Sheet (CONFIRMED to exist):** provide its Google Sheet ID for `INQUIRY_SHEET_ID` in the script (still `TODO_PASTE_INQUIRY_SHEET_ID`).
+- ✅ **Inquiry Sheet (DONE):** `INQUIRY_SHEET_ID` set to "Client Daily Inquiries". Conversion wired (profile-grain, status-based). Caveat: ~10 tabs with inconsistent headers and no CSR column → conversion is per-profile; add a CSR column to inquiry tabs if per-CSR conversion is wanted.
 - ⬜ **ClickUp retrofit (NOT DONE):** add `CSR`, `Profile`, `Fiverr Order ID` custom fields (workspace-level, required at creation). Field creation is a ClickUp admin/UI step (not exposed via the MCP tools available here). Until done, production attribution is blank.
-- ⬜ **Order Sheet:** confirm a Fiverr Order ID column exists (for per-order ClickUp linkage / de-dup).
-- ⬜ **CSR Pulse patch:** the CSR Pulse codebase is not in this repo — provide it (or its repo) to build the §7b render/PDF extension.
+- ⬜ **Order Sheet:** no Fiverr Order ID column (it lives only on Fiverr) → per-order linkage uses client-name fallback.
+- ◧ **CSR Pulse patch:** code received (`csr-pulse-main`, single `src/CSRPulse.jsx`). §7b render/PDF extension still to build.
 - ⬜ SLA thresholds per stage; per-profile revenue floors and cost inputs.
