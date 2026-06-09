@@ -96,31 +96,38 @@ const CSR_ALIASES = { /* e.g. 'basit':'Abdul Basit', 'hasnain':'Hasnain Gillani'
 function runDailySync() {
   const since = Date.now() - CONFIG.LOOKBACK_DAYS * 86400000;
 
-  // 1. ClickUp production, keyed CSR x Profile
-  const tasks = fetchSpaceTasks_(CONFIG.CLICKUP_SPACE_ID, since);
-  // True revision ROUNDS come from the webhook event log (see csr-pulse-clickup-webhook.gs).
-  const txn = CONFIG.REVISION_METHOD === 'webhook' ? readTransitionCounts_() : null;
+  // 1. ClickUp production, keyed CSR x Profile. Best-effort: if ClickUp isn't set up yet
+  //    (no token / no retrofit), conversion + orders must still publish, so this can't abort.
   const prod = {}; // key "Profile||CSR" -> {revisions, deliveries, slaBreaches}
-  tasks.forEach(t => {
-    const csr = cfValue_(t, CONFIG.CF_CSR);
-    const profile = cfValue_(t, CONFIG.CF_PROFILE);
-    const key = (profile || '—') + '||' + (csr || '—');
-    if (!prod[key]) prod[key] = { revisions: 0, deliveries: 0, slaBreaches: 0 };
+  let taskCount = 0;
+  try {
+    const tasks = fetchSpaceTasks_(CONFIG.CLICKUP_SPACE_ID, since);
+    taskCount = tasks.length;
+    // True revision ROUNDS come from the webhook event log (see csr-pulse-clickup-webhook.gs).
+    const txn = CONFIG.REVISION_METHOD === 'webhook' ? readTransitionCounts_() : null;
+    tasks.forEach(t => {
+      const csr = cfValue_(t, CONFIG.CF_CSR);
+      const profile = cfValue_(t, CONFIG.CF_PROFILE);
+      const key = (profile || '—') + '||' + (csr || '—');
+      if (!prod[key]) prod[key] = { revisions: 0, deliveries: 0, slaBreaches: 0 };
 
-    // time_in_status drives SLA + (in fallback modes) the binary flags.
-    const hist = fetchTimeInStatus_(t.id);
-    Utilities.sleep(CONFIG.THROTTLE_MS);
-    if (txn) {
-      const c = txn[t.id] || { revisions: 0, deliveries: 0 };
-      prod[key].revisions  += c.revisions;   // exact rounds from the event log
-      prod[key].deliveries += c.deliveries;  // exact client deliveries from the event log
-    } else {
-      const r = countDeliveries_(t, hist);   // binary flags (status_flag / tag)
-      prod[key].deliveries += r.deliveries;
-      prod[key].revisions  += r.revisions;
-    }
-    if (slaBreached_(hist)) prod[key].slaBreaches += 1;
-  });
+      // time_in_status drives SLA + (in fallback modes) the binary flags.
+      const hist = fetchTimeInStatus_(t.id);
+      Utilities.sleep(CONFIG.THROTTLE_MS);
+      if (txn) {
+        const c = txn[t.id] || { revisions: 0, deliveries: 0 };
+        prod[key].revisions  += c.revisions;   // exact rounds from the event log
+        prod[key].deliveries += c.deliveries;  // exact client deliveries from the event log
+      } else {
+        const r = countDeliveries_(t, hist);   // binary flags (status_flag / tag)
+        prod[key].deliveries += r.deliveries;
+        prod[key].revisions  += r.revisions;
+      }
+      if (slaBreached_(hist)) prod[key].slaBreaches += 1;
+    });
+  } catch (e) {
+    Logger.log('ClickUp pull skipped/failed (' + e + '). Conversion + orders still publish.');
+  }
 
   // 2a. Orders per CSR x Profile (the Order sheets DO carry a CSR column).
   const orders = countRowsByCsrProfile_(CONFIG.ORDER_SHEET_IDS, since);
@@ -131,7 +138,7 @@ function runDailySync() {
   // 3. Write two tabs (different grains): CSR×Profile production + by-profile conversion.
   writeProductionTab_(prod, orders);
   writeConversionTab_(conversion);
-  Logger.log('Sync done. Tasks: ' + tasks.length + '; profiles w/ inquiries: ' + Object.keys(conversion).length);
+  Logger.log('Sync done. ClickUp tasks: ' + taskCount + '; profiles w/ inquiries: ' + Object.keys(conversion).length);
 }
 
 // ════════════════════════════════════════════════════════════════
