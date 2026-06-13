@@ -4,7 +4,11 @@
 **Working name:** CSR Shift Logger
 **Owner:** Abdul Haseeb
 
-> **Current design = v4** → see `CSR-Shift-Logger-Design.pdf` (source: `design-pdf/csr-shift-logger-v4.html`).
+> **Current design = v5** → see `CSR-Shift-Logger-Design.pdf` (source: `design-pdf/csr-shift-logger-v5.html`).
+> v5: **one CEO password** (CSR app has none); **no edits after submit**; **Impressions/Clicks removed**;
+> **roster trimmed + editable** (managers add/edit/remove, like CSR Pulse); added **Frustrated client /
+> Disputed client** (+ Project delivered, Project shared); **multi-profile = one report per profile**; counts
+> start at **0**; button is **“Start my report”**; no CSR ID shown to users. Earlier:
 > v4 adds: **roster page** (team by shift, from CSR Pulse + the 10 profiles); **CEO screen locked by password**
 > (CSRs can't open it); **no edits after submit** (shift locks on submit); hand-off note routes **by profile**
 > (the next CSR on that profile). Earlier:
