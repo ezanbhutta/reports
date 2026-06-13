@@ -208,10 +208,11 @@ flowchart LR
 - **Frontend:** React + Vite + Tailwind — same stack you already ship on Vercel.
 - **Storage:** **Supabase** (hosted Postgres). A shared backend is required — many CSRs writing,
   the CEO reading one combined picture. (localStorage can't do multi-user; sheets you've ruled out.)
-- **Auth:** per-CSR login (so attribution + check-in/out are trustworthy and nobody logs as
-  someone else). Light email-or-PIN.
-- **Phase 2:** a read-only CEO/lead dashboard over the same data (conversion, per-CSR activity,
-  per-shift rollup, exception line). Built after the input app is in real use.
+- **Auth:** pick-your-name (no per-CSR password) **+ one shared team passcode** to open the app.
+  Note: without per-person login the data store is open to anyone with the URL + passcode, so
+  Supabase Row-Level Security will allow inserts/edits but block destructive wipes.
+- **CEO/lead dashboard:** built **together** with the input app — read-only views over the same
+  data (conversion from inquiry→order_placed, per-CSR activity, per-shift rollup, exception line).
 
 ---
 
@@ -223,14 +224,18 @@ flowchart LR
 
 ---
 
-## 10. Decisions I need from you to finalize
+## 10. Decisions — RESOLVED (approved 13 Jun)
 
-1. **Storage = Supabase?** (recommended) — or do you have another backend in mind?
-2. **Action catalog:** the 6 confirmed + which of the 6 candidates in §4?
-3. **Auth:** per-CSR login (recommended) or just pick-your-name?
-4. **Edit window:** can entries be edited anytime, or only during the shift / same day?
-5. **Check-in:** auto-stamped when they hit "Start shift" (recommended), or typed manually?
-6. **CEO dashboard:** in this build, or Phase 2?
+1. **Storage = Supabase** (hosted Postgres). Data cannot live in the code/GitHub: a Vercel app
+   is read-only at runtime and GitHub is not a database (every submit would be a git commit —
+   slow, insecure, collides on concurrent writes). Supabase is the simplest shared store and
+   does not change the Vercel deploy. Free tier is sufficient.
+2. **Action catalog:** the 6 confirmed **+** the report candidates (New order, Delivery,
+   Assigned-to-designer, Extension, Completed order, Spam). All become buttons in v1.
+3. **Identify:** pick-your-name (no per-CSR password) **+ one shared team passcode** to open
+   the app (light guard, since no login means the URL is otherwise open).
+4. **Scope:** build the **CSR input app AND the CEO/lead dashboard together**.
+5. **Check-in:** auto-stamped on "Start shift". **Edit window:** through end of the business day.
 
-> Share whatever helps: the full list of action types your CSRs actually do, and a couple of
-> real shift reports for the less-obvious ones (deliveries, assignments) so I get the fields right.
+Still useful to share: your exact full action list (to confirm fields for the candidate actions
+like deliveries/assignments), and 1–2 real shift reports for the trickier ones.
