@@ -4,7 +4,10 @@
 **Working name:** CSR Shift Logger
 **Owner:** Abdul Haseeb
 
-> **Current design = v3** → see `CSR-Shift-Logger-Design.pdf` (source: `design-pdf/csr-shift-logger-v3.html`).
+> **Current design = v4** → see `CSR-Shift-Logger-Design.pdf` (source: `design-pdf/csr-shift-logger-v4.html`).
+> v4 adds: **roster page** (team by shift, from CSR Pulse + the 10 profiles); **CEO screen locked by password**
+> (CSRs can't open it); **no edits after submit** (shift locks on submit); hand-off note routes **by profile**
+> (the next CSR on that profile). Earlier:
 > v3 adds: a **read-only team log** (any CSR can read past shifts + KPIs, can't edit) and **hand-off notes**
 > (each CSR leaves a note; the next CSR sees it as a pop-up at login and taps “Noted”). All copy rewritten in
 > plain, non-technical English (13 pages). Earlier v2 notes:
