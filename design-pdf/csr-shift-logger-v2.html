@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CSR Shift Logger — System Design v2</title>
+<style>
+  @page { size: A4; margin: 0; }
+  *{ box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; margin:0; padding:0; }
+  :root{
+    --violet:#7229FF; --violetDim:#5E1FD8; --glow:#9F66FF; --violetBg:#F3EEFF; --violetLine:#E2D6FF;
+    --ink:#15082F; --muted:#5B5280; --dim:#938AAE; --faint:#B7AFCE;
+    --bg:#FBFAFF; --raised:#F5F3FC; --card:#FFFFFF; --border:#EAE6F5; --line:#F0EDF8;
+    --mint:#10B981; --mintBg:#E7F8F1; --amber:#F59E0B; --amberBg:#FEF5E1; --coral:#EF4444; --cyan:#0EA5E9; --cyanBg:#E6F5FE;
+    --font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace;
+  }
+  html,body{ background:#E9E6F2; font-family:var(--font); color:var(--ink); }
+  .page{ position:relative; width:210mm; min-height:297mm; background:var(--bg);
+    padding:18mm 17mm 16mm; margin:0 auto; break-after:page; display:flex; flex-direction:column; }
+  .page:last-child{ break-after:auto; }
+  body{ counter-reset:pg; }
+  .page{ counter-increment:pg; }
+
+  /* header band */
+  .head{ border-bottom:1.5px solid var(--border); padding-bottom:11px; margin-bottom:20px; }
+  .eyebrow{ font-size:10px; font-weight:800; letter-spacing:.24em; text-transform:uppercase; color:var(--violet); display:flex; align-items:center; gap:9px; }
+  .eyebrow .num{ background:var(--violet); color:#fff; border-radius:6px; padding:2px 8px; font-size:10px; letter-spacing:.05em; }
+  h1{ font-size:27px; font-weight:800; letter-spacing:-.025em; margin-top:9px; line-height:1.08; }
+  .sub{ font-size:13px; color:var(--muted); margin-top:6px; max-width:640px; line-height:1.5; }
+  .foot{ margin-top:auto; padding-top:12px; border-top:1px solid var(--border); display:flex;
+    justify-content:space-between; font-size:9.5px; color:var(--dim); letter-spacing:.05em; }
+  .foot .pgno::after{ content:counter(pg,decimal-leading-zero) " / 11"; }
+
+  .body{ flex:1; }
+  .center{ display:flex; flex-direction:column; align-items:center; }
+  .twocol{ display:grid; grid-template-columns:1.05fr .95fr; gap:22px; align-items:start; }
+  .panel{ background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px 18px; }
+  .panel h3{ font-size:12.5px; font-weight:800; letter-spacing:.02em; margin-bottom:9px; display:flex; align-items:center; gap:8px; }
+  .panel h3::before{ content:''; width:9px; height:9px; border-radius:3px; background:var(--violet); display:inline-block; }
+  .bul{ list-style:none; }
+  .bul li{ font-size:11.5px; color:var(--muted); line-height:1.5; padding-left:16px; position:relative; margin-bottom:7px; }
+  .bul li::before{ content:''; position:absolute; left:0; top:7px; width:5px; height:5px; border-radius:50%; background:var(--glow); }
+  .bul li b{ color:var(--ink); font-weight:700; }
+  .mono{ font-family:var(--mono); }
+
+  /* ---- COVER ---- */
+  .cover{ padding:0; background:linear-gradient(155deg,#190A40 0%,#2C1268 46%,#6A24F0 128%); color:#fff;
+    justify-content:space-between; }
+  .cwrap{ padding:26mm 22mm; display:flex; flex-direction:column; justify-content:space-between; min-height:297mm; }
+  .cbrand{ font-size:12px; font-weight:800; letter-spacing:.34em; text-transform:uppercase; color:#CBB8FF; }
+  .cstamp{ display:inline-block; margin-top:7mm; background:#FFD45C; color:#3A2900; font-weight:800;
+    font-size:10.5px; letter-spacing:.08em; padding:7px 13px; border-radius:8px; }
+  .ctitle{ font-size:58px; font-weight:800; letter-spacing:-.035em; line-height:.98; }
+  .ctag{ font-size:16px; color:#E7DEFF; max-width:520px; line-height:1.55; margin-top:16px; }
+  .crow{ display:flex; gap:9px; margin-top:26px; flex-wrap:wrap; }
+  .cchip{ background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.24); border-radius:999px;
+    padding:8px 15px; font-size:12px; font-weight:600; }
+  .cmeta{ display:flex; gap:40px; font-size:12px; color:#C9BBFF; }
+  .cmeta b{ display:block; color:#fff; font-size:14px; margin-top:3px; }
+
+  /* ---- FLOW primitives ---- */
+  .canvas{ width:100%; background:radial-gradient(circle at 1px 1px,#E7E2F4 1px,transparent 0) 0 0/20px 20px, var(--card);
+    border:1px solid var(--border); border-radius:16px; padding:20px; }
+  .spine{ display:flex; flex-direction:column; align-items:center; }
+  .fn{ background:var(--card); border:1px solid var(--border); border-radius:13px; padding:11px 16px; width:330px;
+    text-align:center; box-shadow:0 2px 5px rgba(21,8,47,.05); }
+  .fn .t{ font-weight:700; font-size:12.5px; }
+  .fn .d{ font-size:10.5px; color:var(--muted); margin-top:2px; line-height:1.4; }
+  .fn.accent{ border:1.5px solid var(--violetLine); }
+  .pill{ background:var(--violet); color:#fff; font-weight:700; font-size:12.5px; border-radius:999px; padding:10px 24px;
+    box-shadow:0 6px 16px rgba(114,41,255,.26); }
+  .endp{ background:var(--ink); color:#fff; font-weight:700; font-size:12.5px; border-radius:999px; padding:10px 24px; }
+  .hub{ width:360px; background:linear-gradient(180deg,#fff,#F7F2FF); border:2px solid var(--violet); border-radius:15px;
+    padding:13px 16px; text-align:center; box-shadow:0 10px 26px rgba(114,41,255,.16); }
+  .hub .t{ font-weight:800; font-size:13.5px; }
+  .hub .k{ display:flex; gap:5px; justify-content:center; flex-wrap:wrap; margin-top:7px; }
+  .hub .k span{ background:var(--violetBg); color:var(--violetDim); border-radius:6px; padding:3px 8px; font-size:9.5px; font-weight:700; }
+  .ar{ width:2px; height:22px; background:var(--glow); position:relative; margin:6px 0; }
+  .ar::after{ content:''; position:absolute; left:-5px; bottom:-1px; border-left:6px solid transparent; border-right:6px solid transparent; border-top:8px solid var(--glow); }
+  .ar.s{ height:14px; }
+  .dia{ width:118px; height:118px; background:var(--violetBg); border:2px solid var(--violet); transform:rotate(45deg);
+    border-radius:13px; display:flex; align-items:center; justify-content:center; }
+  .dia span{ transform:rotate(-45deg); width:110px; text-align:center; font-size:11px; font-weight:700; }
+  .loop{ display:inline-flex; align-items:center; gap:7px; background:var(--violetBg); border:1px dashed var(--violetLine);
+    color:var(--violetDim); font-size:10.5px; font-weight:700; border-radius:999px; padding:5px 13px; }
+  .liverail{ width:360px; margin-top:14px; display:flex; align-items:center; gap:12px; background:#0E1330; color:#fff;
+    border-radius:13px; padding:12px 15px; }
+  .liverail .cyl{ width:38px; height:38px; border-radius:9px; background:linear-gradient(180deg,#3ECF8E,#1F9E6B);
+    color:#04241A; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:14px; flex:0 0 auto; }
+  .liverail .t{ font-weight:800; font-size:12px; }
+  .liverail .d{ font-size:10px; color:#B9C2E8; margin-top:1px; }
+  .livedot{ width:7px;height:7px;border-radius:50%;background:#3ECF8E; display:inline-block; box-shadow:0 0 0 3px rgba(62,207,142,.25); }
+
+  /* ---- step badge ---- */
+  .stepbadge{ display:inline-flex; align-items:center; gap:8px; background:var(--violetBg); color:var(--violetDim);
+    font-size:10px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; padding:5px 11px; border-radius:999px; margin-bottom:6px; }
+
+  /* ---- UI PREVIEW ---- */
+  .ui{ background:#fff; border:1px solid var(--border); border-radius:15px; overflow:hidden; box-shadow:0 8px 22px rgba(21,8,47,.09); width:100%; }
+  .ui .bar{ background:var(--raised); border-bottom:1px solid var(--border); padding:9px 13px; display:flex; align-items:center; gap:6px; }
+  .ui .bar i{ width:9px;height:9px;border-radius:50%; }
+  .ui .bar .ti{ margin-left:9px; font-size:10.5px; color:var(--dim); font-weight:700; }
+  .ui .body{ padding:16px; }
+  .lbl{ font-size:8.5px; text-transform:uppercase; letter-spacing:.13em; color:var(--dim); font-weight:800; margin:11px 0 4px; }
+  .lbl:first-child{ margin-top:0; }
+  .inp{ border:1px solid var(--violetLine); border-radius:9px; padding:8px 11px; font-size:11.5px; display:flex; justify-content:space-between; align-items:center; }
+  .inp .c{ color:var(--dim); font-size:10px; }
+  .inp.area{ height:46px; align-items:flex-start; color:var(--muted); }
+  .seg{ display:flex; gap:6px; }
+  .seg b{ flex:1; text-align:center; font-size:10px; font-weight:700; padding:7px 4px; border-radius:8px; border:1px solid var(--violetLine); color:var(--muted); }
+  .seg b.on{ background:var(--violet); color:#fff; border-color:var(--violet); }
+  .seg b small{ display:block; font-size:8px; font-weight:600; opacity:.85; margin-top:1px; }
+  .btn{ background:var(--violet); color:#fff; text-align:center; font-weight:800; font-size:11.5px; padding:10px; border-radius:10px; }
+  .btn.ghost{ background:#fff; color:var(--muted); border:1px solid var(--violetLine); }
+  .modalwrap{ background:var(--violetBg); border-radius:14px; padding:22px; display:flex; justify-content:center; }
+  .modal{ width:280px; background:#fff; border:1px solid var(--border); border-radius:14px; box-shadow:0 18px 40px rgba(21,8,47,.22); overflow:hidden; }
+  .modal .mh{ padding:11px 15px; border-bottom:1px solid var(--line); font-weight:800; font-size:12.5px; display:flex; align-items:center; gap:8px; }
+  .modal .mh .pl{ width:18px;height:18px;border-radius:6px;background:var(--violet);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px; }
+  .modal .mb{ padding:14px 15px; }
+
+  /* KPI tiles */
+  .tiles{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+  .tile{ background:var(--raised); border:1px solid var(--border); border-radius:10px; padding:9px 10px; }
+  .tile .n{ font-family:var(--mono); font-size:18px; font-weight:700; }
+  .tile .l{ font-size:8.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--dim); font-weight:700; margin-top:1px; }
+  .tile.hot{ background:var(--violet); }
+  .tile.hot .n{ color:#fff; } .tile.hot .l{ color:#D8C9FF; }
+  .logl{ margin-top:4px; }
+  .logl .r{ display:flex; justify-content:space-between; align-items:center; font-size:10.5px; padding:7px 0; border-top:1px dashed var(--line); color:var(--muted); }
+  .logl .r b{ color:var(--ink); font-weight:700; }
+  .tag{ font-size:8px; font-weight:800; padding:1px 6px; border-radius:5px; }
+
+  /* action buttons grid */
+  .actg{ display:grid; grid-template-columns:repeat(3,1fr); gap:7px; }
+  .actb{ border:1px solid var(--violetLine); border-radius:9px; padding:8px 9px; font-size:9.5px; font-weight:700; color:var(--violetDim);
+    display:flex; align-items:center; gap:6px; }
+  .actb .p{ width:14px;height:14px;border-radius:5px;background:var(--violetBg);color:var(--violet);display:flex;align-items:center;justify-content:center;font-size:12px;line-height:1; }
+
+  /* catalog */
+  .catwrap{ display:grid; grid-template-columns:1fr 1fr; gap:13px; }
+  .cat{ background:var(--card); border:1px solid var(--border); border-radius:13px; overflow:hidden; break-inside:avoid; }
+  .cat .ch{ padding:8px 13px; font-weight:800; font-size:11.5px; color:#fff; display:flex; align-items:center; gap:8px; letter-spacing:.02em; }
+  .cat .ci{ padding:8px 13px; border-top:1px solid var(--line); }
+  .cat .ci .nm{ font-weight:700; font-size:11px; }
+  .cat .ci .fl{ font-size:9.5px; color:var(--muted); margin-top:2px; }
+  .cat .ci .fl b{ color:var(--violetDim); font-weight:700; }
+
+  /* checklist + metrics */
+  .metrics{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .check{ display:flex; flex-direction:column; gap:8px; }
+  .chk{ display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--border); border-radius:10px; padding:10px 13px; font-size:11.5px; font-weight:600; color:var(--ink); }
+  .chk .box{ width:18px;height:18px;border-radius:6px;border:1.5px solid var(--mint); background:var(--mintBg); color:var(--mint); display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800; }
+  .numbox{ background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px; text-align:center; }
+  .numbox .n{ font-family:var(--mono); font-size:26px; font-weight:700; color:var(--violet); }
+  .numbox .l{ font-size:9px; text-transform:uppercase; letter-spacing:.1em; color:var(--dim); font-weight:800; margin-top:3px; }
+
+  /* surfaces / role separation */
+  .surfaces{ display:flex; align-items:stretch; gap:16px; justify-content:center; }
+  .surface{ flex:1; max-width:215px; border-radius:15px; padding:15px; border:1px solid var(--border); background:var(--card); }
+  .surface .st{ font-weight:800; font-size:13px; }
+  .surface .ss{ font-size:10px; color:var(--muted); margin-top:3px; line-height:1.45; }
+  .surface .lockrow{ margin-top:10px; font-size:9.5px; font-weight:700; display:inline-flex; align-items:center; gap:6px; border-radius:7px; padding:4px 9px; }
+  .surface.csr{ border-top:4px solid var(--violet); }
+  .surface.mgr{ border-top:4px solid var(--ink); }
+  .vline{ display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--dim); font-size:9px; font-weight:700; }
+  .vline .l{ width:2px; flex:1; background:var(--violetLine); }
+  .storebox{ margin:16px auto 0; max-width:430px; background:#0E1330; color:#fff; border-radius:14px; padding:14px 16px; display:flex; align-items:center; gap:13px; }
+  .storebox .cyl{ width:42px;height:42px;border-radius:10px;background:linear-gradient(180deg,#3ECF8E,#1F9E6B); color:#04241A; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px; flex:0 0 auto; }
+  .storebox .t{ font-weight:800; font-size:12.5px; }
+  .storebox .d{ font-size:10px; color:#B9C2E8; margin-top:1px; }
+
+  /* console preview */
+  .console .row{ display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-top:1px solid var(--line); font-size:10.5px; }
+  .console .row .nmx{ font-weight:700; color:var(--ink); display:flex; align-items:center; gap:7px; }
+  .console .row .ct{ display:flex; gap:6px; }
+  .console .row .ct span{ background:var(--raised); border-radius:6px; padding:2px 7px; font-size:9px; font-weight:700; color:var(--muted); }
+  .filters{ display:flex; gap:6px; margin-bottom:8px; }
+  .filters span{ font-size:9.5px; font-weight:700; border:1px solid var(--violetLine); border-radius:999px; padding:4px 10px; color:var(--muted); }
+  .filters span.on{ background:var(--violet); color:#fff; border-color:var(--violet); }
+
+  /* schema */
+  .erow{ display:flex; gap:14px; align-items:center; justify-content:center; }
+  .ent{ width:230px; background:#fff; border:1px solid var(--border); border-radius:13px; overflow:hidden; box-shadow:0 2px 8px rgba(21,8,47,.05); }
+  .ent .eh{ background:var(--ink); color:#fff; font-weight:800; font-size:12px; padding:9px 13px; letter-spacing:.04em; }
+  .ent .er{ display:flex; justify-content:space-between; padding:6px 13px; font-size:10.5px; border-top:1px solid var(--line); }
+  .ent .er .k{ font-weight:600; } .ent .er .ty{ color:var(--dim); }
+  .pk{ background:var(--violet); color:#fff; border-radius:5px; padding:1px 6px; font-size:8px; font-weight:800; }
+  .fk{ background:var(--violetBg); color:var(--violetDim); border-radius:5px; padding:1px 6px; font-size:8px; font-weight:800; }
+  .rel{ color:var(--violetDim); font-weight:800; font-size:11px; display:flex; flex-direction:column; align-items:center; }
+  .rel .l{ width:34px; height:2px; background:var(--glow); margin:3px 0; }
+</style>
+</head>
+<body>
+
+<!-- 01 COVER -->
+<div class="page cover">
+  <div class="cwrap">
+    <div>
+      <div class="cbrand">HaseebMadeIt · Operations</div>
+      <div class="cstamp">DESIGN FOR APPROVAL · NOTHING BUILT YET</div>
+    </div>
+    <div>
+      <div class="ctitle">CSR Shift<br>Logger</div>
+      <div class="ctag">A structured shift-logging system. Each CSR records every action through a quick
+        pop-up form; their KPIs update live; the CEO sees the whole team in real time on a separate, private console.</div>
+      <div class="crow">
+        <span class="cchip">Pop-up logging</span><span class="cchip">Live KPIs</span>
+        <span class="cchip">Two separate dashboards</span><span class="cchip">Supabase realtime</span>
+      </div>
+    </div>
+    <div class="cmeta">
+      <div>Owner<b>Abdul Haseeb</b></div>
+      <div>Prepared for<b>CEO approval</b></div>
+      <div>Version<b>Design v2 · 11 pages</b></div>
+    </div>
+  </div>
+</div>
+
+<!-- 02 BIG PICTURE -->
+<div class="page">
+  <div class="head">
+    <div class="eyebrow"><span class="num">01</span> The big picture</div>
+    <h1>Two surfaces, one live database</h1>
+    <div class="sub">CSRs log on one app. The CEO/Manager watches on a separate, private console. Both talk to
+      the same Supabase database, so every action a CSR submits appears on the manager's screen instantly.</div>
+  </div>
+  <div class="body center">
+    <div class="surfaces" style="width:100%; max-width:560px;">
+      <div class="surface csr">
+        <div class="st">CSR Logger</div>
+        <div class="ss">Pick name · shift · profile, then log actions all shift. Sees only their own live dashboard.</div>
+        <div class="lockrow" style="background:var(--violetBg); color:var(--violetDim)">🔑 Team passcode</div>
+      </div>
+      <div class="vline"><div class="l"></div><div style="padding:6px 0">writes / reads</div><div class="l"></div></div>
+      <div class="surface mgr">
+        <div class="st">Manager Console</div>
+        <div class="ss">Live view of every CSR, shift &amp; profile. Read-only. Not linked from the CSR app.</div>
+        <div class="lockrow" style="background:#EEF0F8; color:var(--ink)">🔒 Manager passcode (separate)</div>
+      </div>
+    </div>
+    <div class="storebox">
+      <div class="cyl">DB</div>
+      <div><div class="t"><span class="livedot"></span>&nbsp; Supabase · Postgres + Realtime</div>
+        <div class="d">One shared store. CSR submits → row inserted → Manager Console updates live (no refresh).</div></div>
+    </div>
+    <div class="panel" style="margin-top:18px; width:100%;">
+      <h3>Why it's built this way</h3>
+      <ul class="bul">
+        <li><b>Self-contained.</b> No sheets, no ClickUp pulls — the CSRs' entries are the only source.</li>
+        <li><b>Role-separated.</b> Two URLs, two passcodes. CSRs never reach the manager console.</li>
+        <li><b>Live.</b> Supabase Realtime pushes each new entry to the manager instantly.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot"><span>CSR Shift Logger · Design v2</span><span class="pgno"></span></div>
+</div>
+
+<!-- 03 MASTER FLOW -->
+<div class="page">
+  <div class="head">
+    <div class="eyebrow"><span class="num">02</span> The complete flow</div>
+    <h1>How one CSR shift runs, end to end</h1>
+    <div class="sub">Start a session, log each action through a pop-up as it happens, edit freely, then submit to
+      check out. The summary is generated — never typed.</div>
+  </div>
+  <div class="body center">
+    <div class="canvas">
+      <div class="spine">
+        <div class="pill">CSR opens the app</div>
+        <div class="ar s"></div>
+        <div class="fn accent"><div class="t">Start shift</div><div class="d">pick name · shift · profile · <b>check-in auto-stamped (PKT)</b> · date auto</div></div>
+        <div class="ar"></div>
+        <div class="hub"><div class="t">★ Shift dashboard — the hub</div>
+          <div class="k"><span>Inquiries 3</span><span>Revisions 4</span><span>Follow-ups 2</span><span>Offers 1</span></div></div>
+        <div class="ar s"></div>
+        <div class="fn"><div class="t">Tap “ + ” on an action → pop-up form</div><div class="d">fill only that action's fields → <b>OK</b> → entry added, that KPI +1</div></div>
+        <div class="ar s"></div>
+        <div class="loop">↺ repeats for every action, all shift long — KPIs update live</div>
+        <div class="ar s"></div>
+        <div class="fn"><div class="t">Edit any entry, anytime</div><div class="d">corrections don't change check-out</div></div>
+        <div class="ar"></div>
+        <div class="fn accent"><div class="t">Submit shift → Check out</div><div class="d"><b>check-out stamped only here</b> · shift finalized · summary saved</div></div>
+        <div class="ar s"></div>
+        <div class="endp">Done — report generated automatically</div>
+        <div class="liverail"><div class="cyl">DB</div>
+          <div><div class="t"><span class="livedot"></span>&nbsp; Every change streams to Supabase</div>
+            <div class="d">→ the Manager Console reflects it live.</div></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>CSR Shift Logger · Design v2</span><span class="pgno"></span></div>
+</div>
+
+<!-- 04 STEP 1 START -->
+<div class="page">
+  <div class="head">
+    <div class="eyebrow"><span class="num">03</span> Step 1 — Identify</div>
+    <h1>Starting a shift</h1>
+    <div class="sub">No accounts to manage. The CSR picks who they are, which shift, and which profile they're on.
+      Time is stamped automatically in Pakistan time.</div>
+  </div>
+  <div class="body twocol">
+    <div>
+      <div class="stepbadge">● Start screen</div>
+      <div class="ui">
+        <div class="bar"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i><span class="ti">Start shift</span></div>
+        <div class="body">
+          <div class="lbl">Your name</div><div class="inp">Saad <span class="c">▼</span></div>
+          <div class="lbl">Shift (Pakistan time)</div>
+          <div class="seg"><b>Morning<small>9a–5p</small></b><b>Evening<small>5p–1a</small></b><b class="on">Night<small>1a–9a</small></b></div>
+          <div class="lbl">Profile</div><div class="inp">Grid Designs <span class="c">▼</span></div>
+          <div class="lbl">Date · Check-in</div><div class="inp">13 Jun 2026 · 01:08 <span class="c">auto</span></div>
+          <div class="btn" style="margin-top:13px">Start shift</div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="panel">
+        <h3>What's captured</h3>
+        <ul class="bul">
+          <li><b>Name</b>, <b>Shift</b>, <b>Profile</b> — three dropdowns, nothing typed.</li>
+          <li><b>Check-in</b> auto-stamped the moment they press Start.</li>
+          <li><b>Date</b> auto-filled. No CSR ID, no login to remember.</li>
+        </ul>
+      </div>
+      <div class="panel" style="margin-top:13px">
+        <h3>Shift windows · PKT</h3>
+        <ul class="bul">
+          <li><b>Morning</b> — 09:00 → 17:00</li>
+          <li><b>Evening</b> — 17:00 → 01:00</li>
+          <li><b>Night</b> — 01:00 → 09:00</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>CSR Shift Logger · Design v2</span><span class="pgno"></span></div>
+</div>
+
+<!-- 05 STEP 2 POPUP -->
+<div class="page">
+  <div class="head">
+    <div class="eyebrow"><span class="num">04</span> Step 2 — Log</div>
+    <h1>Logging an action — the pop-up</h1>
+    <div class="sub">Press “ + ” on any action, a small window opens with just that action's fields, fill it, press OK —
+      and it's added. Fast, no page changes.</div>
+  </div>
+  <div class="body">
+    <div class="center" style="margin-bottom:18px">
+      <div class="spine" style="flex-direction:row; gap:0; align-items:center; flex-wrap:wrap; justify-content:center">
+        <div class="fn" style="width:auto"><div class="t">Tap “ + ”</div></div>
+        <div style="width:30px;height:2px;background:var(--glow);position:relative"><div style="position:absolute;right:-1px;top:-4px;border-top:5px solid transparent;border-bottom:5px solid transparent;border-left:8px solid var(--glow)"></div></div>
+        <div class="fn accent" style="width:auto"><div class="t">Pop-up form</div></div>
+        <div style="width:30px;height:2px;background:var(--glow);position:relative"><div style="position:absolute;right:-1px;top:-4px;border-top:5px solid transparent;border-bottom:5px solid transparent;border-left:8px solid var(--glow)"></div></div>
+        <div class="fn" style="width:auto"><div class="t">Fill fields</div></div>
+        <div style="width:30px;height:2px;background:var(--glow);position:relative"><div style="position:absolute;right:-1px;top:-4px;border-top:5px solid transparent;border-bottom:5px solid transparent;border-left:8px solid var(--glow)"></div></div>
+        <div class="fn" style="width:auto"><div class="t">Press OK</div></div>
+        <div style="width:30px;height:2px;background:var(--glow);position:relative"><div style="position:absolute;right:-1px;top:-4px;border-top:5px solid transparent;border-bottom:5px solid transparent;border-left:8px solid var(--glow)"></div></div>
+        <div class="pill" style="padding:9px 18px">Added — BOOM 💥</div>
+      </div>
+    </div>
+    <div class="twocol">
+      <div class="modalwrap">
+        <div class="modal">
+          <div class="mh"><span class="pl">+</span> New meeting</div>
+          <div class="mb">
+            <div class="lbl">Client name</div><div class="inp">Aurelius Group</div>
+            <div class="lbl">Meeting type</div>
+            <div class="seg"><b class="on">New</b><b>Existing client</b></div>
+            <div class="lbl">Agenda</div><div class="inp area">Scope &amp; timeline for rebrand…</div>
+            <div style="display:flex; gap:8px; margin-top:13px">
+              <div class="btn ghost" style="flex:1">Cancel</div><div class="btn" style="flex:1">OK</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="panel">
+          <h3>How it feels</h3>
+          <ul class="bul">
+            <li>The form shows <b>only the fields for that action</b> — nothing irrelevant.</li>
+            <li>OK adds it to today's log and bumps that KPI <b>instantly</b>.</li>
+            <li>No navigation away — the CSR stays on the dashboard the whole shift.</li>
+          </ul>
+        </div>
+        <div class="panel" style="margin-top:13px">
+          <h3>Every action has its own short form</h3>
+          <ul class="bul">
+            <li><b>Meeting</b> → client · type · <b>agenda</b></li>
+            <li><b>New inquiry</b> → username · <b>agenda</b></li>
+            <li><b>Project assigned</b> → client · designer · <b>project · due date</b></li>
+            <li><b>Spam</b> → <b>username</b></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>CSR Shift Logger · Design v2</span><span class="pgno"></span></div>
+</div>
+
+<!-- 06 STEP 3 CSR DASHBOARD -->
+<div class="page">
+  <div class="head">
+    <div class="eyebrow"><span class="num">05</span> Step 3 — The CSR's view</div>
+    <h1>The live shift dashboard</h1>
+    <div class="sub">The CSR's home for the whole shift: action buttons, KPI tiles that climb as they log, and today's
+      editable log. This is the “dashboard for the CSR.”</div>
+  </div>
+  <div class="body twocol">
+    <div>
+      <div class="ui">
+        <div class="bar"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i><span class="ti">Saad · Night · Grid Designs · in 01:08</span></div>
+        <div class="body">
+          <div class="tiles">
+            <div class="tile hot"><div class="n">3</div><div class="l">Inquiries</div></div>
+            <div class="tile"><div class="n">4</div><div class="l">Rev. assigned</div></div>
+            <div class="tile"><div class="n">2</div><div class="l">Follow-ups</div></div>
+            <div class="tile"><div class="n">1</div><div class="l">Offers</div></div>
+          </div>
+          <div class="lbl" style="margin-top:12px">Log an action</div>
+          <div class="actg">
+            <div class="actb"><span class="p">+</span>Inquiry</div><div class="actb"><span class="p">+</span>Revision</div><div class="actb"><span class="p">+</span>Meeting</div>
+            <div class="actb"><span class="p">+</span>Follow-up</div><div class="actb"><span class="p">+</span>Upsell</div><div class="actb"><span class="p">+</span>Offer</div>
+          </div>
+          <div class="lbl" style="margin-top:12px">Today's log · tap to edit ✎</div>
+          <div class="logl">
+            <div class="r"><span>01:34 · Inquiry <b>david2clarke</b></span><span class="tag" style="background:var(--violetBg);color:var(--violetDim)">agenda</span></div>
+            <div class="r"><span>01:41 · Upsell <b>@negoettsche</b></span><span class="tag" style="background:var(--mintBg);color:#065F46">Old</span></div>
+            <div class="r"><span>01:52 · Meeting <b>Aurelius</b></span><span class="tag" style="background:var(--amberBg);color:#92400E">New</span></div>
+          </div>
+          <div class="btn" style="margin-top:12px">Submit shift &amp; check out</div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="panel">
+        <h3>Live &amp; automatic</h3>
+        <ul class="bul">
+          <li>KPI tiles <b>climb instantly</b> as actions are logged — no totals typed.</li>
+          <li>Every entry shows in <b>today's log</b>, newest first, with its key detail.</li>
+        </ul>
+      </div>
+      <div class="panel" style="margin-top:13px">
+        <h3>Editing</h3>
+        <ul class="bul">
+          <li>Tap any entry to fix or update it (e.g. an order came in for that client).</li>
+          <li><b>Editing never changes check-out</b> — only the Submit button does that.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>CSR Shift Logger · Design v2</span><span class="pgno"></span></div>
+</div>
+
+<!-- 07 STEP 4 CHECKOUT -->
+<div class="page">
+  <div class="head">
+    <div class="eyebrow"><span class="num">06</span> Step 4 — Close</div>
+    <h1>Checking out</h1>
+    <div class="sub">One button ends the shift. It's the only thing that records the check-out time, so the worked
+      hours stay accurate no matter how much editing happened.</div>
+  </div>
+  <div class="body center">
+    <div class="canvas" style="max-width:520px">
+      <div class="spine">
+        <div class="fn"><div class="t">CSR keeps logging &amp; editing</div><div class="d">check-in time fixed since Start</div></div>
+        <div class="ar"></div>
+        <div class="fn accent" style="border-color:var(--violet)"><div class="t">Press “ Submit shift &amp; check out ”</div><div class="d">the one and only check-out trigger</div></div>
+        <div class="ar"></div>
+        <div class="fn"><div class="t">Check-out time stamped (PKT) · shift locked</div><div class="d">worked hours = check-out − check-in</div></div>
+        <div class="ar s"></div>
+        <div class="endp">Shift summary saved &amp; visible to the manager</div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:18px; max-width:520px; width:100%">
+      <h3>The rule, plainly</h3>
+      <ul class="bul">
+        <li><b>Submit = check-out.</b> Nothing else stamps the time.</li>
+        <li>Re-opening to edit an entry <b>does not</b> move the check-out time.</li>
+        <li>Once submitted, the shift is finalized and rolls into the manager's totals.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot"><span>CSR Shift Logger · Design v2</span><span class="pgno"></span></div>
+</div>
+
+<!-- 08 ACTION CATALOG -->
+<div class="page">
+  <div class="head">
+    <div class="eyebrow"><span class="num">07</span> What gets logged</div>
+    <h1>The full action catalog</h1>
+    <div class="sub">Every action your CSRs report today, as its own button. Grouped so the dashboard stays tidy;
+      <b>violet</b> = required field.</div>
+  </div>
+  <div class="body">
+    <div class="catwrap">
+      <div class="cat"><div class="ch" style="background:#7229FF">Inquiries</div>
+        <div class="ci"><div class="nm">New inquiry</div><div class="fl"><b>Username</b> · <b>Agenda</b></div></div>
+        <div class="ci"><div class="nm">Lead follow-up</div><div class="fl"><b>Name</b></div></div>
+      </div>
+      <div class="cat"><div class="ch" style="background:#9F66FF">Orders &amp; Projects</div>
+        <div class="ci"><div class="nm">New order</div><div class="fl"><b>Client</b> · <b>Service</b> · Value</div></div>
+        <div class="ci"><div class="nm">Order assigned</div><div class="fl"><b>Client</b> · <b>Designer</b></div></div>
+        <div class="ci"><div class="nm">Project assigned</div><div class="fl"><b>Client</b> · <b>Designer</b> · <b>Project</b> · <b>Due date</b></div></div>
+        <div class="ci"><div class="nm">Completed order</div><div class="fl"><b>Client</b> · Value</div></div>
+      </div>
+      <div class="cat"><div class="ch" style="background:#0EA5E9">Revisions &amp; Deliveries</div>
+        <div class="ci"><div class="nm">Revision assigned</div><div class="fl"><b>Client</b> · <b>Designer</b></div></div>
+        <div class="ci"><div class="nm">Revision delivered</div><div class="fl"><b>Client</b> · <b>Project</b></div></div>
+        <div class="ci"><div class="nm">Revision shared (to client)</div><div class="fl"><b>Username</b> · <b>Project</b></div></div>
+        <div class="ci"><div class="nm">Draft delivered</div><div class="fl"><b>Client</b> · <b>Project</b></div></div>
+        <div class="ci"><div class="nm">Final files delivered</div><div class="fl"><b>Client</b> · <b>Project</b></div></div>
+        <div class="ci"><div class="nm">Branding shared</div><div class="fl"><b>Client</b> · <b>Project</b></div></div>
+      </div>
+      <div class="cat"><div class="ch" style="background:#F59E0B">Follow-ups &amp; Sales</div>
+        <div class="ci"><div class="nm">Follow-up (update)</div><div class="fl"><b>Client</b></div></div>
+        <div class="ci"><div class="nm">Designer follow-up <span style="color:var(--dim);font-weight:600">· on ClickUp</span></div><div class="fl"><b>Project</b> · <b>Designer</b> · Note</div></div>
+        <div class="ci"><div class="nm">Upsell</div><div class="fl"><b>Client</b> · <b>What</b> · <b>New/Old</b> · Value</div></div>
+        <div class="ci"><div class="nm">Offer / coupon</div><div class="fl"><b>Client</b> · <b>Scope</b> · <b>Value</b> · Coupon</div></div>
+      </div>
+      <div class="cat"><div class="ch" style="background:#10B981">Meetings</div>
+        <div class="ci"><div class="nm">Meeting</div><div class="fl"><b>Client</b> · <b>Type (new / existing)</b> · <b>Agenda</b></div></div>
+      </div>
+      <div class="cat"><div class="ch" style="background:#EF4444">Other</div>
+        <div class="ci"><div class="nm">Extension sent</div><div class="fl"><b>Client</b> · <b>Reason</b></div></div>
+        <div class="ci"><div class="nm">Spam / irrelevant</div><div class="fl"><b>Username</b></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>CSR Shift Logger · Design v2</span><span class="pgno"></span></div>
+</div>
+
+<!-- 09 METRICS + CHECKLIST -->
+<div class="page">
+  <div class="head">
+    <div class="eyebrow"><span class="num">08</span> Once per shift</div>
+    <h1>Shift metrics &amp; housekeeping</h1>
+    <div class="sub">A few things aren't per-action — they're filled once before checkout. These come straight from
+      your current reports (Impressions/Clicks, CRM, ClickUp clearance…).</div>
+  </div>
+  <div class="body twocol">
+    <div>
+      <div class="stepbadge">● Numbers (typed once)</div>
+      <div class="metrics">
+        <div class="numbox"><div class="n">0</div><div class="l">Impressions</div></div>
+        <div class="numbox"><div class="n">0</div><div class="l">Clicks</div></div>
+      </div>
+      <div class="panel" style="margin-top:14px">
+        <h3>Why separate</h3>
+        <ul class="bul">
+          <li>These are shift totals, not events — so they're single fields, not buttons.</li>
+          <li>Optional: leave blank if a profile doesn't track them.</li>
+        </ul>
+      </div>
+    </div>
+    <div>
+      <div class="stepbadge">● Done-checks (toggles)</div>
+      <div class="check">
+        <div class="chk"><span class="box">✓</span> CRM updated</div>
+        <div class="chk"><span class="box">✓</span> ClickUp cleared</div>
+        <div class="chk"><span class="box">✓</span> Portfolio updated</div>
+        <div class="chk"><span class="box">✓</span> Analytics checked</div>
+        <div class="chk"><span class="box">✓</span> Order-by-order checked</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>CSR Shift Logger · Design v2</span><span class="pgno"></span></div>
+</div>
+
+<!-- 10 MANAGER CONSOLE -->
+<div class="page">
+  <div class="head">
+    <div class="eyebrow"><span class="num">09</span> The CEO / Manager view</div>
+    <h1>A separate, live console</h1>
+    <div class="sub">A different app at a different link, behind its own passcode. It shows every CSR's KPIs updating
+      in real time — and CSRs can't open it.</div>
+  </div>
+  <div class="body twocol">
+    <div>
+      <div class="ui console">
+        <div class="bar"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i><span class="ti"><span class="livedot"></span>&nbsp;Manager Console · live</span></div>
+        <div class="body">
+          <div class="filters"><span class="on">All shifts</span><span>Night</span><span>All profiles</span><span>Today</span></div>
+          <div class="tiles">
+            <div class="tile hot"><div class="n">9</div><div class="l">CSRs online</div></div>
+            <div class="tile"><div class="n">41</div><div class="l">Inquiries</div></div>
+            <div class="tile"><div class="n">63</div><div class="l">Revisions</div></div>
+            <div class="tile"><div class="n">28</div><div class="l">Follow-ups</div></div>
+          </div>
+          <div class="lbl" style="margin-top:11px">By CSR · updating live</div>
+          <div class="console">
+            <div class="row"><span class="nmx"><span class="livedot"></span> Saad · Grid</span><span class="ct"><span>Inq 3</span><span>Rev 4</span><span>Off 1</span></span></div>
+            <div class="row"><span class="nmx"><span class="livedot"></span> Nadir · Eikon</span><span class="ct"><span>Inq 2</span><span>Rev 5</span><span>FU 3</span></span></div>
+            <div class="row"><span class="nmx"><span class="livedot"></span> Samama · AH2</span><span class="ct"><span>Inq 1</span><span>Rev 2</span><span>Ups 1</span></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="panel">
+        <h3>How the separation works</h3>
+        <ul class="bul">
+          <li><b>Two apps, two passcodes.</b> CSR app = team passcode; console = manager passcode.</li>
+          <li>The console link isn't shown anywhere in the CSR app.</li>
+          <li>Supabase rules let CSRs <b>write</b> their own entries but <b>not read</b> the console's team-wide view.</li>
+        </ul>
+      </div>
+      <div class="panel" style="margin-top:13px">
+        <h3>What the CEO sees</h3>
+        <ul class="bul">
+          <li>Live totals + a row per CSR, filterable by <b>shift / profile / date</b>.</li>
+          <li>Numbers move the instant a CSR submits an action — no refresh.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>CSR Shift Logger · Design v2</span><span class="pgno"></span></div>
+</div>
+
+<!-- 11 DATA + ARCH -->
+<div class="page">
+  <div class="head">
+    <div class="eyebrow"><span class="num">10</span> Under the hood</div>
+    <h1>Data model &amp; how it's wired</h1>
+    <div class="sub">Two tables, one realtime database. Type-specific fields live in a flexible column so adding a new
+      action later never needs a schema change.</div>
+  </div>
+  <div class="body">
+    <div class="center">
+      <div class="erow">
+        <div class="ent">
+          <div class="eh">SHIFT_SESSION</div>
+          <div class="er"><span class="k">id <span class="pk">PK</span></span><span class="ty">uuid</span></div>
+          <div class="er"><span class="k">csr_name</span><span class="ty">text</span></div>
+          <div class="er"><span class="k">shift</span><span class="ty">text</span></div>
+          <div class="er"><span class="k">profile</span><span class="ty">text</span></div>
+          <div class="er"><span class="k">date</span><span class="ty">date</span></div>
+          <div class="er"><span class="k">check_in_at</span><span class="ty">ts (PKT)</span></div>
+          <div class="er"><span class="k">check_out_at</span><span class="ty">ts (PKT)</span></div>
+          <div class="er"><span class="k">impressions</span><span class="ty">int</span></div>
+          <div class="er"><span class="k">clicks</span><span class="ty">int</span></div>
+          <div class="er"><span class="k">checklist</span><span class="ty">jsonb</span></div>
+          <div class="er"><span class="k">status</span><span class="ty">text</span></div>
+        </div>
+        <div class="rel">1<div class="l"></div>∞</div>
+        <div class="ent">
+          <div class="eh">ACTIVITY</div>
+          <div class="er"><span class="k">id <span class="pk">PK</span></span><span class="ty">uuid</span></div>
+          <div class="er"><span class="k">session_id <span class="fk">FK</span></span><span class="ty">uuid</span></div>
+          <div class="er"><span class="k">type</span><span class="ty">text</span></div>
+          <div class="er"><span class="k">client</span><span class="ty">text</span></div>
+          <div class="er"><span class="k">details</span><span class="ty">jsonb</span></div>
+          <div class="er"><span class="k">created_at</span><span class="ty">ts</span></div>
+          <div class="er"><span class="k">updated_at</span><span class="ty">ts</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="twocol" style="margin-top:20px">
+      <div class="panel">
+        <h3>Data model notes</h3>
+        <ul class="bul">
+          <li>One <b>session</b> per CSR per shift (name · shift · profile · check-in/out).</li>
+          <li>One <b>activity</b> row per logged action; its fields sit in <span class="mono">details</span>.</li>
+          <li>KPI counts = <span class="mono">count(activity) group by type</span> — generated, never typed.</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <h3>Stack &amp; realtime</h3>
+        <ul class="bul">
+          <li><b>React + Vite + Tailwind</b> on Vercel — two builds (CSR app, Manager console).</li>
+          <li><b>Supabase</b> Postgres + Realtime + row-level security.</li>
+          <li>CSR submits → row inserted → Realtime pushes it to the console <b>instantly</b>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>CSR Shift Logger · Design v2</span><span class="pgno"></span></div>
+</div>
+
+</body>
+</html>

@@ -4,6 +4,14 @@
 **Working name:** CSR Shift Logger
 **Owner:** Abdul Haseeb
 
+> **Current design = v2** → see `CSR-Shift-Logger-Design.pdf` (source: `design-pdf/csr-shift-logger-v2.html`).
+> v2 changes from the draft below: identity = name + shift + profile (no CSR ID, **no conversion**) · PKT
+> shift windows · **pop-up** logging (`+ → form → OK`) · full action catalog (meeting & inquiry **agenda**,
+> project assigned + **project + due date**, spam **username**, **designer follow-up**) · shift **metrics &
+> checklist** (impressions/clicks, CRM/ClickUp/portfolio/analytics) · **live** KPIs · two **separate**
+> surfaces — CSR dashboard and a gated CEO/Manager console — on Supabase **Realtime**.
+> The v1 sections below are kept for history.
+
 ---
 
 ## 1. What this is (and isn't)
