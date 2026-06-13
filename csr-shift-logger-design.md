@@ -4,7 +4,10 @@
 **Working name:** CSR Shift Logger
 **Owner:** Abdul Haseeb
 
-> **Current design = v2** → see `CSR-Shift-Logger-Design.pdf` (source: `design-pdf/csr-shift-logger-v2.html`).
+> **Current design = v3** → see `CSR-Shift-Logger-Design.pdf` (source: `design-pdf/csr-shift-logger-v3.html`).
+> v3 adds: a **read-only team log** (any CSR can read past shifts + KPIs, can't edit) and **hand-off notes**
+> (each CSR leaves a note; the next CSR sees it as a pop-up at login and taps “Noted”). All copy rewritten in
+> plain, non-technical English (13 pages). Earlier v2 notes:
 > v2 changes from the draft below: identity = name + shift + profile (no CSR ID, **no conversion**) · PKT
 > shift windows · **pop-up** logging (`+ → form → OK`) · full action catalog (meeting & inquiry **agenda**,
 > project assigned + **project + due date**, spam **username**, **designer follow-up**) · shift **metrics &

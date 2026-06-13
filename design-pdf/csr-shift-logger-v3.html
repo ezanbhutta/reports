@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CSR Shift Logger — Plain Guide</title>
+<style>
+  @page { size: A4; margin: 0; }
+  *{ box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact; margin:0; padding:0; }
+  :root{
+    --violet:#7229FF; --violetDim:#5E1FD8; --glow:#9F66FF; --violetBg:#F3EEFF; --violetLine:#E2D6FF;
+    --ink:#15082F; --muted:#5B5280; --dim:#938AAE; --faint:#B7AFCE;
+    --bg:#FBFAFF; --raised:#F5F3FC; --card:#FFFFFF; --border:#EAE6F5; --line:#F0EDF8;
+    --mint:#10B981; --mintBg:#E7F8F1; --amber:#F59E0B; --amberBg:#FEF5E1; --coral:#EF4444; --cyan:#0EA5E9; --cyanBg:#E6F5FE;
+    --font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace;
+  }
+  html,body{ background:#E9E6F2; font-family:var(--font); color:var(--ink); }
+  .page{ position:relative; width:210mm; min-height:297mm; background:var(--bg);
+    padding:18mm 17mm 16mm; margin:0 auto; break-after:page; display:flex; flex-direction:column; }
+  .page:last-child{ break-after:auto; }
+  body{ counter-reset:pg; } .page{ counter-increment:pg; }
+  .head{ border-bottom:1.5px solid var(--border); padding-bottom:11px; margin-bottom:20px; }
+  .eyebrow{ font-size:10px; font-weight:800; letter-spacing:.24em; text-transform:uppercase; color:var(--violet); display:flex; align-items:center; gap:9px; }
+  .eyebrow .num{ background:var(--violet); color:#fff; border-radius:6px; padding:2px 8px; font-size:10px; letter-spacing:.05em; }
+  h1{ font-size:27px; font-weight:800; letter-spacing:-.025em; margin-top:9px; line-height:1.08; }
+  .sub{ font-size:13px; color:var(--muted); margin-top:6px; max-width:650px; line-height:1.5; }
+  .foot{ margin-top:auto; padding-top:12px; border-top:1px solid var(--border); display:flex; justify-content:space-between; font-size:9.5px; color:var(--dim); letter-spacing:.05em; }
+  .foot .pgno::after{ content:counter(pg,decimal-leading-zero) " / 13"; }
+  .body{ flex:1; }
+  .center{ display:flex; flex-direction:column; align-items:center; }
+  .twocol{ display:grid; grid-template-columns:1.05fr .95fr; gap:22px; align-items:start; }
+  .panel{ background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px 18px; }
+  .panel h3{ font-size:12.5px; font-weight:800; margin-bottom:9px; display:flex; align-items:center; gap:8px; }
+  .panel h3::before{ content:''; width:9px; height:9px; border-radius:3px; background:var(--violet); display:inline-block; }
+  .bul{ list-style:none; }
+  .bul li{ font-size:11.5px; color:var(--muted); line-height:1.5; padding-left:16px; position:relative; margin-bottom:7px; }
+  .bul li::before{ content:''; position:absolute; left:0; top:7px; width:5px; height:5px; border-radius:50%; background:var(--glow); }
+  .bul li b{ color:var(--ink); font-weight:700; }
+  .mono{ font-family:var(--mono); }
+
+  .cover{ padding:0; background:linear-gradient(155deg,#190A40 0%,#2C1268 46%,#6A24F0 128%); color:#fff; }
+  .cwrap{ padding:26mm 22mm; display:flex; flex-direction:column; justify-content:space-between; min-height:297mm; }
+  .cbrand{ font-size:12px; font-weight:800; letter-spacing:.34em; text-transform:uppercase; color:#CBB8FF; }
+  .cstamp{ display:inline-block; margin-top:7mm; background:#FFD45C; color:#3A2900; font-weight:800; font-size:10.5px; letter-spacing:.08em; padding:7px 13px; border-radius:8px; }
+  .ctitle{ font-size:58px; font-weight:800; letter-spacing:-.035em; line-height:.98; }
+  .ctag{ font-size:16px; color:#E7DEFF; max-width:530px; line-height:1.55; margin-top:16px; }
+  .crow{ display:flex; gap:9px; margin-top:26px; flex-wrap:wrap; }
+  .cchip{ background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.24); border-radius:999px; padding:8px 15px; font-size:12px; font-weight:600; }
+  .cmeta{ display:flex; gap:40px; font-size:12px; color:#C9BBFF; } .cmeta b{ display:block; color:#fff; font-size:14px; margin-top:3px; }
+
+  .canvas{ width:100%; background:radial-gradient(circle at 1px 1px,#E7E2F4 1px,transparent 0) 0 0/20px 20px, var(--card); border:1px solid var(--border); border-radius:16px; padding:20px; }
+  .spine{ display:flex; flex-direction:column; align-items:center; }
+  .fn{ background:var(--card); border:1px solid var(--border); border-radius:13px; padding:11px 16px; width:340px; text-align:center; box-shadow:0 2px 5px rgba(21,8,47,.05); }
+  .fn .t{ font-weight:700; font-size:12.5px; } .fn .d{ font-size:10.5px; color:var(--muted); margin-top:2px; line-height:1.4; }
+  .fn.accent{ border:1.5px solid var(--violetLine); }
+  .pill{ background:var(--violet); color:#fff; font-weight:700; font-size:12.5px; border-radius:999px; padding:10px 24px; box-shadow:0 6px 16px rgba(114,41,255,.26); }
+  .endp{ background:var(--ink); color:#fff; font-weight:700; font-size:12.5px; border-radius:999px; padding:10px 24px; }
+  .hub{ width:360px; background:linear-gradient(180deg,#fff,#F7F2FF); border:2px solid var(--violet); border-radius:15px; padding:13px 16px; text-align:center; box-shadow:0 10px 26px rgba(114,41,255,.16); }
+  .hub .t{ font-weight:800; font-size:13.5px; }
+  .hub .k{ display:flex; gap:5px; justify-content:center; flex-wrap:wrap; margin-top:7px; }
+  .hub .k span{ background:var(--violetBg); color:var(--violetDim); border-radius:6px; padding:3px 8px; font-size:9.5px; font-weight:700; }
+  .ar{ width:2px; height:20px; background:var(--glow); position:relative; margin:6px 0; }
+  .ar::after{ content:''; position:absolute; left:-5px; bottom:-1px; border-left:6px solid transparent; border-right:6px solid transparent; border-top:8px solid var(--glow); }
+  .ar.s{ height:13px; }
+  .loop{ display:inline-flex; align-items:center; gap:7px; background:var(--violetBg); border:1px dashed var(--violetLine); color:var(--violetDim); font-size:10.5px; font-weight:700; border-radius:999px; padding:5px 13px; }
+  .liverail{ width:360px; margin-top:14px; display:flex; align-items:center; gap:12px; background:#0E1330; color:#fff; border-radius:13px; padding:12px 15px; }
+  .liverail .cyl{ width:38px; height:38px; border-radius:9px; background:linear-gradient(180deg,#3ECF8E,#1F9E6B); color:#04241A; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:14px; flex:0 0 auto; }
+  .liverail .t{ font-weight:800; font-size:12px; } .liverail .d{ font-size:10px; color:#B9C2E8; margin-top:1px; }
+  .livedot{ width:7px;height:7px;border-radius:50%;background:#3ECF8E; display:inline-block; box-shadow:0 0 0 3px rgba(62,207,142,.25); }
+  .stepbadge{ display:inline-flex; align-items:center; gap:8px; background:var(--violetBg); color:var(--violetDim); font-size:10px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; padding:5px 11px; border-radius:999px; margin-bottom:8px; }
+
+  .ui{ background:#fff; border:1px solid var(--border); border-radius:15px; overflow:hidden; box-shadow:0 8px 22px rgba(21,8,47,.09); width:100%; }
+  .ui .bar{ background:var(--raised); border-bottom:1px solid var(--border); padding:9px 13px; display:flex; align-items:center; gap:6px; }
+  .ui .bar i{ width:9px;height:9px;border-radius:50%; } .ui .bar .ti{ margin-left:9px; font-size:10.5px; color:var(--dim); font-weight:700; }
+  .ui .body{ padding:16px; }
+  .lbl{ font-size:8.5px; text-transform:uppercase; letter-spacing:.13em; color:var(--dim); font-weight:800; margin:11px 0 4px; } .lbl:first-child{ margin-top:0; }
+  .inp{ border:1px solid var(--violetLine); border-radius:9px; padding:8px 11px; font-size:11.5px; display:flex; justify-content:space-between; align-items:center; }
+  .inp .c{ color:var(--dim); font-size:10px; } .inp.area{ height:46px; align-items:flex-start; color:var(--muted); }
+  .seg{ display:flex; gap:6px; } .seg b{ flex:1; text-align:center; font-size:10px; font-weight:700; padding:7px 4px; border-radius:8px; border:1px solid var(--violetLine); color:var(--muted); }
+  .seg b.on{ background:var(--violet); color:#fff; border-color:var(--violet); } .seg b small{ display:block; font-size:8px; font-weight:600; opacity:.85; margin-top:1px; }
+  .btn{ background:var(--violet); color:#fff; text-align:center; font-weight:800; font-size:11.5px; padding:10px; border-radius:10px; } .btn.ghost{ background:#fff; color:var(--muted); border:1px solid var(--violetLine); }
+  .btn.ok{ background:var(--mint); }
+  .modalwrap{ background:var(--violetBg); border-radius:14px; padding:20px; display:flex; justify-content:center; }
+  .modal{ width:290px; background:#fff; border:1px solid var(--border); border-radius:14px; box-shadow:0 18px 40px rgba(21,8,47,.22); overflow:hidden; }
+  .modal .mh{ padding:11px 15px; border-bottom:1px solid var(--line); font-weight:800; font-size:12.5px; display:flex; align-items:center; gap:8px; }
+  .modal .mh .pl{ width:18px;height:18px;border-radius:6px;background:var(--violet);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px; }
+  .modal .mb{ padding:14px 15px; }
+  .tiles{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+  .tile{ background:var(--raised); border:1px solid var(--border); border-radius:10px; padding:9px 10px; }
+  .tile .n{ font-family:var(--mono); font-size:18px; font-weight:700; } .tile .l{ font-size:8.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--dim); font-weight:700; margin-top:1px; }
+  .tile.hot{ background:var(--violet); } .tile.hot .n{ color:#fff; } .tile.hot .l{ color:#D8C9FF; }
+  .logl .r{ display:flex; justify-content:space-between; align-items:center; font-size:10.5px; padding:7px 0; border-top:1px dashed var(--line); color:var(--muted); } .logl .r b{ color:var(--ink); font-weight:700; }
+  .tag{ font-size:8px; font-weight:800; padding:1px 6px; border-radius:5px; }
+  .actg{ display:grid; grid-template-columns:repeat(3,1fr); gap:7px; }
+  .actb{ border:1px solid var(--violetLine); border-radius:9px; padding:8px 9px; font-size:9.5px; font-weight:700; color:var(--violetDim); display:flex; align-items:center; gap:6px; }
+  .actb .p{ width:14px;height:14px;border-radius:5px;background:var(--violetBg);color:var(--violet);display:flex;align-items:center;justify-content:center;font-size:12px;line-height:1; }
+
+  .catwrap{ display:grid; grid-template-columns:1fr 1fr; gap:13px; }
+  .cat{ background:var(--card); border:1px solid var(--border); border-radius:13px; overflow:hidden; break-inside:avoid; }
+  .cat .ch{ padding:8px 13px; font-weight:800; font-size:11.5px; color:#fff; display:flex; align-items:center; gap:8px; }
+  .cat .ci{ padding:8px 13px; border-top:1px solid var(--line); }
+  .cat .ci .nm{ font-weight:700; font-size:11px; } .cat .ci .fl{ font-size:9.5px; color:var(--muted); margin-top:2px; } .cat .ci .fl b{ color:var(--violetDim); font-weight:700; }
+
+  .metrics{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .check{ display:flex; flex-direction:column; gap:8px; }
+  .chk{ display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--border); border-radius:10px; padding:10px 13px; font-size:11.5px; font-weight:600; }
+  .chk .box{ width:18px;height:18px;border-radius:6px;border:1.5px solid var(--mint); background:var(--mintBg); color:var(--mint); display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800; }
+  .numbox{ background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px; text-align:center; }
+  .numbox .n{ font-family:var(--mono); font-size:26px; font-weight:700; color:var(--violet); } .numbox .l{ font-size:9px; text-transform:uppercase; letter-spacing:.1em; color:var(--dim); font-weight:800; margin-top:3px; }
+
+  .surfaces{ display:flex; align-items:stretch; gap:16px; justify-content:center; }
+  .surface{ flex:1; max-width:215px; border-radius:15px; padding:15px; border:1px solid var(--border); background:var(--card); }
+  .surface .st{ font-weight:800; font-size:13px; } .surface .ss{ font-size:10px; color:var(--muted); margin-top:3px; line-height:1.45; }
+  .surface .lockrow{ margin-top:10px; font-size:9.5px; font-weight:700; display:inline-flex; align-items:center; gap:6px; border-radius:7px; padding:4px 9px; }
+  .surface.csr{ border-top:4px solid var(--violet); } .surface.mgr{ border-top:4px solid var(--ink); }
+  .vline{ display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--dim); font-size:9px; font-weight:700; } .vline .l{ width:2px; flex:1; background:var(--violetLine); }
+  .storebox{ margin:16px auto 0; max-width:440px; background:#0E1330; color:#fff; border-radius:14px; padding:14px 16px; display:flex; align-items:center; gap:13px; }
+  .storebox .cyl{ width:42px;height:42px;border-radius:10px;background:linear-gradient(180deg,#3ECF8E,#1F9E6B); color:#04241A; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px; flex:0 0 auto; }
+  .storebox .t{ font-weight:800; font-size:12.5px; } .storebox .d{ font-size:10px; color:#B9C2E8; margin-top:1px; }
+
+  .console .row{ display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-top:1px solid var(--line); font-size:10.5px; }
+  .console .row .nmx{ font-weight:700; display:flex; align-items:center; gap:7px; }
+  .console .row .ct{ display:flex; gap:6px; } .console .row .ct span{ background:var(--raised); border-radius:6px; padding:2px 7px; font-size:9px; font-weight:700; color:var(--muted); }
+  .filters{ display:flex; gap:6px; margin-bottom:8px; } .filters span{ font-size:9.5px; font-weight:700; border:1px solid var(--violetLine); border-radius:999px; padding:4px 10px; color:var(--muted); } .filters span.on{ background:var(--violet); color:#fff; border-color:var(--violet); }
+  .readonly{ font-size:8.5px; font-weight:800; color:#92400E; background:var(--amberBg); border-radius:6px; padding:2px 8px; }
+
+  .erow{ display:flex; gap:14px; align-items:center; justify-content:center; }
+  .ent{ width:232px; background:#fff; border:1px solid var(--border); border-radius:13px; overflow:hidden; box-shadow:0 2px 8px rgba(21,8,47,.05); }
+  .ent .eh{ background:var(--ink); color:#fff; font-weight:800; font-size:12px; padding:9px 13px; }
+  .ent .er{ display:flex; justify-content:space-between; padding:6px 13px; font-size:10.5px; border-top:1px solid var(--line); } .ent .er .k{ font-weight:600; } .ent .er .ty{ color:var(--dim); }
+  .pk{ background:var(--violet); color:#fff; border-radius:5px; padding:1px 6px; font-size:8px; font-weight:800; } .fk{ background:var(--violetBg); color:var(--violetDim); border-radius:5px; padding:1px 6px; font-size:8px; font-weight:800; }
+  .rel{ color:var(--violetDim); font-weight:800; font-size:11px; display:flex; flex-direction:column; align-items:center; } .rel .l{ width:34px; height:2px; background:var(--glow); margin:3px 0; }
+</style>
+</head>
+<body>
+
+<!-- 01 COVER -->
+<div class="page cover">
+  <div class="cwrap">
+    <div><div class="cbrand">HaseebMadeIt · Operations</div>
+      <div class="cstamp">A PLAN TO LOOK AT · NOTHING IS BUILT YET</div></div>
+    <div>
+      <div class="ctitle">CSR Shift<br>Logger</div>
+      <div class="ctag">A simple app where each CSR writes down what they do during their shift.
+        The counts add up by themselves, and the CEO can watch the whole team live on a separate screen.</div>
+      <div class="crow"><span class="cchip">Tap, fill, done</span><span class="cchip">Counts itself</span>
+        <span class="cchip">Hand-off notes</span><span class="cchip">See past shifts</span></div>
+    </div>
+    <div class="cmeta"><div>Owner<b>Abdul Haseeb</b></div><div>For<b>CEO to approve</b></div><div>Pages<b>13 · plain guide</b></div></div>
+  </div>
+</div>
+
+<!-- 02 BIG IDEA -->
+<div class="page">
+  <div class="head"><div class="eyebrow"><span class="num">01</span> The big idea</div>
+    <h1>Two apps that share one place</h1>
+    <div class="sub">CSRs use one app to write down their work. The CEO uses a different app to watch.
+      Both save to the same place online — so when a CSR adds something, the CEO sees it right away.</div></div>
+  <div class="body center">
+    <div class="surfaces" style="width:100%; max-width:560px;">
+      <div class="surface csr"><div class="st">The CSR app</div>
+        <div class="ss">Pick your name, shift and profile, then write down each thing you do. You see your own counts.</div>
+        <div class="lockrow" style="background:var(--violetBg); color:var(--violetDim)">🔑 One team password</div></div>
+      <div class="vline"><div class="l"></div><div style="padding:6px 0">save / read</div><div class="l"></div></div>
+      <div class="surface mgr"><div class="st">The CEO app</div>
+        <div class="ss">Watch every CSR live. Look only — can't change anything. CSRs don't get this one.</div>
+        <div class="lockrow" style="background:#EEF0F8; color:var(--ink)">🔒 A different password</div></div>
+    </div>
+    <div class="storebox"><div class="cyl">DB</div>
+      <div><div class="t"><span class="livedot"></span>&nbsp; One shared online database (Supabase)</div>
+        <div class="d">A CSR taps save → it lands here → the CEO's screen updates on its own. No refresh needed.</div></div></div>
+    <div class="panel" style="margin-top:18px; width:100%;"><h3>In plain words</h3>
+      <ul class="bul">
+        <li>Nothing comes from old sheets or ClickUp. <b>What the CSRs type is the only source.</b></li>
+        <li>Two apps, two passwords. CSRs <b>can't open</b> the CEO app.</li>
+        <li>Everything is <b>live</b> — new work shows up for the CEO straight away.</li>
+      </ul></div>
+  </div>
+  <div class="foot"><span>CSR Shift Logger · Plain Guide</span><span class="pgno"></span></div>
+</div>
+
+<!-- 03 HOW A SHIFT WORKS -->
+<div class="page">
+  <div class="head"><div class="eyebrow"><span class="num">02</span> The whole picture</div>
+    <h1>How a shift works, start to finish</h1>
+    <div class="sub">Here is everything in order — from logging in to logging out. The counts add up by themselves.</div></div>
+  <div class="body center">
+    <div class="canvas">
+      <div class="spine">
+        <div class="pill">Open the app</div><div class="ar s"></div>
+        <div class="fn accent"><div class="t">Log in</div><div class="d">pick name · shift · profile · <b>the time is filled in for you (Pakistan time)</b></div></div>
+        <div class="ar s"></div>
+        <div class="fn"><div class="t">See the last person's note</div><div class="d">a pop-up shows it → tap <b>“Noted”</b></div></div>
+        <div class="ar"></div>
+        <div class="hub"><div class="t">★ Your shift screen</div>
+          <div class="k"><span>Inquiries 3</span><span>Revisions 4</span><span>Follow-ups 2</span><span>Offers 1</span></div></div>
+        <div class="ar s"></div>
+        <div class="fn"><div class="t">Tap “ + ” on a thing you did → small box pops up</div><div class="d">fill it → press <b>OK</b> → it's saved, the count goes up</div></div>
+        <div class="ar s"></div><div class="loop">↺ do this for everything you do, all shift — counts climb live</div><div class="ar s"></div>
+        <div class="fn"><div class="t">Leave a note for the next person</div><div class="d">anything they should know</div></div>
+        <div class="ar"></div>
+        <div class="fn accent"><div class="t">Press “Submit” → you're clocked out</div><div class="d"><b>this is the only thing that sets your finish time</b></div></div>
+        <div class="ar s"></div><div class="endp">Done — your report is made for you</div>
+        <div class="liverail"><div class="cyl">DB</div><div><div class="t"><span class="livedot"></span>&nbsp; Everything saves as you go</div><div class="d">→ the CEO sees it live.</div></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>CSR Shift Logger · Plain Guide</span><span class="pgno"></span></div>
+</div>
+
+<!-- 04 START -->
+<div class="page">
+  <div class="head"><div class="eyebrow"><span class="num">03</span> Step 1</div>
+    <h1>Logging in</h1>
+    <div class="sub">No usernames or passwords to remember. Just pick three things. The app fills in the time and date.</div></div>
+  <div class="body twocol">
+    <div><div class="stepbadge">● Log-in screen</div>
+      <div class="ui"><div class="bar"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i><span class="ti">Log in</span></div>
+        <div class="body">
+          <div class="lbl">Your name</div><div class="inp">Saad <span class="c">▼</span></div>
+          <div class="lbl">Your shift (Pakistan time)</div>
+          <div class="seg"><b>Morning<small>9am–5pm</small></b><b>Evening<small>5pm–1am</small></b><b class="on">Night<small>1am–9am</small></b></div>
+          <div class="lbl">Profile</div><div class="inp">Grid Designs <span class="c">▼</span></div>
+          <div class="lbl">Date &amp; start time</div><div class="inp">13 Jun 2026 · 01:08 <span class="c">filled in</span></div>
+          <div class="btn" style="margin-top:13px">Start my shift</div>
+        </div></div></div>
+    <div>
+      <div class="panel"><h3>What you do</h3>
+        <ul class="bul"><li>Pick your <b>name</b>, your <b>shift</b>, and your <b>profile</b>. That's it.</li>
+          <li>The app writes down your <b>start time</b> and <b>date</b> for you.</li>
+          <li>Right after you log in, you'll see the <b>note the last person left</b> (next page).</li></ul></div>
+      <div class="panel" style="margin-top:13px"><h3>Shift times (Pakistan)</h3>
+        <ul class="bul"><li><b>Morning</b> — 9:00 am to 5:00 pm</li><li><b>Evening</b> — 5:00 pm to 1:00 am</li><li><b>Night</b> — 1:00 am to 9:00 am</li></ul></div>
+    </div>
+  </div>
+  <div class="foot"><span>CSR Shift Logger · Plain Guide</span><span class="pgno"></span></div>
+</div>
+
+<!-- 05 ADD WHAT YOU DID -->
+<div class="page">
+  <div class="head"><div class="eyebrow"><span class="num">04</span> Step 2</div>
+    <h1>Writing down what you did</h1>
+    <div class="sub">Tap the “ + ” next to the thing you did. A small box pops up and asks only for what it needs. Fill it, press OK — saved.</div></div>
+  <div class="body">
+    <div class="center" style="margin-bottom:18px">
+      <div class="spine" style="flex-direction:row; gap:0; align-items:center; flex-wrap:wrap; justify-content:center">
+        <div class="fn" style="width:auto"><div class="t">Tap “ + ”</div></div>
+        <div style="width:30px;height:2px;background:var(--glow);position:relative"><div style="position:absolute;right:-1px;top:-4px;border-top:5px solid transparent;border-bottom:5px solid transparent;border-left:8px solid var(--glow)"></div></div>
+        <div class="fn accent" style="width:auto"><div class="t">A small box pops up</div></div>
+        <div style="width:30px;height:2px;background:var(--glow);position:relative"><div style="position:absolute;right:-1px;top:-4px;border-top:5px solid transparent;border-bottom:5px solid transparent;border-left:8px solid var(--glow)"></div></div>
+        <div class="fn" style="width:auto"><div class="t">Fill it in</div></div>
+        <div style="width:30px;height:2px;background:var(--glow);position:relative"><div style="position:absolute;right:-1px;top:-4px;border-top:5px solid transparent;border-bottom:5px solid transparent;border-left:8px solid var(--glow)"></div></div>
+        <div class="fn" style="width:auto"><div class="t">Press OK</div></div>
+        <div style="width:30px;height:2px;background:var(--glow);position:relative"><div style="position:absolute;right:-1px;top:-4px;border-top:5px solid transparent;border-bottom:5px solid transparent;border-left:8px solid var(--glow)"></div></div>
+        <div class="pill" style="padding:9px 18px">Saved — done 💥</div>
+      </div>
+    </div>
+    <div class="twocol">
+      <div class="modalwrap"><div class="modal"><div class="mh"><span class="pl">+</span> Meeting</div>
+        <div class="mb"><div class="lbl">Client name</div><div class="inp">Aurelius Group</div>
+          <div class="lbl">Type of meeting</div><div class="seg"><b class="on">New</b><b>Old client</b></div>
+          <div class="lbl">What it was about (agenda)</div><div class="inp area">New logo, scope and timeline…</div>
+          <div style="display:flex; gap:8px; margin-top:13px"><div class="btn ghost" style="flex:1">Cancel</div><div class="btn ok" style="flex:1">OK</div></div></div></div></div>
+      <div>
+        <div class="panel"><h3>Why it's easy</h3>
+          <ul class="bul"><li>The box asks <b>only</b> what that thing needs — nothing extra.</li>
+            <li>Press OK and your <b>count goes up by itself</b>.</li>
+            <li>You stay on the same screen the whole time.</li></ul></div>
+        <div class="panel" style="margin-top:13px"><h3>A few examples</h3>
+          <ul class="bul"><li><b>Meeting</b> → client · type · <b>what it was about</b></li>
+            <li><b>New inquiry</b> → username · <b>what they want</b></li>
+            <li><b>Project given to a designer</b> → client · designer · <b>project · due date</b></li></ul></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>CSR Shift Logger · Plain Guide</span><span class="pgno"></span></div>
+</div>
+
+<!-- 06 CSR DASHBOARD -->
+<div class="page">
+  <div class="head"><div class="eyebrow"><span class="num">05</span> Step 3</div>
+    <h1>Your shift screen</h1>
+    <div class="sub">This is your home for the whole shift. Your counts go up as you add things, and your list shows everything you logged.</div></div>
+  <div class="body twocol">
+    <div><div class="ui"><div class="bar"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i><span class="ti">Saad · Night · Grid · started 01:08</span></div>
+      <div class="body">
+        <div class="tiles"><div class="tile hot"><div class="n">3</div><div class="l">Inquiries</div></div>
+          <div class="tile"><div class="n">4</div><div class="l">Revisions</div></div>
+          <div class="tile"><div class="n">2</div><div class="l">Follow-ups</div></div>
+          <div class="tile"><div class="n">1</div><div class="l">Offers</div></div></div>
+        <div class="lbl" style="margin-top:12px">Add something</div>
+        <div class="actg"><div class="actb"><span class="p">+</span>Inquiry</div><div class="actb"><span class="p">+</span>Revision</div><div class="actb"><span class="p">+</span>Meeting</div>
+          <div class="actb"><span class="p">+</span>Follow-up</div><div class="actb"><span class="p">+</span>Upsell</div><div class="actb"><span class="p">+</span>Offer</div></div>
+        <div class="lbl" style="margin-top:12px">Your list today · tap to fix ✎</div>
+        <div class="logl"><div class="r"><span>01:34 · Inquiry <b>david2clarke</b></span><span class="tag" style="background:var(--violetBg);color:var(--violetDim)">note</span></div>
+          <div class="r"><span>01:41 · Upsell <b>@negoettsche</b></span><span class="tag" style="background:var(--mintBg);color:#065F46">Old</span></div>
+          <div class="r"><span>01:52 · Meeting <b>Aurelius</b></span><span class="tag" style="background:var(--amberBg);color:#92400E">New</span></div></div>
+        <div class="btn" style="margin-top:12px">Submit &amp; clock out</div>
+      </div></div></div>
+    <div>
+      <div class="panel"><h3>It counts for you</h3>
+        <ul class="bul"><li>The numbers at the top <b>go up on their own</b> as you add things.</li>
+          <li>You never type a total — the app does the maths.</li></ul></div>
+      <div class="panel" style="margin-top:13px"><h3>Fixing a mistake</h3>
+        <ul class="bul"><li>Tap any line in your list to fix or update it.</li>
+          <li>Fixing things <b>does not</b> change your finish time — only the Submit button does.</li></ul></div>
+    </div>
+  </div>
+  <div class="foot"><span>CSR Shift Logger · Plain Guide</span><span class="pgno"></span></div>
+</div>
+
+<!-- 07 HANDOFF NOTE (NEW) -->
+<div class="page">
+  <div class="head"><div class="eyebrow"><span class="num">06</span> Hand-off</div>
+    <h1>A note for the next person</h1>
+    <div class="sub">Before you leave, write anything the next CSR should know. When they log in, your note pops up — and they tap “Noted” so you know they read it.</div></div>
+  <div class="body twocol">
+    <div><div class="stepbadge">● You write it (before you leave)</div>
+      <div class="ui"><div class="bar"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i><span class="ti">Notes for next shift</span></div>
+        <div class="body"><div class="lbl">Anything the next CSR should know</div>
+          <div class="inp area" style="height:80px">Client “BALONCE” is waiting on a revision — please send first thing. Aurelius meeting moved to 4pm.</div>
+          <div class="btn" style="margin-top:11px">Save note</div></div></div>
+      <div style="height:13px"></div>
+      <div class="stepbadge">● They see it (when they log in)</div>
+      <div class="modalwrap" style="padding:16px"><div class="modal">
+        <div class="mh"><span class="pl">✉</span> Note from Saad (last shift)</div>
+        <div class="mb"><div style="font-size:11.5px; color:var(--muted); line-height:1.5; background:var(--raised); border-radius:10px; padding:11px;">
+          Client “BALONCE” is waiting on a revision — please send first thing. Aurelius meeting moved to 4pm.</div>
+          <div class="btn ok" style="margin-top:12px">Noted ✓</div></div></div></div>
+    </div>
+    <div>
+      <div class="panel"><h3>How it works</h3>
+        <ul class="bul"><li>It's just a <b>plain text box</b> — write whatever you want.</li>
+          <li>The next CSR on that profile sees it <b>the moment they log in</b>.</li>
+          <li>They tap <b>“Noted”</b>, so you can be sure they read it.</li></ul></div>
+      <div class="panel" style="margin-top:13px"><h3>Why it helps</h3>
+        <ul class="bul"><li>No more “did the night shift tell us about…?”</li>
+          <li>Nothing falls through the cracks between shifts.</li></ul></div>
+    </div>
+  </div>
+  <div class="foot"><span>CSR Shift Logger · Plain Guide</span><span class="pgno"></span></div>
+</div>
+
+<!-- 08 CHECKOUT -->
+<div class="page">
+  <div class="head"><div class="eyebrow"><span class="num">07</span> Step 4</div>
+    <h1>Clocking out</h1>
+    <div class="sub">One button ends your shift and writes your finish time. This is the only thing that sets it — so your hours stay correct even if you fixed things along the way.</div></div>
+  <div class="body center">
+    <div class="canvas" style="max-width:520px"><div class="spine">
+      <div class="fn"><div class="t">You keep adding and fixing things</div><div class="d">your start time stays the same</div></div>
+      <div class="ar"></div>
+      <div class="fn accent" style="border-color:var(--violet)"><div class="t">Press “Submit &amp; clock out”</div><div class="d">the only thing that sets your finish time</div></div>
+      <div class="ar"></div>
+      <div class="fn"><div class="t">Finish time is written down · shift is locked</div><div class="d">your hours = finish time − start time</div></div>
+      <div class="ar s"></div>
+      <div class="endp">Your report is saved and the CEO can see it</div>
+    </div></div>
+    <div class="panel" style="margin-top:18px; max-width:520px; width:100%"><h3>The simple rule</h3>
+      <ul class="bul"><li><b>Submit = clock out.</b> Nothing else writes your finish time.</li>
+        <li>Going back to fix a line <b>does not</b> change your finish time.</li>
+        <li>Once you submit, the shift is final and rolls into the CEO's totals.</li></ul></div>
+  </div>
+  <div class="foot"><span>CSR Shift Logger · Plain Guide</span><span class="pgno"></span></div>
+</div>
+
+<!-- 09 CATALOG -->
+<div class="page">
+  <div class="head"><div class="eyebrow"><span class="num">08</span> The buttons</div>
+    <h1>Everything you can write down</h1>
+    <div class="sub">Every kind of work you report today, each as its own button. They're grouped to keep the screen tidy.
+      <b>Violet</b> words are the things the box asks for.</div></div>
+  <div class="body">
+    <div class="catwrap">
+      <div class="cat"><div class="ch" style="background:#7229FF">Inquiries</div>
+        <div class="ci"><div class="nm">New inquiry</div><div class="fl"><b>Username</b> · <b>What they want</b></div></div>
+        <div class="ci"><div class="nm">Lead follow-up</div><div class="fl"><b>Name</b></div></div></div>
+      <div class="cat"><div class="ch" style="background:#9F66FF">Orders &amp; projects</div>
+        <div class="ci"><div class="nm">New order</div><div class="fl"><b>Client</b> · <b>Service</b> · Price</div></div>
+        <div class="ci"><div class="nm">Order given to designer</div><div class="fl"><b>Client</b> · <b>Designer</b></div></div>
+        <div class="ci"><div class="nm">Project given to designer</div><div class="fl"><b>Client</b> · <b>Designer</b> · <b>Project</b> · <b>Due date</b></div></div>
+        <div class="ci"><div class="nm">Order completed</div><div class="fl"><b>Client</b> · Price</div></div></div>
+      <div class="cat"><div class="ch" style="background:#0EA5E9">Revisions &amp; deliveries</div>
+        <div class="ci"><div class="nm">Revision given to designer</div><div class="fl"><b>Client</b> · <b>Designer</b></div></div>
+        <div class="ci"><div class="nm">Revision done</div><div class="fl"><b>Client</b> · <b>Project</b></div></div>
+        <div class="ci"><div class="nm">Revision sent to client</div><div class="fl"><b>Username</b> · <b>Project</b></div></div>
+        <div class="ci"><div class="nm">Draft sent</div><div class="fl"><b>Client</b> · <b>Project</b></div></div>
+        <div class="ci"><div class="nm">Final files sent</div><div class="fl"><b>Client</b> · <b>Project</b></div></div>
+        <div class="ci"><div class="nm">Branding sent</div><div class="fl"><b>Client</b> · <b>Project</b></div></div></div>
+      <div class="cat"><div class="ch" style="background:#F59E0B">Follow-ups &amp; sales</div>
+        <div class="ci"><div class="nm">Follow-up with client</div><div class="fl"><b>Client</b></div></div>
+        <div class="ci"><div class="nm">Follow-up with designer <span style="color:var(--dim);font-weight:600">· on ClickUp</span></div><div class="fl"><b>Project</b> · <b>Designer</b> · Note</div></div>
+        <div class="ci"><div class="nm">Upsell</div><div class="fl"><b>Client</b> · <b>What</b> · <b>New/Old</b> · Price</div></div>
+        <div class="ci"><div class="nm">Offer / coupon</div><div class="fl"><b>Client</b> · <b>Work</b> · <b>Price</b> · Coupon</div></div></div>
+      <div class="cat"><div class="ch" style="background:#10B981">Meetings</div>
+        <div class="ci"><div class="nm">Meeting</div><div class="fl"><b>Client</b> · <b>Type</b> · <b>What it was about</b></div></div></div>
+      <div class="cat"><div class="ch" style="background:#EF4444">Other</div>
+        <div class="ci"><div class="nm">Extension sent</div><div class="fl"><b>Client</b> · <b>Reason</b></div></div>
+        <div class="ci"><div class="nm">Spam / not relevant</div><div class="fl"><b>Username</b></div></div></div>
+    </div>
+  </div>
+  <div class="foot"><span>CSR Shift Logger · Plain Guide</span><span class="pgno"></span></div>
+</div>
+
+<!-- 10 METRICS + CHECKLIST -->
+<div class="page">
+  <div class="head"><div class="eyebrow"><span class="num">09</span> At the end</div>
+    <h1>A few numbers &amp; a checklist</h1>
+    <div class="sub">Some things aren't a single action — you fill them once before you clock out. These come straight from your reports today.</div></div>
+  <div class="body twocol">
+    <div><div class="stepbadge">● Numbers (type once)</div>
+      <div class="metrics"><div class="numbox"><div class="n">0</div><div class="l">Impressions</div></div><div class="numbox"><div class="n">0</div><div class="l">Clicks</div></div></div>
+      <div class="panel" style="margin-top:14px"><h3>Why these are different</h3>
+        <ul class="bul"><li>They're totals for the whole shift, not single actions.</li><li>Leave them blank if your profile doesn't track them.</li></ul></div></div>
+    <div><div class="stepbadge">● Tick when done</div>
+      <div class="check"><div class="chk"><span class="box">✓</span> CRM updated</div><div class="chk"><span class="box">✓</span> ClickUp cleared</div>
+        <div class="chk"><span class="box">✓</span> Portfolio updated</div><div class="chk"><span class="box">✓</span> Analytics checked</div>
+        <div class="chk"><span class="box">✓</span> Checked orders one by one</div></div></div>
+  </div>
+  <div class="foot"><span>CSR Shift Logger · Plain Guide</span><span class="pgno"></span></div>
+</div>
+
+<!-- 11 TEAM LOG (NEW) -->
+<div class="page">
+  <div class="head"><div class="eyebrow"><span class="num">10</span> Looking back</div>
+    <h1>See past shifts</h1>
+    <div class="sub">Anyone on the team can open the log and read what other CSRs did before, and their counts. You can read it, but you can't change someone else's report.</div></div>
+  <div class="body twocol">
+    <div><div class="ui console"><div class="bar"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i><span class="ti">Team log · past shifts</span></div>
+      <div class="body">
+        <div class="filters"><span class="on">All CSRs</span><span>All profiles</span><span>This week</span></div>
+        <div class="console">
+          <div class="row"><span class="nmx">Ahmad · Dygram · 12 Jun · Night</span><span class="ct"><span>Rev 6</span><span>Del 11</span></span></div>
+          <div class="row"><span class="nmx">Nadir · Eikon · 12 Jun · Night</span><span class="ct"><span>Inq 2</span><span>Rev 5</span></span></div>
+          <div class="row"><span class="nmx">Samama · AH2 · 11 Jun · Night</span><span class="ct"><span>FU 4</span><span>Ups 1</span></span></div>
+          <div class="row"><span class="nmx">Saad · Grid · 11 Jun · Night</span><span class="ct"><span>Inq 10</span><span>Ord 2</span></span></div>
+        </div>
+        <div style="margin-top:11px; display:flex; justify-content:space-between; align-items:center">
+          <span style="font-size:10px; color:var(--dim)">Tap a row to read the full report</span><span class="readonly">READ ONLY</span></div>
+      </div></div></div>
+    <div>
+      <div class="panel"><h3>What it's for</h3>
+        <ul class="bul"><li>Catch up on what the shift before you did.</li>
+          <li>See any CSR's past reports and their counts — it's <b>open to the whole team</b>.</li></ul></div>
+      <div class="panel" style="margin-top:13px"><h3>Read only</h3>
+        <ul class="bul"><li>You can <b>open and read</b> any past report.</li>
+          <li>You <b>can't edit</b> someone else's report — only your own, and only on the day.</li></ul></div>
+    </div>
+  </div>
+  <div class="foot"><span>CSR Shift Logger · Plain Guide</span><span class="pgno"></span></div>
+</div>
+
+<!-- 12 CEO SCREEN -->
+<div class="page">
+  <div class="head"><div class="eyebrow"><span class="num">11</span> The CEO's screen</div>
+    <h1>A separate screen, just for the CEO</h1>
+    <div class="sub">A different app with its own password. The CEO sees every CSR's counts going up live. CSRs can't open this one.</div></div>
+  <div class="body twocol">
+    <div><div class="ui console"><div class="bar"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i><span class="ti"><span class="livedot"></span>&nbsp;CEO screen · live</span></div>
+      <div class="body">
+        <div class="filters"><span class="on">All shifts</span><span>Night</span><span>All profiles</span><span>Today</span></div>
+        <div class="tiles"><div class="tile hot"><div class="n">9</div><div class="l">CSRs working</div></div>
+          <div class="tile"><div class="n">41</div><div class="l">Inquiries</div></div><div class="tile"><div class="n">63</div><div class="l">Revisions</div></div><div class="tile"><div class="n">28</div><div class="l">Follow-ups</div></div></div>
+        <div class="lbl" style="margin-top:11px">Each CSR · updating live</div>
+        <div class="console"><div class="row"><span class="nmx"><span class="livedot"></span> Saad · Grid</span><span class="ct"><span>Inq 3</span><span>Rev 4</span><span>Off 1</span></span></div>
+          <div class="row"><span class="nmx"><span class="livedot"></span> Nadir · Eikon</span><span class="ct"><span>Inq 2</span><span>Rev 5</span><span>FU 3</span></span></div>
+          <div class="row"><span class="nmx"><span class="livedot"></span> Samama · AH2</span><span class="ct"><span>Inq 1</span><span>Rev 2</span><span>Ups 1</span></span></div></div>
+      </div></div></div>
+    <div>
+      <div class="panel"><h3>Kept separate</h3>
+        <ul class="bul"><li>It's a <b>different web link</b> with its <b>own password</b>.</li>
+          <li>The link isn't shown anywhere in the CSR app.</li>
+          <li>CSRs simply <b>don't have the password</b> for it.</li></ul></div>
+      <div class="panel" style="margin-top:13px"><h3>What the CEO sees</h3>
+        <ul class="bul"><li>Live totals and a row for each CSR.</li>
+          <li>Filter by <b>shift, profile or date</b>.</li>
+          <li>Numbers move the <b>instant</b> a CSR saves something.</li></ul></div>
+    </div>
+  </div>
+  <div class="foot"><span>CSR Shift Logger · Plain Guide</span><span class="pgno"></span></div>
+</div>
+
+<!-- 13 DATA + TECH -->
+<div class="page">
+  <div class="head"><div class="eyebrow"><span class="num">12</span> For the developer</div>
+    <h1>What we save &amp; how it's built</h1>
+    <div class="sub">The only technical page. Two simple tables, one live database. Everything else above is built on top of this.</div></div>
+  <div class="body">
+    <div class="center"><div class="erow">
+      <div class="ent"><div class="eh">SHIFT (one per CSR per shift)</div>
+        <div class="er"><span class="k">id <span class="pk">key</span></span><span class="ty">uuid</span></div>
+        <div class="er"><span class="k">csr_name</span><span class="ty">text</span></div><div class="er"><span class="k">shift</span><span class="ty">text</span></div>
+        <div class="er"><span class="k">profile</span><span class="ty">text</span></div><div class="er"><span class="k">date</span><span class="ty">date</span></div>
+        <div class="er"><span class="k">start_time</span><span class="ty">time</span></div><div class="er"><span class="k">finish_time</span><span class="ty">time</span></div>
+        <div class="er"><span class="k">impressions / clicks</span><span class="ty">int</span></div><div class="er"><span class="k">checklist</span><span class="ty">json</span></div>
+        <div class="er"><span class="k">note_for_next</span><span class="ty">text</span></div><div class="er"><span class="k">note_seen_by/at</span><span class="ty">text/ts</span></div></div>
+      <div class="rel">1<div class="l"></div>many</div>
+      <div class="ent"><div class="eh">ACTION (one per thing logged)</div>
+        <div class="er"><span class="k">id <span class="pk">key</span></span><span class="ty">uuid</span></div>
+        <div class="er"><span class="k">shift_id <span class="fk">link</span></span><span class="ty">uuid</span></div><div class="er"><span class="k">type</span><span class="ty">text</span></div>
+        <div class="er"><span class="k">client</span><span class="ty">text</span></div><div class="er"><span class="k">details</span><span class="ty">json</span></div>
+        <div class="er"><span class="k">created_at</span><span class="ty">ts</span></div><div class="er"><span class="k">updated_at</span><span class="ty">ts</span></div></div>
+    </div></div>
+    <div class="twocol" style="margin-top:20px">
+      <div class="panel"><h3>What's saved</h3>
+        <ul class="bul"><li>One <b>shift</b> row (who · when · note for next · the numbers).</li>
+          <li>One <b>action</b> row for each thing logged; its fields sit in <span class="mono">details</span>.</li>
+          <li>Counts are worked out from the action rows — never typed.</li></ul></div>
+      <div class="panel"><h3>How it's built</h3>
+        <ul class="bul"><li><b>React + Vite</b> on Vercel — two small apps (CSR, CEO).</li>
+          <li><b>Supabase</b> database with live updates.</li>
+          <li>CSRs can add/read; only the CEO app reads the live team totals.</li></ul></div>
+    </div>
+  </div>
+  <div class="foot"><span>CSR Shift Logger · Plain Guide</span><span class="pgno"></span></div>
+</div>
+
+</body>
+</html>
