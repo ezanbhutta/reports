@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CSR Shift Logger — System Design</title>
+<style>
+  @page { size: A4; margin: 13mm 13mm 15mm 13mm; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  :root{
+    --violet:#7229FF; --violetDim:#5E1FD8; --glow:#9F66FF; --violetBg:#F1EBFF;
+    --ink:#160A33; --muted:#534A78; --dim:#8B82A8;
+    --bg:#FAFAFE; --raised:#F4F2FA; --card:#FFFFFF; --border:#E8E5F3; --borderHi:#D8CFF2;
+    --mint:#10B981; --mintBg:#E7F8F1; --amber:#F59E0B; --amberBg:#FEF4DE;
+    --coral:#EF4444; --cyan:#0EA5E9; --cyanBg:#E5F4FE;
+  }
+  html,body{ margin:0; padding:0; background:#fff; color:var(--ink);
+    font-family:'Inter',-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; }
+  .page{ position:relative; padding:4mm 2mm; break-after:page; }
+  .page:last-child{ break-after:auto; }
+  .eyebrow{ font-size:10px; font-weight:700; letter-spacing:.22em; text-transform:uppercase; color:var(--violet); }
+  h2.sec{ font-size:23px; font-weight:800; margin:4px 0 2px; letter-spacing:-.02em; }
+  .sub{ color:var(--muted); font-size:12.5px; margin:0 0 18px; max-width:680px; line-height:1.5; }
+  .mono{ font-family:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace; }
+  .foot{ position:absolute; bottom:4mm; left:2mm; right:2mm; display:flex; justify-content:space-between;
+    font-size:9px; color:var(--dim); letter-spacing:.04em; border-top:1px solid var(--border); padding-top:5px; }
+
+  /* ---------- COVER ---------- */
+  .cover{ height:271mm; display:flex; flex-direction:column; justify-content:space-between;
+    background:linear-gradient(160deg,#1A0B3D 0%,#2A1166 48%,#7229FF 130%); color:#fff;
+    border-radius:18px; padding:22mm 20mm; }
+  .cover .brand{ font-size:12px; font-weight:700; letter-spacing:.3em; text-transform:uppercase; color:#C9B6FF; }
+  .cover h1{ font-size:52px; line-height:1.02; font-weight:800; letter-spacing:-.03em; margin:0 0 14px; }
+  .cover .tag{ font-size:16px; color:#E4DBFF; max-width:520px; line-height:1.55; }
+  .cover .pillrow{ display:flex; gap:10px; margin-top:26px; flex-wrap:wrap; }
+  .cover .pill{ background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.22);
+    border-radius:999px; padding:8px 15px; font-size:12px; font-weight:600; color:#fff; }
+  .cover .meta{ display:flex; gap:34px; font-size:12px; color:#CFC2FF; }
+  .cover .meta b{ color:#fff; display:block; font-size:14px; margin-top:3px; }
+  .stamp{ display:inline-block; background:#FFD15C; color:#3A2A00; font-weight:800; font-size:11px;
+    letter-spacing:.06em; padding:6px 12px; border-radius:8px; }
+
+  /* ---------- FLOWCHART PRIMITIVES ---------- */
+  .canvas{ background:
+      radial-gradient(circle at 1px 1px, #E9E4F6 1px, transparent 0) 0 0/22px 22px,
+      var(--bg);
+    border:1px solid var(--border); border-radius:18px; padding:20px 16px 26px; }
+  .spine{ display:flex; flex-direction:column; align-items:center; }
+  .node{ background:var(--card); border:1px solid var(--border); border-radius:14px;
+    padding:12px 16px; width:430px; max-width:90%; box-shadow:0 2px 6px rgba(22,10,51,.05);
+    break-inside:avoid; position:relative; }
+  .node .t{ font-weight:700; font-size:13px; color:var(--ink); }
+  .node .d{ font-size:11px; color:var(--muted); margin-top:2px; line-height:1.45; }
+  .node.accent{ border-left:4px solid var(--violet); }
+  .node.io{ background:var(--raised); }
+  .pillnode{ background:var(--violet); color:#fff; font-weight:700; font-size:13px;
+    border-radius:999px; padding:11px 26px; text-align:center; box-shadow:0 6px 16px rgba(114,41,255,.28); }
+  .endnode{ background:var(--ink); color:#fff; font-weight:700; font-size:13px;
+    border-radius:999px; padding:11px 26px; text-align:center; }
+  .hub{ width:470px; max-width:94%; background:linear-gradient(180deg,#fff, #F7F3FF);
+    border:2px solid var(--violet); border-radius:16px; padding:14px 18px;
+    box-shadow:0 10px 28px rgba(114,41,255,.16); break-inside:avoid; }
+  .hub .hb{ display:flex; align-items:center; gap:8px; }
+  .hub .star{ width:22px;height:22px;border-radius:7px;background:var(--violet);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800; }
+  .hub .t{ font-weight:800; font-size:14px; }
+  .hub .kpibar{ margin-top:9px; display:flex; gap:6px; flex-wrap:wrap; }
+  .kpi{ background:var(--violetBg); color:var(--violetDim); border-radius:7px; padding:4px 9px;
+    font-size:10.5px; font-weight:700; }
+  .down{ width:2px; height:24px; background:var(--glow); position:relative; margin:7px 0; }
+  .down::after{ content:''; position:absolute; left:-5px; bottom:-1px;
+    border-left:6px solid transparent; border-right:6px solid transparent; border-top:9px solid var(--glow); }
+  .down.short{ height:16px; }
+  .branch{ display:flex; align-items:stretch; gap:14px; width:470px; max-width:94%; }
+  .branch .col{ flex:1; display:flex; flex-direction:column; align-items:center; }
+  .tag{ font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--violetDim); background:var(--violetBg); border-radius:6px; padding:2px 8px; margin-bottom:5px; }
+  .tag.no{ color:#9A3412; background:#FEEAD8; }
+  .tag.yes{ color:#065F46; background:var(--mintBg); }
+  .diamond{ width:128px; height:128px; background:var(--violetBg); border:2px solid var(--violet);
+    transform:rotate(45deg); border-radius:14px; display:flex; align-items:center; justify-content:center; }
+  .diamond span{ transform:rotate(-45deg); width:120px; text-align:center; font-size:11.5px; font-weight:700; color:var(--ink); }
+  .chips{ display:flex; flex-wrap:wrap; gap:7px; justify-content:center; width:470px; max-width:94%; }
+  .chip{ background:#fff; border:1px solid var(--borderHi); color:var(--violetDim);
+    border-radius:999px; padding:6px 13px; font-size:11.5px; font-weight:700; }
+  .loopnote{ display:flex; align-items:center; gap:7px; color:var(--violetDim); font-size:11px; font-weight:700;
+    background:var(--violetBg); border:1px dashed var(--borderHi); border-radius:999px; padding:5px 13px; }
+  .rail{ width:470px; max-width:94%; margin-top:14px; display:flex; align-items:center; gap:12px;
+    background:#0E1330; border-radius:14px; padding:13px 16px; color:#fff; break-inside:avoid; }
+  .rail .db{ width:40px; height:40px; border-radius:10px; background:linear-gradient(180deg,#3ECF8E,#1F9E6B);
+    display:flex; align-items:center; justify-content:center; font-weight:800; font-size:11px; color:#04241A; flex:0 0 auto; }
+  .rail .rt{ font-weight:800; font-size:13px; }
+  .rail .rd{ font-size:11px; color:#B9C2E8; margin-top:1px; }
+
+  /* ---------- CARDS / CATALOG ---------- */
+  .grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .grid3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:11px; }
+  .acard{ background:var(--card); border:1px solid var(--border); border-radius:14px; padding:13px 15px;
+    break-inside:avoid; }
+  .acard .hd{ display:flex; align-items:center; gap:9px; margin-bottom:7px; }
+  .badge{ width:26px; height:26px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+    font-weight:800; font-size:12px; color:#fff; flex:0 0 auto; }
+  .acard .nm{ font-weight:800; font-size:13.5px; }
+  .fields{ display:flex; flex-wrap:wrap; gap:6px; }
+  .f{ background:var(--raised); border:1px solid var(--border); border-radius:7px; padding:3px 9px;
+    font-size:10.5px; font-weight:600; color:var(--muted); }
+  .f.req{ color:var(--violetDim); background:var(--violetBg); border-color:var(--borderHi); }
+  .note{ font-size:10.5px; color:var(--dim); margin-top:7px; font-style:italic; }
+  .candidate{ opacity:.92; border-style:dashed; }
+  .legend{ display:flex; gap:16px; font-size:10.5px; color:var(--muted); margin:0 0 12px; flex-wrap:wrap; }
+  .legend span{ display:flex; align-items:center; gap:6px; }
+  .dot{ width:10px;height:10px;border-radius:50%; }
+
+  /* ---------- DATA MODEL ---------- */
+  .erow{ display:flex; align-items:center; gap:10px; justify-content:center; }
+  .entity{ background:#fff; border:1px solid var(--border); border-radius:13px; overflow:hidden;
+    width:210px; break-inside:avoid; box-shadow:0 2px 8px rgba(22,10,51,.05); }
+  .entity .eh{ background:var(--ink); color:#fff; font-weight:800; font-size:12px; padding:9px 13px; letter-spacing:.04em; }
+  .entity .er{ display:flex; justify-content:space-between; gap:8px; padding:6px 13px; font-size:10.5px;
+    border-top:1px solid var(--border); }
+  .entity .er .k{ color:var(--ink); font-weight:600; }
+  .entity .er .ty{ color:var(--dim); }
+  .pk{ color:#fff; background:var(--violet); border-radius:5px; padding:1px 6px; font-size:8.5px; font-weight:800; }
+  .fk{ color:var(--violetDim); background:var(--violetBg); border-radius:5px; padding:1px 6px; font-size:8.5px; font-weight:800; }
+  .rel{ display:flex; flex-direction:column; align-items:center; color:var(--violetDim); font-weight:800; font-size:11px; }
+  .rel .ln{ width:38px; height:2px; background:var(--glow); margin:4px 0; }
+
+  /* ---------- SCREENS ---------- */
+  .screens{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:13px; align-items:start; }
+  .screen{ background:#fff; border:1px solid var(--border); border-radius:14px; overflow:hidden; break-inside:avoid;
+    box-shadow:0 4px 14px rgba(22,10,51,.07); }
+  .screen .bar{ background:var(--raised); padding:7px 11px; display:flex; align-items:center; gap:5px; border-bottom:1px solid var(--border); }
+  .screen .bar i{ width:8px;height:8px;border-radius:50%; display:inline-block; }
+  .screen .bar .ti{ margin-left:8px; font-size:9.5px; color:var(--dim); font-weight:600; }
+  .screen .body{ padding:13px; }
+  .scap{ font-size:10.5px; color:var(--muted); text-align:center; margin-top:7px; font-weight:600; }
+  .lbl{ font-size:9px; text-transform:uppercase; letter-spacing:.1em; color:var(--dim); font-weight:700; margin:9px 0 3px; }
+  .inp{ border:1px solid var(--borderHi); border-radius:8px; padding:7px 10px; font-size:11px; color:var(--ink);
+    display:flex; justify-content:space-between; align-items:center; }
+  .inp .cf{ color:var(--dim); }
+  .seg{ display:flex; gap:5px; }
+  .seg b{ flex:1; text-align:center; font-size:10px; padding:6px 0; border-radius:7px; border:1px solid var(--borderHi); color:var(--muted); font-weight:600; }
+  .seg b.on{ background:var(--violet); color:#fff; border-color:var(--violet); }
+  .btn{ background:var(--violet); color:#fff; text-align:center; font-weight:700; font-size:11px; padding:9px; border-radius:9px; margin-top:11px; }
+  .agrid{ display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:6px; }
+  .ab{ border:1px solid var(--borderHi); border-radius:9px; padding:8px; font-size:10px; font-weight:700; color:var(--violetDim); display:flex; align-items:center; gap:5px; }
+  .ab .p{ width:14px;height:14px;border-radius:5px;background:var(--violetBg); color:var(--violet); display:flex;align-items:center;justify-content:center; font-size:11px; line-height:1;}
+  .logrow{ display:flex; justify-content:space-between; font-size:10px; padding:6px 0; border-top:1px dashed var(--border); color:var(--muted); }
+  .logrow b{ color:var(--ink); font-weight:700; }
+  .stt{ font-size:8.5px; font-weight:800; border-radius:5px; padding:1px 6px; }
+
+  /* ---------- DECISIONS ---------- */
+  .deccard{ background:var(--card); border:1px solid var(--border); border-left:4px solid var(--violet);
+    border-radius:12px; padding:11px 15px; margin-bottom:9px; break-inside:avoid; }
+  .deccard .q{ font-weight:800; font-size:13px; }
+  .deccard .o{ font-size:11.5px; color:var(--muted); margin-top:2px; }
+  .reco{ color:#065F46; background:var(--mintBg); border-radius:6px; padding:1px 7px; font-size:9.5px; font-weight:800; }
+  .callout{ background:var(--violetBg); border:1px solid var(--borderHi); border-radius:12px; padding:13px 16px;
+    font-size:12px; color:var(--ink); line-height:1.5; }
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<div class="page">
+  <div class="cover">
+    <div>
+      <div class="brand">HaseebMadeIt · Operations</div>
+      <div style="margin-top:6mm"><span class="stamp">DESIGN FOR APPROVAL · NOT YET BUILT</span></div>
+    </div>
+    <div>
+      <h1>CSR Shift<br>Logger</h1>
+      <div class="tag">A structured shift-logging app. Every CSR action captured through a dedicated
+        form the moment it happens — no free-text notes, no pulling from any sheet or ClickUp.
+        The shift summary writes itself.</div>
+      <div class="pillrow">
+        <span class="pill">Structured input</span>
+        <span class="pill">Auto KPI summary</span>
+        <span class="pill">Editable entries</span>
+        <span class="pill">Self-contained</span>
+      </div>
+    </div>
+    <div class="meta">
+      <div>Owner<b>Abdul Haseeb</b></div>
+      <div>Prepared for<b>CEO approval</b></div>
+      <div>Document<b>End-to-end flow + data model</b></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MASTER FLOWCHART ============ -->
+<div class="page">
+  <div class="eyebrow">The complete flow</div>
+  <h2 class="sec">How a shift works, end to end</h2>
+  <p class="sub">One CSR, one shift. They start a session, log each action through its own form as it
+    happens, edit anything later, then check out — and the summary is generated automatically.</p>
+
+  <div class="canvas">
+    <div class="spine">
+      <div class="pillnode">CSR opens the app</div>
+      <div class="down"></div>
+
+      <div class="diamond"><span>Shift already started today?</span></div>
+      <div class="down short"></div>
+
+      <div class="branch">
+        <div class="col">
+          <span class="tag no">No → start one</span>
+          <div class="node accent">
+            <div class="t">Start shift</div>
+            <div class="d">Pick name · select shift (Morning / Evening / Night) · <b>check-in auto-stamped</b> · date auto</div>
+          </div>
+        </div>
+        <div class="col">
+          <span class="tag yes">Yes → resume</span>
+          <div class="node io">
+            <div class="t">Resume today's session</div>
+            <div class="d">Jumps straight back to Shift Home with everything already logged.</div>
+          </div>
+        </div>
+      </div>
+      <div class="down"></div>
+
+      <div class="hub">
+        <div class="hb"><div class="star">★</div><div class="t">SHIFT HOME — the hub</div></div>
+        <div class="d" style="font-size:11px;color:var(--muted);margin-top:4px">Live KPI tally · action buttons · today's running log. Everything below loops back here.</div>
+        <div class="kpibar">
+          <span class="kpi">Inquiries 3</span><span class="kpi">Follow-ups 2</span>
+          <span class="kpi">Upsells 1</span><span class="kpi">Offers 1</span><span class="kpi">Revisions 4</span>
+        </div>
+      </div>
+      <div class="down"></div>
+
+      <div class="node"><div class="t">Tap an action type</div></div>
+      <div class="down short"></div>
+      <div class="chips">
+        <span class="chip">New inquiry</span><span class="chip">Revision shared</span>
+        <span class="chip">Meeting</span><span class="chip">Follow-up</span>
+        <span class="chip">Upsell</span><span class="chip">Offer shared</span>
+      </div>
+      <div class="down short"></div>
+
+      <div class="node accent">
+        <div class="t">Dynamic form — only that action's fields</div>
+        <div class="d">e.g. Upsell → client · what was upsold · new/old client. Nothing irrelevant shown.</div>
+      </div>
+      <div class="down"></div>
+
+      <div class="node">
+        <div class="t">Submit</div>
+        <div class="d">Entry appended to today's log · that KPI counter +1 · saved instantly.</div>
+      </div>
+      <div class="down short"></div>
+      <div class="loopnote">↺ loops back to Shift Home for every action, all shift long</div>
+
+      <div class="rail">
+        <div class="db">DB</div>
+        <div><div class="rt">Every Submit · Edit · Check-out → Supabase</div>
+          <div class="rd">One shared store, so the CEO later sees every CSR's day in one place.</div></div>
+      </div>
+
+      <div class="down"></div>
+      <div class="branch">
+        <div class="col">
+          <span class="tag">Anytime</span>
+          <div class="node io">
+            <div class="t">Edit an existing entry</div>
+            <div class="d">e.g. an inquiry's order comes in later → change outcome to <b>Order Placed</b>.</div>
+          </div>
+        </div>
+        <div class="col">
+          <span class="tag">Shift end</span>
+          <div class="node accent">
+            <div class="t">Check out &amp; submit shift</div>
+            <div class="d"><b>Check-out auto-stamped</b> · shift finalized · summary saved.</div>
+          </div>
+        </div>
+      </div>
+      <div class="down"></div>
+      <div class="endnode">Shift report generated automatically — no typing totals</div>
+    </div>
+  </div>
+  <div class="foot"><span>CSR Shift Logger — System Design</span><span>HaseebMadeIt · for approval</span></div>
+</div>
+
+<!-- ============ ACTION CATALOG ============ -->
+<div class="page">
+  <div class="eyebrow">What gets logged</div>
+  <h2 class="sec">Action catalog</h2>
+  <p class="sub">Each action is one button on Shift Home and one focused form. Confirmed set is from your
+    brief; candidates are the extra categories your current daily reports already contain — tell me which to include.</p>
+  <div class="legend">
+    <span><i class="dot" style="background:var(--violet)"></i> Confirmed — from your brief</span>
+    <span><i class="dot" style="background:var(--dim)"></i> Candidate — confirm to include</span>
+    <span><i class="f req" style="padding:1px 7px">violet field</i> required</span>
+  </div>
+
+  <div class="grid">
+    <div class="acard"><div class="hd"><div class="badge" style="background:#7229FF">1</div><div class="nm">New inquiry</div></div>
+      <div class="fields"><span class="f req">Username / name</span><span class="f">Outcome (editable)</span></div>
+      <div class="note">Outcome drives conversion % later (see lifecycle).</div></div>
+
+    <div class="acard"><div class="hd"><div class="badge" style="background:#9F66FF">2</div><div class="nm">Revision shared</div></div>
+      <div class="fields"><span class="f req">Fiverr username</span><span class="f req">Project name</span></div></div>
+
+    <div class="acard"><div class="hd"><div class="badge" style="background:#0EA5E9">3</div><div class="nm">Meeting</div></div>
+      <div class="fields"><span class="f req">Client name</span><span class="f req">Type: New / Existing-client</span></div></div>
+
+    <div class="acard"><div class="hd"><div class="badge" style="background:#F59E0B">4</div><div class="nm">Follow-up</div></div>
+      <div class="fields"><span class="f req">Client name</span><span class="f req">Update: Update / Lead / Re-engage</span></div></div>
+
+    <div class="acard"><div class="hd"><div class="badge" style="background:#10B981">5</div><div class="nm">Upsell</div></div>
+      <div class="fields"><span class="f req">Client name</span><span class="f req">What was upsold</span><span class="f req">New / Old client</span><span class="f">Value</span></div></div>
+
+    <div class="acard"><div class="hd"><div class="badge" style="background:#EF4444">6</div><div class="nm">Offer shared</div></div>
+      <div class="fields"><span class="f req">Client name</span><span class="f req">Scope of work</span><span class="f req">Offer value</span><span class="f">Coupon</span></div></div>
+  </div>
+
+  <div style="height:14px"></div>
+  <div class="grid3">
+    <div class="acard candidate"><div class="hd"><div class="badge" style="background:#8B82A8">+</div><div class="nm" style="font-size:12px">New order</div></div>
+      <div class="fields"><span class="f">Client</span><span class="f">Service</span><span class="f">Value</span></div></div>
+    <div class="acard candidate"><div class="hd"><div class="badge" style="background:#8B82A8">+</div><div class="nm" style="font-size:12px">Delivery to client</div></div>
+      <div class="fields"><span class="f">Client</span><span class="f">Project</span><span class="f">Draft/Rev/Final</span></div></div>
+    <div class="acard candidate"><div class="hd"><div class="badge" style="background:#8B82A8">+</div><div class="nm" style="font-size:12px">Assigned to designer</div></div>
+      <div class="fields"><span class="f">Client</span><span class="f">Designer</span></div></div>
+    <div class="acard candidate"><div class="hd"><div class="badge" style="background:#8B82A8">+</div><div class="nm" style="font-size:12px">Extension sent</div></div>
+      <div class="fields"><span class="f">Client</span><span class="f">Reason</span></div></div>
+    <div class="acard candidate"><div class="hd"><div class="badge" style="background:#8B82A8">+</div><div class="nm" style="font-size:12px">Completed order</div></div>
+      <div class="fields"><span class="f">Client</span><span class="f">Value</span></div></div>
+    <div class="acard candidate"><div class="hd"><div class="badge" style="background:#8B82A8">+</div><div class="nm" style="font-size:12px">Spam / irrelevant</div></div>
+      <div class="fields"><span class="f">count only</span></div></div>
+  </div>
+  <div class="foot"><span>CSR Shift Logger — System Design</span><span>HaseebMadeIt · for approval</span></div>
+</div>
+
+<!-- ============ LIFECYCLE + DATA MODEL ============ -->
+<div class="page">
+  <div class="eyebrow">Why entries are editable</div>
+  <h2 class="sec">The inquiry lifecycle</h2>
+  <p class="sub">Entries aren't frozen. The key case: an inquiry that becomes an order later. That one
+    editable field is what makes conversion measurable — with zero external data.</p>
+
+  <div class="canvas" style="padding:22px 16px">
+    <div style="display:flex; align-items:center; justify-content:center; gap:0; flex-wrap:wrap;">
+      <div class="pillnode" style="background:#0E1330">New inquiry logged</div>
+      <div style="width:34px;height:2px;background:var(--glow);position:relative;margin:0 2px">
+        <div style="position:absolute;right:-1px;top:-5px;border-top:6px solid transparent;border-bottom:6px solid transparent;border-left:9px solid var(--glow)"></div></div>
+      <div class="node" style="width:auto"><div class="t">Open</div><div class="d">awaiting the client</div></div>
+      <div style="width:34px;height:2px;background:var(--glow);position:relative;margin:0 2px">
+        <div style="position:absolute;right:-1px;top:-5px;border-top:6px solid transparent;border-bottom:6px solid transparent;border-left:9px solid var(--glow)"></div></div>
+      <div class="node" style="width:auto"><div class="t">Following up</div><div class="d">follow-up logged</div></div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-top:16px">
+      <div class="node accent" style="width:auto;background:var(--mintBg);border-color:#A7E3CD">
+        <div class="t" style="color:#065F46">✓ Order placed</div><div class="d">edited when the order comes in → counts as a conversion</div></div>
+      <div class="node" style="width:auto;background:#FDECEC;border-color:#F3C2C2">
+        <div class="t" style="color:#9B1C1C">Lost</div><div class="d">closed / no response</div></div>
+    </div>
+    <p style="text-align:center;color:var(--muted);font-size:11.5px;margin:16px auto 0;max-width:560px">
+      <b>Conversion %</b> = inquiries marked <span style="color:#065F46;font-weight:700">Order placed</span> ÷ all inquiries — computed by the app, never typed.</p>
+  </div>
+
+  <div style="height:20px"></div>
+  <div class="eyebrow">How it's stored</div>
+  <h2 class="sec">Data model</h2>
+  <p class="sub">Three tables. One session per CSR per shift; many activities per session; type-specific
+    fields live in a flexible <span class="mono">details</span> column with the queryable bits pulled out.</p>
+
+  <div class="erow">
+    <div class="entity">
+      <div class="eh">CSR</div>
+      <div class="er"><span class="k">id <span class="pk">PK</span></span><span class="ty">uuid</span></div>
+      <div class="er"><span class="k">name</span><span class="ty">text</span></div>
+      <div class="er"><span class="k">default_shift</span><span class="ty">text</span></div>
+      <div class="er"><span class="k">active</span><span class="ty">bool</span></div>
+    </div>
+    <div class="rel">1<div class="ln"></div>∞</div>
+    <div class="entity">
+      <div class="eh">SHIFT_SESSION</div>
+      <div class="er"><span class="k">id <span class="pk">PK</span></span><span class="ty">uuid</span></div>
+      <div class="er"><span class="k">csr_id <span class="fk">FK</span></span><span class="ty">uuid</span></div>
+      <div class="er"><span class="k">shift</span><span class="ty">text</span></div>
+      <div class="er"><span class="k">date</span><span class="ty">date</span></div>
+      <div class="er"><span class="k">check_in_at</span><span class="ty">ts</span></div>
+      <div class="er"><span class="k">check_out_at</span><span class="ty">ts</span></div>
+      <div class="er"><span class="k">status</span><span class="ty">text</span></div>
+    </div>
+    <div class="rel">1<div class="ln"></div>∞</div>
+    <div class="entity">
+      <div class="eh">ACTIVITY</div>
+      <div class="er"><span class="k">id <span class="pk">PK</span></span><span class="ty">uuid</span></div>
+      <div class="er"><span class="k">session_id <span class="fk">FK</span></span><span class="ty">uuid</span></div>
+      <div class="er"><span class="k">type</span><span class="ty">text</span></div>
+      <div class="er"><span class="k">client</span><span class="ty">text</span></div>
+      <div class="er"><span class="k">details</span><span class="ty">jsonb</span></div>
+      <div class="er"><span class="k">outcome</span><span class="ty">text</span></div>
+      <div class="er"><span class="k">created_at</span><span class="ty">ts</span></div>
+    </div>
+  </div>
+  <p style="text-align:center;color:var(--dim);font-size:10.5px;margin-top:12px">
+    KPI summary = <span class="mono">count(activity) group by type</span> for the session — generated, never entered.</p>
+  <div class="foot"><span>CSR Shift Logger — System Design</span><span>HaseebMadeIt · for approval</span></div>
+</div>
+
+<!-- ============ SCREENS ============ -->
+<div class="page">
+  <div class="eyebrow">What the CSR sees</div>
+  <h2 class="sec">Screen preview</h2>
+  <p class="sub">Three core screens. Start the shift, log actions from the hub, fill one short form per action.</p>
+
+  <div class="screens">
+    <div>
+      <div class="screen">
+        <div class="bar"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i><span class="ti">Start shift</span></div>
+        <div class="body">
+          <div class="lbl">Name</div>
+          <div class="inp">Saad <span class="cf">▼</span></div>
+          <div class="lbl">Shift</div>
+          <div class="seg"><b>Morning</b><b>Evening</b><b class="on">Night</b></div>
+          <div class="lbl">Date</div>
+          <div class="inp">13 Jun 2026 <span class="cf">auto</span></div>
+          <div class="lbl">Check-in</div>
+          <div class="inp">21:30 <span class="cf">auto</span></div>
+          <div class="btn">Start shift</div>
+        </div>
+      </div>
+      <div class="scap">1 · Identify &amp; check in</div>
+    </div>
+
+    <div>
+      <div class="screen">
+        <div class="bar"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i><span class="ti">Shift Home — Saad · Night</span></div>
+        <div class="body">
+          <div style="display:flex;gap:5px;flex-wrap:wrap">
+            <span class="kpi">Inq 3</span><span class="kpi">F/U 2</span><span class="kpi">Ups 1</span><span class="kpi">Off 1</span><span class="kpi">Rev 4</span>
+          </div>
+          <div class="agrid">
+            <div class="ab"><span class="p">+</span>New inquiry</div><div class="ab"><span class="p">+</span>Revision</div>
+            <div class="ab"><span class="p">+</span>Meeting</div><div class="ab"><span class="p">+</span>Follow-up</div>
+            <div class="ab"><span class="p">+</span>Upsell</div><div class="ab"><span class="p">+</span>Offer</div>
+          </div>
+          <div class="lbl" style="margin-top:11px">Today's log ✎</div>
+          <div class="logrow"><span>21:34 · Inquiry <b>david2clarke</b></span><span class="stt" style="background:var(--violetBg);color:var(--violetDim)">Open</span></div>
+          <div class="logrow"><span>21:41 · Upsell <b>@negoettsche</b></span><span class="stt" style="background:var(--mintBg);color:#065F46">Old</span></div>
+          <div class="logrow"><span>21:52 · Offer <b>Ascend Grp</b></span><span class="stt" style="background:var(--amberBg);color:#92400E">$70</span></div>
+          <div class="btn">Check out &amp; submit</div>
+        </div>
+      </div>
+      <div class="scap">2 · Log actions from the hub</div>
+    </div>
+
+    <div>
+      <div class="screen">
+        <div class="bar"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i><span class="ti">New inquiry</span></div>
+        <div class="body">
+          <div class="lbl">Username / name</div>
+          <div class="inp">david2clarke</div>
+          <div class="lbl">Outcome</div>
+          <div class="inp">Open <span class="cf">▼ edit later</span></div>
+          <div style="height:60px"></div>
+          <div style="display:flex;gap:7px">
+            <div class="btn" style="flex:1;background:#fff;color:var(--muted);border:1px solid var(--borderHi)">Cancel</div>
+            <div class="btn" style="flex:1">Save</div>
+          </div>
+        </div>
+      </div>
+      <div class="scap">3 · One short form per action</div>
+    </div>
+  </div>
+
+  <div style="height:18px"></div>
+  <div class="eyebrow">How it's wired</div>
+  <h2 class="sec">Architecture</h2>
+  <div class="erow" style="margin-top:6px">
+    <div class="node" style="width:auto"><div class="t">CSR</div><div class="d">logs actions</div></div>
+    <div class="rel"><div class="ln" style="width:30px"></div></div>
+    <div class="node accent" style="width:auto"><div class="t">CSR Shift Logger</div><div class="d">React + Vite + Tailwind · Vercel</div></div>
+    <div class="rel"><div class="ln" style="width:30px"></div></div>
+    <div class="node" style="width:auto;background:#0E1330;color:#fff;border:none"><div class="t" style="color:#fff">Supabase</div><div class="d" style="color:#B9C2E8">Postgres + Auth (shared store)</div></div>
+    <div class="rel" style="color:var(--dim)"><div class="ln" style="width:30px;background:var(--dim)"></div></div>
+    <div class="node io" style="width:auto"><div class="t">CEO / Lead view</div><div class="d">Phase 2 · reads the same data</div></div>
+  </div>
+  <div class="foot"><span>CSR Shift Logger — System Design</span><span>HaseebMadeIt · for approval</span></div>
+</div>
+
+<!-- ============ DECISIONS ============ -->
+<div class="page">
+  <div class="eyebrow">Before we build</div>
+  <h2 class="sec">Decisions to approve</h2>
+  <p class="sub">Six choices lock the design. My recommendation is marked on each.</p>
+
+  <div class="deccard"><div class="q">1 · Storage backend <span class="reco">Recommend: Supabase</span></div>
+    <div class="o">A shared backend is required (many CSRs writing, one combined view). Supabase = hosted Postgres, instant APIs, no servers to run.</div></div>
+  <div class="deccard"><div class="q">2 · Action catalog</div>
+    <div class="o">The 6 confirmed are in. Which of the 6 candidates (new order, delivery, assigned-to-designer, extension, completed, spam) become buttons too?</div></div>
+  <div class="deccard"><div class="q">3 · Sign-in <span class="reco">Recommend: name + team passcode</span></div>
+    <div class="o">Pick-your-name + one shared passcode to open the app (light). Or per-CSR login (stronger attribution, a bit more friction).</div></div>
+  <div class="deccard"><div class="q">4 · Edit window <span class="reco">Recommend: same business day</span></div>
+    <div class="o">Entries editable through the current shift / business day, then locked — so history stays trustworthy.</div></div>
+  <div class="deccard"><div class="q">5 · Check-in time <span class="reco">Recommend: auto</span></div>
+    <div class="o">Auto-stamped on "Start shift", check-out auto on submit. (Or let them type it.)</div></div>
+  <div class="deccard"><div class="q">6 · CEO dashboard</div>
+    <div class="o">Build the CSR input app first (Phase 1), add the CEO/lead read-dashboard as Phase 2 — or both together?</div></div>
+
+  <div style="height:8px"></div>
+  <div class="callout"><b>Next:</b> approve this flow (or redline it), answer the six above, and share the full
+    list of actions your CSRs actually do — then I build Phase 1: the input app, Supabase schema, and the
+    auto-summary. Nothing is built until you say go.</div>
+  <div class="foot"><span>CSR Shift Logger — System Design</span><span>HaseebMadeIt · for approval</span></div>
+</div>
+
+</body>
+</html>
