@@ -18,7 +18,7 @@ export function todayPKT() {
 }
 export function timePKT(iso) {
   const d = iso ? new Date(iso) : new Date();
-  return new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
+  return new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Karachi', hour: 'numeric', minute: '2-digit', hour12: true }).format(d);
 }
 export function addDays(ymd, n) {
   const [y, m, d] = ymd.split('-').map(Number);

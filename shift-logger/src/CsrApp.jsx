@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Check, Clock, Sunrise, Sunset, Moon, Zap, ArrowRightLeft, Eye } from 'lucide-react';
+import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Check, Clock, Sunrise, Sunset, Moon, Zap, ArrowRightLeft, ShieldCheck } from 'lucide-react';
 import { C, SHIFTS, PROFILES, ACTIONS, ACTION_BY_KEY, GROUPS, CHECKLIST, KPI_LABEL } from './config.js';
 import { db, todayPKT, timePKT } from './store.js';
 import { Btn, Card, Pill, Modal, Label, Field, actionSummary, Logo } from './ui.jsx';
@@ -18,7 +18,7 @@ const greeting = () => { const h = pktHour(); return h >= 5 && h < 12 ? 'Good mo
 const SHIFT_ICON = { Morning: Sunrise, Evening: Sunset, Night: Moon };
 const hourLabel = iso => new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Karachi', hour: 'numeric', hour12: true }).format(new Date(iso));
 function LiveClock() {
-  const fmt = () => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date());
+  const fmt = () => new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Karachi', hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }).format(new Date());
   const [t, setT] = useState(fmt());
   useEffect(() => { const id = setInterval(() => setT(fmt()), 1000); return () => clearInterval(id); }, []);
   return <>{t}</>;
@@ -102,7 +102,7 @@ export default function CsrApp() {
                 </div>
 
                 <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 13 }}>
-                  {[[Zap, 'One tap to check in & out'], [ArrowRightLeft, 'Hand-off notes never get lost'], [Eye, 'Your CEO sees every shift live']].map(([Icon, txt], i) => (
+                  {[[Zap, 'One tap to check in & out'], [ArrowRightLeft, 'Hand-off notes never get lost'], [ShieldCheck, 'Auto-saved the moment you submit']].map(([Icon, txt], i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, fontWeight: 600 }}>
                       <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 31, height: 31, borderRadius: 10, background: 'rgba(255,255,255,.16)', flex: '0 0 auto' }}><Icon size={15} /></span>
                       <span style={{ opacity: .95 }}>{txt}</span>
@@ -162,7 +162,7 @@ export default function CsrApp() {
         <Card strong className="p-8">
           <div style={{ width: 60, height: 60, borderRadius: 18, margin: '0 auto 14px', background: `${C.mint}22`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Check size={30} style={{ color: C.mint }} /></div>
           <h1 style={h1}>Shift submitted</h1>
-          <p style={{ color: C.muted, fontSize: 13, margin: '6px 0 18px' }}>{report.csr_name} · {report.profile} · checked out {timePKT(report.finish_at)} PKT. Locked now — the CEO sees it live.</p>
+          <p style={{ color: C.muted, fontSize: 13, margin: '6px 0 18px' }}>{report.csr_name} · {report.profile} · checked out {timePKT(report.finish_at)} PKT. Locked now — no more edits.</p>
           <Btn onClick={() => { setReport(null); setProfile(''); setView('login'); }} style={{ padding: '11px 22px' }}>Start another shift</Btn>
         </Card>
       </div>
@@ -192,14 +192,9 @@ export default function CsrApp() {
 
       <div className="mx-auto" style={{ maxWidth: 760, padding: '22px 20px 64px' }}>
         {/* greeting + identity */}
-        <div className="mb-5 flex items-end justify-between" style={{ gap: 12, flexWrap: 'wrap' }}>
-          <div>
-            <h1 className="disp" style={{ fontSize: 24, fontWeight: 700, color: C.ink, margin: 0 }}>{greeting()}, {report.csr_name.split(' ')[0]}</h1>
-            <p style={{ fontSize: 13, color: C.muted, marginTop: 3 }}>Logging for <b style={{ color: C.violetDim }}>{report.profile}</b> · {report.shift} shift · in since {timePKT(report.start_at)} PKT</p>
-          </div>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: C.mint, background: C.mintBg, padding: '6px 11px', borderRadius: 99 }}>
-            <span style={{ width: 7, height: 7, borderRadius: 9, background: C.mint, boxShadow: `0 0 0 3px rgba(16,185,129,.18)` }} /> Live to CEO
-          </span>
+        <div className="mb-5">
+          <h1 className="disp" style={{ fontSize: 24, fontWeight: 700, color: C.ink, margin: 0 }}>{greeting()}, {report.csr_name.split(' ')[0]}</h1>
+          <p style={{ fontSize: 13, color: C.muted, marginTop: 3 }}>Logging for <b style={{ color: C.violetDim }}>{report.profile}</b> · {report.shift} shift · in since {timePKT(report.start_at)} PKT</p>
         </div>
 
         {/* primary action */}
