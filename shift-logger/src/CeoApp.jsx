@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock, Download, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, CEO_PASSWORD, GROUPS } from './config.js';
 import { db, todayPKT, timePKT, addDays, BACKEND } from './store.js';
@@ -19,6 +20,21 @@ function ago(iso) {
   const m = Math.floor(s / 60); if (m < 60) return m + 'm ago';
   const h = Math.floor(m / 60); if (h < 24) return h + 'h ago';
   return Math.floor(h / 24) + 'd ago';
+}
+// Full field-by-field detail for an action — mirrors exactly what the CSR typed.
+function actionDetails(action) {
+  const def = ACTION_BY_KEY[action.type];
+  const d = action.details || {};
+  const out = [];
+  const cf = def?.fields.find(f => f.name === 'client');
+  if (action.client) out.push([cf?.label || 'Client', action.client]);
+  (def?.fields || []).forEach(f => {
+    if (f.name === 'client') return;
+    let v = d[f.name];
+    if (Array.isArray(v)) v = v.join(', ');
+    if (v != null && String(v).trim() !== '') out.push([f.label, String(v)]);
+  });
+  return out;
 }
 
 function winFor(r) {
@@ -86,28 +102,38 @@ function Authed() {
 // ── Date range picker (presets + custom calendar) ──
 function DateRangePicker({ value, onChange }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  // The calendar opens ONLY when "Custom" is clicked; clicking anywhere outside closes it.
+  const [pos, setPos] = useState(null);
+  const btnRef = useRef(null);
+  const popRef = useRef(null);
+  // The calendar opens ONLY when "Custom" is clicked; outside-click or scroll closes it.
   useEffect(() => {
     if (!open) return;
-    const onDoc = ev => { if (ref.current && !ref.current.contains(ev.target)) setOpen(false); };
+    const onDoc = ev => { if (btnRef.current?.contains(ev.target) || popRef.current?.contains(ev.target)) return; setOpen(false); };
+    const onScroll = () => setOpen(false);
     document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    window.addEventListener('scroll', onScroll, true);
+    return () => { document.removeEventListener('mousedown', onDoc); window.removeEventListener('scroll', onScroll, true); };
   }, [open]);
+  const toggle = () => {
+    if (open) { setOpen(false); return; }
+    const r = btnRef.current.getBoundingClientRect();
+    setPos({ top: r.bottom + 8, left: Math.max(12, Math.min(r.left, window.innerWidth - 306)) });
+    setOpen(true);
+  };
   const presets = [['today', 'Today'], ['yesterday', 'Yesterday'], ['7d', '7d'], ['30d', '30d'], ['all', 'All']];
   const isCustom = value.mode === 'custom';
   return (
-    <div ref={ref} className="flex items-center gap-1.5 flex-wrap" style={{ position: 'relative' }}>
+    <div className="flex items-center gap-1.5 flex-wrap" style={{ position: 'relative' }}>
       {presets.map(([v, l]) => <Chip key={v} active={value.mode === v} onClick={() => { setOpen(false); onChange({ mode: v }); }}>{l}</Chip>)}
-      <button onClick={() => setOpen(o => !o)} className="rounded-lg px-3 py-1.5 text-xs font-semibold transition-all"
+      <button ref={btnRef} onClick={toggle} className="rounded-lg px-3 py-1.5 text-xs font-semibold transition-all"
         style={isCustom || open ? { background: C.violet, color: '#fff', boxShadow: '0 4px 12px rgba(114,41,255,.25)' } : { background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }}>
         <CalendarDays size={12} style={{ verticalAlign: -2, marginRight: 5 }} />{isCustom ? `${fmtShort(value.start)} – ${fmtShort(value.end || value.start)}` : 'Custom'}
       </button>
-      {open && <Calendar value={value} onApply={(s, e) => { onChange({ mode: 'custom', start: s, end: e }); setOpen(false); }} />}
+      {open && <Calendar popRef={popRef} pos={pos} value={value} onApply={(s, e) => { onChange({ mode: 'custom', start: s, end: e }); setOpen(false); }} />}
     </div>
   );
 }
-function Calendar({ value, onApply }) {
+function Calendar({ value, onApply, pos, popRef }) {
   const seed = parseYmd(value.start || todayPKT());
   const [vw, setVw] = useState({ y: seed.y, m: seed.m });
   const [s, setS] = useState(value.mode === 'custom' ? value.start : null);
@@ -117,8 +143,8 @@ function Calendar({ value, onApply }) {
   const cells = []; for (let i = 0; i < firstDow; i++) cells.push(null); for (let d = 1; d <= days; d++) cells.push(d);
   const shift = delta => setVw(v => { let m = v.m + delta, y = v.y; if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; } return { y, m }; });
   const pick = d => { const cur = ymd(vw.y, vw.m, d); if (!s || (s && e)) { setS(cur); setE(null); } else { if (cur < s) { setE(s); setS(cur); } else setE(cur); } };
-  return (
-    <div className="glass-2 rounded-2xl pop" style={{ position: 'absolute', top: '100%', left: 0, marginTop: 8, width: 290, padding: 14, zIndex: 70 }}>
+  return createPortal(
+    <div ref={popRef} className="glass-2 rounded-2xl pop" style={{ position: 'fixed', top: pos?.top ?? 120, left: pos?.left ?? 24, width: 290, padding: 14, zIndex: 1000 }}>
       <div className="flex items-center justify-between mb-2">
         <button onClick={() => shift(-1)} className="rounded-lg p-1" style={{ border: 'none', background: 'rgba(124,41,255,.08)', color: C.muted, cursor: 'pointer' }}><ChevronLeft size={16} /></button>
         <span style={{ fontWeight: 800, fontSize: 13, color: C.ink }}>{MON[vw.m]} {vw.y}</span>
@@ -139,7 +165,8 @@ function Calendar({ value, onApply }) {
         <span style={{ fontSize: 11, color: C.muted }}>{s ? `${fmtShort(s)}${e ? ' – ' + fmtShort(e) : ''}` : 'Pick a range'}</span>
         <Btn onClick={() => s && onApply(s, e || s)} disabled={!s} style={{ padding: '6px 14px', fontSize: 12 }}>Apply</Btn>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -193,7 +220,7 @@ function Console() {
 
   return (
     <>
-      <Card className="mb-6 p-4" style={{ position: 'relative', zIndex: 40 }}>
+      <Card className="mb-6 p-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 pr-3" style={{ borderRight: '1px solid rgba(124,41,255,.14)' }}><Filter size={14} style={{ color: C.dim }} /><span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.dim }}>Filters</span></div>
           <DateRangePicker value={range} onChange={setRange} />
@@ -309,11 +336,23 @@ function DrillDrawer({ report, actions, onClose }) {
           <div className="mb-4 flex flex-wrap gap-1.5">{Object.keys(c).map(t => <span key={t} style={{ background: 'rgba(124,41,255,.08)', borderRadius: 7, padding: '3px 9px', fontSize: 10.5, fontWeight: 700, color: C.violetDim }}>{(KPI_LABEL[t] || t)} {c[t]}</span>)}</div>
           <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.12em', color: C.dim, marginBottom: 8 }}>Timeline</div>
           {actions.length === 0 && <div style={{ color: C.dim, fontSize: 12.5 }}>No actions logged.</div>}
-          {[...actions].reverse().map(a => (
-            <div key={a.id} className="glass-soft rounded-xl" style={{ display: 'flex', gap: 10, padding: '10px 12px', marginBottom: 8 }}>
-              <span style={{ width: 8, height: 8, borderRadius: 9, marginTop: 5, flex: '0 0 auto', background: C.violet }} />
-              <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 700, color: C.ink }}>{ACTION_BY_KEY[a.type]?.label || a.type}</div><div style={{ fontSize: 11.5, color: C.muted }}>{a.client}{actionSummary(a) ? ' · ' + actionSummary(a) : ''}</div></div>
-              <span style={{ fontSize: 10, color: C.dim }}>{timePKT(a.created_at)}</span></div>))}
+          {[...actions].reverse().map(a => { const det = actionDetails(a); return (
+            <div key={a.id} className="glass-soft rounded-xl" style={{ padding: '11px 13px', marginBottom: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 9, flex: '0 0 auto', background: groupColor(ACTION_BY_KEY[a.type]?.group) }} />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{ACTION_BY_KEY[a.type]?.label || a.type}</span>
+                </div>
+                <span style={{ fontSize: 10.5, color: C.dim, whiteSpace: 'nowrap' }}>{timePKT(a.created_at)}</span>
+              </div>
+              {det.length > 0 && <div style={{ marginTop: 7, paddingLeft: 16, display: 'grid', gap: 4 }}>
+                {det.map(([l, v], i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, fontSize: 11.5, lineHeight: 1.35 }}>
+                    <span style={{ color: C.dim, fontWeight: 700, minWidth: 86, flex: '0 0 auto' }}>{l}</span>
+                    <span style={{ color: C.ink, wordBreak: 'break-word' }}>{v}</span>
+                  </div>))}
+              </div>}
+            </div>); })}
           {report.note_for_next && <div className="mt-3 glass-soft rounded-xl" style={{ padding: 12 }}><div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', color: C.violetDim, marginBottom: 4 }}>Note for next shift</div><div style={{ fontSize: 12.5, color: C.ink }}>{report.note_for_next}</div></div>}
         </div>
       </div>
