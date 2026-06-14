@@ -69,8 +69,7 @@ export default function CsrApp() {
       <Shell center>
         <div className="pop" style={{ width: 396, maxWidth: '100%' }}>
           <div style={{ textAlign: 'center', marginBottom: 18 }}>
-            <div style={{ width: 52, height: 52, borderRadius: 16, margin: '0 auto', background: `linear-gradient(180deg,${C.glow},${C.violet})`, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 24, boxShadow: '0 12px 28px rgba(114,41,255,.34)' }}>C</div>
-            <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '.22em', textTransform: 'uppercase', color: C.dim, marginTop: 11 }}>CSR Shift Logger</div>
+            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.22em', textTransform: 'uppercase', color: C.dim }}>CSR Shift Logger</div>
           </div>
           <Card strong className="p-6">
             <h1 style={{ fontSize: 21, fontWeight: 800, color: C.ink, letterSpacing: '-.02em', textAlign: 'center', margin: 0 }}>Start your shift</h1>
