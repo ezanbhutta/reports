@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Check, Clock } from 'lucide-react';
+import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Check, Clock, Sunrise, Sunset, Moon, Zap, ArrowRightLeft, Eye } from 'lucide-react';
 import { C, SHIFTS, PROFILES, ACTIONS, ACTION_BY_KEY, GROUPS, CHECKLIST, KPI_LABEL } from './config.js';
 import { db, todayPKT, timePKT } from './store.js';
 import { Btn, Card, Pill, Modal, Label, Field, actionSummary } from './ui.jsx';
@@ -15,6 +15,13 @@ const addClient = c => { if (!c) return; const r = [c, ...getClients().filter(x 
 const pktHour = () => parseInt(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', hour: '2-digit', hour12: false }).format(new Date()), 10);
 const currentShift = () => { const h = pktHour(); if (h >= 9 && h < 17) return 'Morning'; if (h >= 17 || h < 1) return 'Evening'; return 'Night'; };
 const greeting = () => { const h = pktHour(); return h >= 5 && h < 12 ? 'Good morning' : h >= 12 && h < 17 ? 'Good afternoon' : h >= 17 && h < 22 ? 'Good evening' : 'Working late'; };
+const SHIFT_ICON = { Morning: Sunrise, Evening: Sunset, Night: Moon };
+function LiveClock() {
+  const fmt = () => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date());
+  const [t, setT] = useState(fmt());
+  useEffect(() => { const id = setInterval(() => setT(fmt()), 1000); return () => clearInterval(id); }, []);
+  return <>{t}</>;
+}
 
 export default function CsrApp() {
   const [roster, setRoster] = useState([]);
@@ -67,42 +74,77 @@ export default function CsrApp() {
     const nowShift = currentShift();
     return (
       <Shell center>
-        <div className="pop" style={{ width: 396, maxWidth: '100%' }}>
-          <div style={{ textAlign: 'center', marginBottom: 18 }}>
-            <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.22em', textTransform: 'uppercase', color: C.dim }}>CSR Shift Logger</div>
-          </div>
-          <Card strong className="p-6">
-            <h1 style={{ fontSize: 21, fontWeight: 800, color: C.ink, letterSpacing: '-.02em', textAlign: 'center', margin: 0 }}>Start your shift</h1>
-            <p style={{ textAlign: 'center', color: C.muted, fontSize: 12.5, margin: '5px 0 4px' }}>No password — just tell us who's on.</p>
+        <div className="pop w-full" style={{ maxWidth: 940 }}>
+          <div className="glass-2" style={{ borderRadius: 28, overflow: 'hidden' }}>
+            <div className="grid md:grid-cols-[1.1fr_1fr]">
 
-            <Label>Your name</Label>
-            <select value={name} onChange={e => { setName(e.target.value); const r = names.find(x => x.name === e.target.value); if (r?.shift) setShift(r.shift); if (r?.profile) setProfile(r.profile); }}
-              className="gi" style={{ fontSize: 15, fontWeight: 600, padding: '12px 12px' }}>
-              <option value="">Select your name…</option>
-              {names.map(r => <option key={r.id} value={r.name}>{r.name}{r.role === 'Manager' ? ' (manager)' : ''}</option>)}
-            </select>
+              {/* ── Brand hero (desktop) ── */}
+              <div className="hidden md:flex" style={{ position: 'relative', flexDirection: 'column', justifyContent: 'space-between', padding: '38px 36px', minHeight: 552, color: '#fff', background: `linear-gradient(155deg, ${C.glow} 0%, ${C.violet} 52%, ${C.violetDim} 100%)`, overflow: 'hidden' }}>
+                <div style={{ position: 'absolute', width: 300, height: 300, borderRadius: '50%', background: 'rgba(255,255,255,.16)', filter: 'blur(60px)', top: -90, right: -60 }} />
+                <div style={{ position: 'absolute', width: 230, height: 230, borderRadius: '50%', background: 'rgba(159,102,255,.5)', filter: 'blur(70px)', bottom: -50, left: -40 }} />
 
-            <Label>Shift · Pakistan time</Label>
-            <div className="grid grid-cols-3 gap-2">
-              {SHIFTS.map(s => { const on = shift === s.key; const now = s.key === nowShift; return (
-                <button key={s.key} onClick={() => setShift(s.key)} className="rounded-xl lift" style={{ position: 'relative', padding: '11px 4px', border: on ? 'none' : '1px solid rgba(124,41,255,.18)', background: on ? C.violet : 'rgba(255,255,255,.5)', color: on ? '#fff' : C.muted, fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}>
-                  {now && !on && <span style={{ position: 'absolute', top: 6, right: 6, width: 6, height: 6, borderRadius: 9, background: C.mint }} />}
-                  {s.label}<div style={{ fontSize: 9, opacity: .85, fontWeight: 600 }}>{s.time}</div>
-                  {now && on && <div style={{ fontSize: 8, fontWeight: 800, letterSpacing: '.08em', opacity: .9 }}>NOW</div>}
-                </button>); })}
+                <div style={{ position: 'relative' }}>
+                  <div style={{ fontWeight: 800, fontSize: 20, letterSpacing: '-.01em' }}>HaseebMadeIt</div>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.2em', textTransform: 'uppercase', opacity: .72 }}>CSR Operations</div>
+                </div>
+
+                <div style={{ position: 'relative' }}>
+                  <div style={{ fontSize: 13, opacity: .85, fontWeight: 600 }}>{greeting()} — it's</div>
+                  <div className="mono" style={{ fontSize: 46, fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1.05, marginTop: 2 }}><LiveClock /></div>
+                  <div style={{ fontSize: 12.5, opacity: .82, marginTop: 5 }}>{todayPKT()} · Pakistan time</div>
+                  <div style={{ marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,.15)', border: '1px solid rgba(255,255,255,.25)', padding: '8px 13px', borderRadius: 99, fontSize: 12, fontWeight: 700 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: 9, background: '#fff', boxShadow: '0 0 0 3px rgba(255,255,255,.3)' }} /> {nowShift} shift is live now
+                  </div>
+                </div>
+
+                <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 13 }}>
+                  {[[Zap, 'One tap to check in & out'], [ArrowRightLeft, 'Hand-off notes never get lost'], [Eye, 'Your CEO sees every shift live']].map(([Icon, txt], i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, fontWeight: 600 }}>
+                      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 31, height: 31, borderRadius: 10, background: 'rgba(255,255,255,.16)', flex: '0 0 auto' }}><Icon size={15} /></span>
+                      <span style={{ opacity: .95 }}>{txt}</span>
+                    </div>))}
+                </div>
+              </div>
+
+              {/* ── Form ── */}
+              <div style={{ padding: '40px 38px' }}>
+                <div className="md:hidden" style={{ textAlign: 'center', marginBottom: 22 }}>
+                  <div style={{ fontWeight: 800, fontSize: 17, color: C.ink }}>HaseebMadeIt</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.2em', textTransform: 'uppercase', color: C.dim, marginTop: 2 }}>CSR Shift Logger</div>
+                </div>
+
+                <h1 style={{ fontSize: 25, fontWeight: 800, color: C.ink, letterSpacing: '-.02em', margin: 0 }}>Start your shift</h1>
+                <p style={{ color: C.muted, fontSize: 13, margin: '6px 0 0' }}>No password — just tell us who's on.</p>
+
+                <Label>Your name</Label>
+                <select value={name} onChange={e => { setName(e.target.value); const r = names.find(x => x.name === e.target.value); if (r?.shift) setShift(r.shift); if (r?.profile) setProfile(r.profile); }}
+                  className="gi" style={{ fontSize: 15, fontWeight: 600, padding: '13px 34px 13px 13px' }}>
+                  <option value="">Select your name…</option>
+                  {names.map(r => <option key={r.id} value={r.name}>{r.name}{r.role === 'Manager' ? ' (manager)' : ''}</option>)}
+                </select>
+
+                <Label>Shift · Pakistan time</Label>
+                <div className="grid grid-cols-3 gap-2.5">
+                  {SHIFTS.map(s => { const on = shift === s.key; const now = s.key === nowShift; const Icon = SHIFT_ICON[s.key]; return (
+                    <button key={s.key} onClick={() => setShift(s.key)} className="rounded-2xl lift" style={{ position: 'relative', padding: '15px 6px', cursor: 'pointer', textAlign: 'center', border: on ? 'none' : '1px solid rgba(124,41,255,.16)', background: on ? `linear-gradient(165deg, ${C.glow}, ${C.violet})` : 'rgba(255,255,255,.6)', color: on ? '#fff' : C.muted, boxShadow: on ? '0 12px 24px rgba(114,41,255,.28)' : 'none' }}>
+                      {now && <span style={{ position: 'absolute', top: 7, right: 7, fontSize: 7.5, fontWeight: 800, letterSpacing: '.06em', padding: '2px 5px', borderRadius: 6, background: on ? 'rgba(255,255,255,.25)' : C.mintBg, color: on ? '#fff' : C.mint }}>NOW</span>}
+                      <Icon size={19} strokeWidth={2.2} style={{ display: 'block', margin: '0 auto 7px' }} />
+                      <div style={{ fontWeight: 800, fontSize: 13 }}>{s.label}</div>
+                      <div style={{ fontSize: 9.5, opacity: .8, fontWeight: 600, marginTop: 1 }}>{s.time}</div>
+                    </button>); })}
+                </div>
+
+                <Label>Profile</Label>
+                <select value={profile} onChange={e => setProfile(e.target.value)} className="gi" style={{ padding: '13px 34px 13px 13px' }}><option value="">Select profile…</option>{PROFILES.map(p => <option key={p} value={p}>{p}</option>)}</select>
+
+                <Btn onClick={startReport} disabled={!name || !profile} className="lift" style={{ width: '100%', marginTop: 20, padding: 14, fontSize: 14.5 }}>Start my shift →</Btn>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(124,41,255,.1)', fontSize: 11, color: C.dim }}>
+                  <Clock size={11} /> {todayPKT()} · check-in {timePKT()} PKT · auto
+                </div>
+              </div>
+
             </div>
-
-            <Label>Profile</Label>
-            <select value={profile} onChange={e => setProfile(e.target.value)} className="gi"><option value="">Select profile…</option>{PROFILES.map(p => <option key={p} value={p}>{p}</option>)}</select>
-
-            <Btn onClick={startReport} disabled={!name || !profile} className="lift" style={{ width: '100%', marginTop: 18, padding: 13, fontSize: 14 }}>Start my shift →</Btn>
-
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 14, paddingTop: 13, borderTop: '1px solid rgba(124,41,255,.1)', fontSize: 11, color: C.dim }}>
-              <Clock size={11} /> {todayPKT()} · check-in {timePKT()} PKT · auto
-            </div>
-          </Card>
-          <div style={{ textAlign: 'center' }}>
-            <button onClick={() => setView('teamlog')} style={link}><ClipboardList size={13} /> View past reports</button>
           </div>
         </div>
       </Shell>
@@ -338,7 +380,6 @@ function TeamLog({ onBack }) {
 
 // ── chrome ──
 const h1 = { fontSize: 25, fontWeight: 800, color: C.ink, letterSpacing: '-.02em', margin: 0 };
-const link = { display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 16, background: 'none', border: 'none', color: C.violetDim, fontWeight: 700, fontSize: 12.5, cursor: 'pointer' };
 function Brand({ small }) {
   return <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
     <div style={{ width: small ? 28 : 30, height: small ? 28 : 30, borderRadius: 9, background: `linear-gradient(180deg,${C.glow},${C.violet})`, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: small ? 15 : 16, boxShadow: '0 6px 16px rgba(114,41,255,.3)' }}>C</div>
