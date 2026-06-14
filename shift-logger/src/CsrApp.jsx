@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { RefreshCw, Plus, ChevronLeft, LogOut, Pencil, ClipboardList } from 'lucide-react';
+import { RefreshCw, Plus, ChevronLeft, LogOut, Pencil, ClipboardList, Users, Package, Star } from 'lucide-react';
 import { C, SHIFTS, PROFILES, ACTIONS, ACTION_BY_KEY, GROUPS, CHECKLIST, KPI_LABEL } from './config.js';
 import { db, todayPKT, timePKT } from './store.js';
-import { Btn, Card, Tile, Modal, Label, Field, actionSummary } from './ui.jsx';
+import { Btn, Card, StatCard, Modal, Label, Field, actionSummary } from './ui.jsx';
 
 export default function CsrApp() {
   const [roster, setRoster] = useState([]);
@@ -126,9 +126,9 @@ export default function CsrApp() {
   const locked = report.status !== 'open';
   return (
     <Shell>
-      <div style={{ maxWidth: 1080, margin: '0 auto', padding: '18px 16px 60px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-          <div><Brand small /><div style={{ fontWeight: 800, fontSize: 16, color: C.ink }}>{headerName}</div>
+      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '18px 22px 60px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, flexWrap: 'wrap', gap: 8 }}>
+          <div><Brand small /><div style={{ fontWeight: 800, fontSize: 17, color: C.ink }}>{headerName}</div>
             <div style={{ fontSize: 11, color: C.dim }}>started {timePKT(report.start_at)} PKT · {report.date}</div></div>
           <div style={{ display: 'flex', gap: 8 }}>
             <Btn variant="ghost" onClick={() => setView('teamlog')} style={{ padding: '8px 12px', fontSize: 12 }}><ClipboardList size={13} style={{ verticalAlign: -2 }} /> Past reports</Btn>
@@ -136,14 +136,18 @@ export default function CsrApp() {
           </div>
         </div>
 
-        {/* KPI tiles */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: 9, marginBottom: 18 }}>
-          <Tile n={actions.length} label="Total logged" hot />
-          {Object.keys(counts).map(t => <Tile key={t} n={counts[t]} label={KPI_LABEL[t] || t} />)}
-          {actions.length === 0 && <div style={{ gridColumn: '2 / -1', alignSelf: 'center', color: C.dim, fontSize: 12 }}>Nothing logged yet — tap a button below to add your first action.</div>}
+        {/* KPI cards */}
+        <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <StatCard label="Total logged" value={actions.length} sub="this report" accent={C.violet} icon={ClipboardList} />
+          {(() => {
+            const top = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+            const pick = (top.length ? top : ['inquiry', 'followup_client', 'shared']).slice(0, 3);
+            const acc = [C.cyan, C.amber, C.mint]; const ic = [Users, Package, Star];
+            return pick.map((t, i) => <StatCard key={t} label={KPI_LABEL[t] || t} value={counts[t] || 0} sub="logged" accent={acc[i]} icon={ic[i]} />);
+          })()}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr .8fr', gap: 18 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.3fr .7fr', gap: 20 }}>
           {/* action buttons */}
           <div>
             {GROUPS.map(g => {

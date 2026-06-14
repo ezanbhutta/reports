@@ -22,6 +22,42 @@ export const Tile = ({ n, label, hot }) => (
   </div>
 );
 
+// CSR Pulse–style stat card (label · big value · sub · tinted icon)
+export const StatCard = ({ label, value, sub, accent = C.violet, icon: Icon }) => (
+  <div className="rounded-xl p-5 transition-all" style={{ background: C.card, border: `1px solid ${C.border}` }}>
+    <div className="mb-3 flex items-center justify-between">
+      <span className="text-[10px] font-bold uppercase tracking-[0.15em]" style={{ color: C.dim }}>{label}</span>
+      {Icon && <div className="flex h-6 w-6 items-center justify-center rounded-md" style={{ background: `${accent}1A` }}><Icon size={12} style={{ color: accent }} strokeWidth={2.5} /></div>}
+    </div>
+    <div className="mono text-2xl font-bold tracking-tight" style={{ color: C.ink }}>{value}</div>
+    {sub && <div className="mt-1 text-xs" style={{ color: C.muted }}>{sub}</div>}
+  </div>
+);
+
+export const Pill = ({ children, color = C.violet }) => (
+  <span className="rounded-md px-2 py-0.5 text-[10px] font-bold" style={{ background: `${color}1A`, color }}>{children}</span>
+);
+
+export const Select = ({ value, onChange, children, color }) => (
+  <select value={value} onChange={onChange} className="rounded-md px-2.5 py-1.5 text-xs font-medium outline-none"
+    style={{ background: C.card, color: color || C.ink, border: `1px solid ${C.border}`, fontWeight: color ? 700 : 500 }}>{children}</select>
+);
+
+export const Chip = ({ active, onClick, children }) => (
+  <button onClick={onClick} className="rounded-md px-3 py-1.5 text-xs font-semibold transition-all"
+    style={{ background: active ? C.violet : 'transparent', color: active ? '#fff' : C.muted, border: `1px solid ${active ? C.violet : 'transparent'}` }}>{children}</button>
+);
+
+export const SectionHeader = ({ eyebrow, title, right, color = C.violet }) => (
+  <div className="mb-3 flex items-end justify-between">
+    <div>
+      {eyebrow && <div className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color }}>{eyebrow}</div>}
+      <div className="text-lg font-bold" style={{ color: C.ink }}>{title}</div>
+    </div>
+    {right && <span className="text-[10px] uppercase tracking-wider" style={{ color: C.dim }}>{right}</span>}
+  </div>
+);
+
 export const Modal = ({ title, onClose, children, width = 380 }) => (
   <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(21,8,47,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, zIndex: 50 }}>
     <div onClick={e => e.stopPropagation()} style={{ width, maxWidth: '100%', maxHeight: '90vh', overflow: 'auto', background: '#fff', borderRadius: 16, boxShadow: '0 24px 60px rgba(21,8,47,.3)' }}>
