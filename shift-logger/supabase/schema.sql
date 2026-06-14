@@ -66,7 +66,10 @@ drop policy if exists "reports insert"           on reports;
 drop policy if exists "reports update while open" on reports;
 create policy "reports read"   on reports for select using (true);
 create policy "reports insert" on reports for insert with check (true);
-create policy "reports update while open" on reports for update using (status = 'open');
+-- USING limits which rows can be updated (only open ones); WITH CHECK (true)
+-- lets an open report transition to 'submitted'. Without it, Postgres reuses
+-- USING as the check and rejects the submit (new status='submitted' fails).
+create policy "reports update while open" on reports for update using (status = 'open') with check (true);
 
 drop policy if exists "actions read"                  on actions;
 drop policy if exists "actions insert"                on actions;

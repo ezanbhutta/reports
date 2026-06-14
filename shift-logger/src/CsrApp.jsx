@@ -33,6 +33,8 @@ export default function CsrApp() {
   const [picker, setPicker] = useState(false);
   const [form, setForm] = useState(null);   // { action, values, editId, error }
   const [wrap, setWrap] = useState(false);
+  const [flash, setFlash] = useState(false);   // success banner on the login for the next person
+  const [oops, setOops] = useState(false);     // submit failed — keep the report, let them retry
   const [name, setName] = useState(''); const [shift, setShift] = useState(currentShift()); const [profile, setProfile] = useState('');
 
   useEffect(() => { db.getRoster().then(setRoster); }, []);
@@ -67,7 +69,15 @@ export default function CsrApp() {
     bumpRecent(action.key); addClient(client);
     setForm(null); refresh();
   }
-  async function submit(checklist, note) { const rep = await db.submitReport(report.id, { checklist, note_for_next: note }); setReport(rep); setWrap(false); setView('done'); }
+  async function submit(checklist, note) {
+    let rep = null;
+    try { rep = await db.submitReport(report.id, { checklist, note_for_next: note }); } catch (e) { /* surfaced below */ }
+    setWrap(false);
+    if (!rep) { setOops(true); return; }          // submit didn't persist — keep their work, let them retry
+    setReport(null); setActions([]); setProfile(''); setName(''); setOops(false);
+    setFlash(true); setView('login');             // back to the logger for the next person
+  }
+  useEffect(() => { if (!flash) return; const t = setTimeout(() => setFlash(false), 4500); return () => clearTimeout(t); }, [flash]);
 
   // ════════════════════════════ LOGIN ════════════════════════════
   if (view === 'login') {
@@ -75,6 +85,11 @@ export default function CsrApp() {
     const nowShift = currentShift();
     return (
       <Shell center night={shift === 'Night'}>
+        {flash && (
+          <div className="pop" style={{ position: 'fixed', top: 18, left: '50%', transform: 'translateX(-50%)', zIndex: 80, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 99, background: `linear-gradient(180deg, #34D399, ${C.mint})`, color: '#fff', fontWeight: 700, fontSize: 13, boxShadow: '0 12px 28px rgba(16,185,129,.32)' }}>
+            <Check size={16} /> Shift submitted — ready for the next person
+          </div>
+        )}
         <div className="pop w-full" style={{ maxWidth: 940 }}>
           <div className="glass-2" style={{ borderRadius: 28, overflow: 'hidden' }}>
             <div className="grid md:grid-cols-[1.1fr_1fr]">
@@ -156,18 +171,6 @@ export default function CsrApp() {
     );
   }
   if (view === 'teamlog') return <TeamLog night={report ? report.shift === 'Night' : shift === 'Night'} onBack={() => setView(report ? 'dashboard' : 'login')} />;
-  if (view === 'done') return (
-    <Shell center night={report.shift === 'Night'}>
-      <div className="pop" style={{ textAlign: 'center', width: 420, maxWidth: '100%' }}>
-        <Card strong className="p-8">
-          <div style={{ width: 60, height: 60, borderRadius: 18, margin: '0 auto 14px', background: `${C.mint}22`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Check size={30} style={{ color: C.mint }} /></div>
-          <h1 style={h1}>Shift submitted</h1>
-          <p style={{ color: C.muted, fontSize: 13, margin: '6px 0 18px' }}>{report.csr_name} · {report.profile} · checked out {timePKT(report.finish_at)} PKT. Locked now — no more edits.</p>
-          <Btn onClick={() => { setReport(null); setProfile(''); setView('login'); }} style={{ padding: '11px 22px' }}>Start another shift</Btn>
-        </Card>
-      </div>
-    </Shell>
-  );
 
   // ════════════════════════════ DASHBOARD ════════════════════════════
   const locked = report.status !== 'open';
@@ -182,6 +185,11 @@ export default function CsrApp() {
 
   return (
     <Shell night={report.shift === 'Night'}>
+      {oops && (
+        <div className="pop" onClick={() => setOops(false)} style={{ position: 'fixed', top: 18, left: '50%', transform: 'translateX(-50%)', zIndex: 80, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 99, background: C.coral, color: '#fff', fontWeight: 700, fontSize: 13, boxShadow: '0 12px 28px rgba(239,68,68,.32)', cursor: 'pointer' }}>
+          Couldn't submit — your entries are safe. Tap to dismiss &amp; try again.
+        </div>
+      )}
       <Header>
         <Brand small />
         <div style={{ display: 'flex', gap: 8 }}>
