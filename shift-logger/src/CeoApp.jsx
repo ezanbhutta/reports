@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock, Download, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, CEO_PASSWORD, GROUPS } from './config.js';
 import { db, todayPKT, timePKT, addDays, BACKEND } from './store.js';
-import { Btn, Card, StatCard, Pill, Select, Chip, SectionHeader, Modal, Label, actionSummary, Logo } from './ui.jsx';
+import { Btn, Card, StatCard, Pill, Select, Chip, SectionHeader, Modal, Label, actionSummary, Logo, Sparkline } from './ui.jsx';
 
 const AUTH_KEY = 'sl_ceo_ok';
 const uid = () => (crypto?.randomUUID ? crypto.randomUUID() : 'r_' + Math.random().toString(36).slice(2));
@@ -51,6 +51,22 @@ function winLabel(r) {
   const m = { today: 'Today', yesterday: 'Yesterday', '7d': 'Last 7 days', '30d': 'Last 30 days', all: 'All time' };
   if (r.mode === 'custom' && r.start) return `${fmtShort(r.start)} – ${fmtShort(r.end || r.start)}`;
   return m[r.mode] || 'Today';
+}
+const dayPKT = iso => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Karachi' }).format(new Date(iso));
+const hourPKT = iso => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', hour: '2-digit', hour12: false }).format(new Date(iso))) % 24;
+const initials = n => (n || '').split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+// Bin timestamps into a small series: 24 hourly buckets for a single day, else daily buckets across the window.
+function seriesFor(times, win) {
+  if (!times || !times.length) return [];
+  const single = win && win.s === win.e;
+  if (single) { const b = new Array(24).fill(0); times.forEach(t => { b[hourPKT(t)]++; }); return b; }
+  const start = win ? win.s : times.map(dayPKT).sort()[0];
+  const end = win ? win.e : todayPKT();
+  const idx = {}; const days = []; let d = start, guard = 0;
+  while (d <= end && guard++ < 200) { idx[d] = days.length; days.push(d); d = addDays(d, 1); }
+  const b = new Array(days.length).fill(0);
+  times.forEach(t => { const dd = dayPKT(t); if (dd in idx) b[idx[dd]]++; });
+  return b;
 }
 
 export default function CeoApp() {
@@ -194,6 +210,20 @@ function Console() {
   // Live feed — newest actions across EVERY shift / profile / CSR (ignores filters on purpose)
   const repMap = useMemo(() => Object.fromEntries(reports.map(r => [r.id, r])), [reports]);
   const latest = useMemo(() => [...allActions].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 8), [allActions]);
+  // Trend series + per-CSR roll-ups for the hero band, sparklines and team profiles
+  const actsSeries = useMemo(() => seriesFor(acts.map(a => a.created_at), win), [acts, win]);
+  const repsSeries = useMemo(() => seriesFor(filtered.map(r => r.start_at), win), [filtered, win]);
+  const hourly = win && win.s === win.e;
+  const team = useMemo(() => {
+    const m = {};
+    filtered.forEach(r => {
+      const t = m[r.csr_name] || (m[r.csr_name] = { name: r.csr_name, actions: 0, shifts: new Set(), profiles: new Set(), open: false, types: {} });
+      t.actions += byReport[r.id]?.length || 0; t.shifts.add(r.shift); t.profiles.add(r.profile);
+      if (r.status === 'open') t.open = true;
+      (byReport[r.id] || []).forEach(a => t.types[a.type] = (t.types[a.type] || 0) + 1);
+    });
+    return Object.values(m).map(t => ({ ...t, shifts: [...t.shifts], profiles: [...t.profiles], top: Object.keys(t.types).sort((a, b) => t.types[b] - t.types[a])[0] })).sort((a, b) => b.actions - a.actions);
+  }, [filtered, byReport]);
 
   async function exportPdf() {
     const { jsPDF } = await import('jspdf');
@@ -234,10 +264,30 @@ function Console() {
         </div>
       </Card>
 
+      {/* Hero · today at a glance */}
+      <div className="lift rounded-2xl mb-6" style={{ position: 'relative', overflow: 'hidden', padding: '22px 26px', color: '#fff', background: 'linear-gradient(135deg, #1B1140 0%, #3A1D7A 52%, #5E1FD8 120%)', boxShadow: '0 20px 50px rgba(94,31,216,.28)' }}>
+        <div style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', background: 'rgba(159,102,255,.40)', filter: 'blur(70px)', top: -100, right: 30 }} />
+        <div className="relative flex items-end justify-between gap-5" style={{ flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '.2em', textTransform: 'uppercase', opacity: .68 }}>HaseebMadeIt · Operations · {label}</div>
+            <div className="disp" style={{ fontSize: 30, fontWeight: 700, marginTop: 7, lineHeight: 1.05 }}>{acts.length} {acts.length === 1 ? 'action' : 'actions'} <span style={{ opacity: .6, fontWeight: 600, fontSize: 17 }}>across {filtered.length} {filtered.length === 1 ? 'report' : 'reports'}</span></div>
+            <div className="flex" style={{ gap: 22, marginTop: 14, flexWrap: 'wrap' }}>
+              {[['Open now', online], ['Profiles active', new Set(filtered.map(r => r.profile)).size], ['CSRs on', new Set(filtered.map(r => r.csr_name)).size], ['Needs attention', flags.length + idle.length]].map(([l, v]) => (
+                <div key={l}><div className="mono" style={{ fontSize: 21, fontWeight: 700, lineHeight: 1 }}>{v}</div><div style={{ fontSize: 10, opacity: .7, fontWeight: 600, marginTop: 4, textTransform: 'uppercase', letterSpacing: '.06em' }}>{l}</div></div>
+              ))}
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 10, opacity: .7, fontWeight: 700, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.12em' }}>Activity · {hourly ? 'hourly' : 'daily'}</div>
+            <Sparkline data={actsSeries.length ? actsSeries : [0, 0]} color="#FFFFFF" w={240} h={56} />
+          </div>
+        </div>
+      </div>
+
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard label="Open now" value={online} sub="reports in progress" accent={C.mint} icon={Activity} />
-        <StatCard label="Reports" value={filtered.length} sub={label.toLowerCase()} accent={C.violet} icon={ClipboardList} />
-        <StatCard label="Actions logged" value={acts.length} sub="across reports" accent={C.glow} icon={BarChart3} />
+        <StatCard label="Reports" value={filtered.length} sub={label.toLowerCase()} accent={C.violet} icon={ClipboardList} series={repsSeries} />
+        <StatCard label="Actions logged" value={acts.length} sub="across reports" accent={C.glow} icon={BarChart3} series={actsSeries} />
         <StatCard label="Needs attention" value={flags.length + idle.length} sub="flags + idle" accent={flags.length + idle.length ? C.coral : C.mint} icon={AlertTriangle} />
       </div>
 
@@ -315,6 +365,32 @@ function Console() {
           </div>}
         </div>
       </div>
+
+      {team.length > 0 && (
+        <div className="mt-6">
+          <SectionHeader eyebrow="Team" title="Who's on" right={`${team.length} ${team.length === 1 ? 'person' : 'people'} · ${label}`} />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {team.map(t => (
+              <div key={t.name} onClick={() => setFCSR(fCSR === t.name ? 'all' : t.name)} className="glass lift rounded-2xl p-4" style={{ cursor: 'pointer', outline: fCSR === t.name ? `2px solid ${C.violet}` : 'none' }}>
+                <div className="flex items-center gap-3">
+                  <div style={{ width: 40, height: 40, borderRadius: 12, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 14, color: '#fff', background: `linear-gradient(150deg, ${C.glow}, ${SHIFT_COLOR[t.shifts[0]] || C.violet})` }}>{initials(t.name)}</div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate" style={{ fontWeight: 800, fontSize: 13.5, color: C.ink }}>{t.name}</span>
+                      <span style={{ width: 7, height: 7, borderRadius: 9, flex: '0 0 auto', background: t.open ? C.mint : C.dim, boxShadow: t.open ? `0 0 0 3px ${C.mintBg}` : 'none' }} />
+                    </div>
+                    <div style={{ fontSize: 10.5, color: C.dim }}>{t.shifts.join(', ')} · {t.profiles.length} profile{t.profiles.length > 1 ? 's' : ''}</div>
+                  </div>
+                </div>
+                <div className="mt-3 flex items-end justify-between">
+                  <div><div className="mono" style={{ fontSize: 22, fontWeight: 800, color: C.ink, lineHeight: 1 }}>{t.actions}</div><div style={{ fontSize: 9.5, color: C.dim, textTransform: 'uppercase', letterSpacing: '.08em', marginTop: 3 }}>actions</div></div>
+                  {t.top && <span style={{ background: 'rgba(124,41,255,.08)', borderRadius: 7, padding: '3px 9px', fontSize: 10.5, fontWeight: 700, color: C.violetDim }}>{KPI_LABEL[t.top] || t.top}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {drill && <DrillDrawer report={repById(drill)} actions={byReport[drill] || []} onClose={() => setDrill(null)} />}
     </>

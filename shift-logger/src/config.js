@@ -3,11 +3,14 @@
 // ════════════════════════════════════════════════════════════════
 
 // Brand theme (HaseebMadeIt violet · light)
-// HaseebMadeIt brand tokens — aligned with the CSR Pulse design system
+// HaseebMadeIt brand tokens — aligned with the CSR Pulse design system.
+// Neutrals + a couple of accents resolve from CSS variables so the CSR app can
+// flip to a dark "night-shift" theme via a .night class (see index.css).
 export const C = {
-  bg: '#FAFAFE', raised: '#F4F2FA', card: '#FFFFFF', ink: '#160A33',
-  muted: '#534A78', dim: '#8B82A8', border: '#E8E5F3', line: '#F0EDF8',
-  violet: '#7229FF', violetDim: '#5E1FD8', glow: '#9F66FF', violetBg: '#F1EBFF', violetLine: '#E2D6FF',
+  bg: 'var(--bg)', raised: 'var(--raised)', card: 'var(--card)', ink: 'var(--ink)',
+  muted: 'var(--muted)', dim: 'var(--dim)', border: 'var(--border)', line: 'var(--line)',
+  surface: 'var(--surface)', surfaceLine: 'var(--surface-line)', violetDim: 'var(--violet-dim)',
+  violet: '#7229FF', glow: '#9F66FF', violetBg: '#F1EBFF', violetLine: '#E2D6FF',
   mint: '#10B981', mintBg: '#E7F8F1', amber: '#F59E0B', amberBg: '#FEF4DE',
   coral: '#EF4444', coralBg: '#FDE9E9', cyan: '#0EA5E9', cyanBg: '#E5F4FE', ink2: '#0E1330',
 };

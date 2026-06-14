@@ -16,6 +16,7 @@ const pktHour = () => parseInt(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asi
 const currentShift = () => { const h = pktHour(); if (h >= 9 && h < 17) return 'Morning'; if (h >= 17 || h < 1) return 'Evening'; return 'Night'; };
 const greeting = () => { const h = pktHour(); return h >= 5 && h < 12 ? 'Good morning' : h >= 12 && h < 17 ? 'Good afternoon' : h >= 17 && h < 22 ? 'Good evening' : 'Working late'; };
 const SHIFT_ICON = { Morning: Sunrise, Evening: Sunset, Night: Moon };
+const hourLabel = iso => new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Karachi', hour: 'numeric', hour12: true }).format(new Date(iso));
 function LiveClock() {
   const fmt = () => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date());
   const [t, setT] = useState(fmt());
@@ -73,7 +74,7 @@ export default function CsrApp() {
     const names = roster.filter(r => r.active);
     const nowShift = currentShift();
     return (
-      <Shell center>
+      <Shell center night={shift === 'Night'}>
         <div className="pop w-full" style={{ maxWidth: 940 }}>
           <div className="glass-2" style={{ borderRadius: 28, overflow: 'hidden' }}>
             <div className="grid md:grid-cols-[1.1fr_1fr]">
@@ -130,7 +131,7 @@ export default function CsrApp() {
                 <Label>Shift · Pakistan time</Label>
                 <div className="grid grid-cols-3 gap-2.5">
                   {SHIFTS.map(s => { const on = shift === s.key; const now = s.key === nowShift; const Icon = SHIFT_ICON[s.key]; return (
-                    <button key={s.key} onClick={() => setShift(s.key)} className="rounded-2xl lift" style={{ position: 'relative', padding: '15px 6px', cursor: 'pointer', textAlign: 'center', border: on ? 'none' : '1px solid rgba(124,41,255,.16)', background: on ? `linear-gradient(165deg, ${C.glow}, ${C.violet})` : 'rgba(255,255,255,.6)', color: on ? '#fff' : C.muted, boxShadow: on ? '0 12px 24px rgba(114,41,255,.28)' : 'none' }}>
+                    <button key={s.key} onClick={() => setShift(s.key)} className="rounded-2xl lift" style={{ position: 'relative', padding: '15px 6px', cursor: 'pointer', textAlign: 'center', border: on ? 'none' : `1px solid ${C.surfaceLine}`, background: on ? `linear-gradient(165deg, ${C.glow}, ${C.violet})` : C.surface, color: on ? '#fff' : C.muted, boxShadow: on ? '0 12px 24px rgba(114,41,255,.28)' : 'none' }}>
                       {now && <span style={{ position: 'absolute', top: 7, right: 7, fontSize: 7.5, fontWeight: 800, letterSpacing: '.06em', padding: '2px 5px', borderRadius: 6, background: on ? 'rgba(255,255,255,.25)' : C.mintBg, color: on ? '#fff' : C.mint }}>NOW</span>}
                       <Icon size={19} strokeWidth={2.2} style={{ display: 'block', margin: '0 auto 7px' }} />
                       <div style={{ fontWeight: 800, fontSize: 13 }}>{s.label}</div>
@@ -154,9 +155,9 @@ export default function CsrApp() {
       </Shell>
     );
   }
-  if (view === 'teamlog') return <TeamLog onBack={() => setView(report ? 'dashboard' : 'login')} />;
+  if (view === 'teamlog') return <TeamLog night={report ? report.shift === 'Night' : shift === 'Night'} onBack={() => setView(report ? 'dashboard' : 'login')} />;
   if (view === 'done') return (
-    <Shell center>
+    <Shell center night={report.shift === 'Night'}>
       <div className="pop" style={{ textAlign: 'center', width: 420, maxWidth: '100%' }}>
         <Card strong className="p-8">
           <div style={{ width: 60, height: 60, borderRadius: 18, margin: '0 auto 14px', background: `${C.mint}22`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Check size={30} style={{ color: C.mint }} /></div>
@@ -175,9 +176,12 @@ export default function CsrApp() {
   const topTypes = Object.keys(counts).sort((a, b) => counts[b] - counts[a]).slice(0, 3);
   const strip = [['Total', actions.length, true], ...topTypes.map(t => [KPI_LABEL[t] || t, counts[t], false])];
   while (strip.length < 4) strip.push(null);
+  // Group the timeline by hour (newest first) for color-railed sections
+  const tlGroups = [];
+  actions.forEach(a => { const hr = hourLabel(a.created_at); let g = tlGroups[tlGroups.length - 1]; if (!g || g.hr !== hr) { g = { hr, items: [] }; tlGroups.push(g); } g.items.push(a); });
 
   return (
-    <Shell>
+    <Shell night={report.shift === 'Night'}>
       <Header>
         <Brand small />
         <div style={{ display: 'flex', gap: 8 }}>
@@ -212,7 +216,7 @@ export default function CsrApp() {
             </button>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 14 }}>
               {quickKeys.map(k => { const a = ACTION_BY_KEY[k]; if (!a) return null; return (
-                <button key={k} onClick={() => openForm(a)} className="lift rounded-xl" style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 12px', background: 'rgba(255,255,255,.6)', border: '1px solid rgba(124,41,255,.16)', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, color: C.ink }}>
+                <button key={k} onClick={() => openForm(a)} className="lift rounded-xl" style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 12px', background: C.surface, border: `1px solid ${C.surfaceLine}`, cursor: 'pointer', fontSize: 12.5, fontWeight: 700, color: C.ink }}>
                   <span style={{ width: 7, height: 7, borderRadius: 9, background: groupColor(a.group) }} />{a.label}</button>); })}
             </div>
           </Card>
@@ -247,16 +251,24 @@ export default function CsrApp() {
               <div style={{ fontSize: 12, marginTop: 2 }}>Tap <b style={{ color: C.violetDim }}>Log an activity</b> to add your first one.</div>
             </div>
           )}
-          <div className="no-scrollbar" style={{ maxHeight: 460, overflow: 'auto' }}>
-            {actions.map(a => (
-              <div key={a.id} onClick={() => !locked && openForm(ACTION_BY_KEY[a.type], { ...a.details, client: a.client }, a.id)}
-                className="glass-soft rounded-xl lift" style={{ display: 'flex', gap: 11, padding: '11px 13px', marginBottom: 8, cursor: locked ? 'default' : 'pointer' }}>
-                <span style={{ width: 8, height: 8, borderRadius: 9, marginTop: 5, flex: '0 0 auto', background: groupColor(ACTION_BY_KEY[a.type]?.group) }} />
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{ACTION_BY_KEY[a.type]?.label || a.type}</div>
-                  <div style={{ fontSize: 11.5, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.client}{actionSummary(a) ? ' · ' + actionSummary(a) : ''}</div>
+          <div className="no-scrollbar" style={{ maxHeight: 540, overflow: 'auto', paddingRight: 2 }}>
+            {tlGroups.map((g, gi) => (
+              <div key={gi}>
+                <div className="flex items-center gap-2" style={{ margin: gi ? '14px 0 8px' : '2px 0 8px' }}>
+                  <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.08em', color: C.dim }}>{g.hr}</span>
+                  <span style={{ flex: 1, height: 1, background: 'rgba(124,41,255,.10)' }} />
+                  <span style={{ fontSize: 10, color: C.dim }}>{g.items.length}</span>
                 </div>
-                <span style={{ fontSize: 10.5, color: C.dim, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3 }}>{timePKT(a.created_at)}{!locked && <Pencil size={10} style={{ color: C.violetLine }} />}</span>
+                {g.items.map(a => { const col = groupColor(ACTION_BY_KEY[a.type]?.group); return (
+                  <div key={a.id} onClick={() => !locked && openForm(ACTION_BY_KEY[a.type], { ...a.details, client: a.client }, a.id)}
+                    className="glass-soft rounded-xl lift" style={{ display: 'flex', gap: 11, padding: '11px 13px', marginBottom: 8, cursor: locked ? 'default' : 'pointer', borderLeft: `3px solid ${col}` }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{ACTION_BY_KEY[a.type]?.label || a.type}</div>
+                      <div className="truncate" style={{ fontSize: 11.5, color: C.muted }}>{a.client}{actionSummary(a) ? ' · ' + actionSummary(a) : ''}</div>
+                    </div>
+                    <span style={{ fontSize: 10.5, color: C.dim, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3 }}>{timePKT(a.created_at)}{!locked && <Pencil size={10} style={{ color: C.violetLine }} />}</span>
+                  </div>
+                ); })}
               </div>
             ))}
           </div>
@@ -287,47 +299,63 @@ export default function CsrApp() {
   );
 }
 
-// ── Command palette ──
+// ── Command palette (keyboard-navigable) ──
 function CommandPalette({ onClose, onPick }) {
   const [q, setQ] = useState('');
-  const inputRef = useRef(null);
+  const [sel, setSel] = useState(0);
+  const inputRef = useRef(null); const listRef = useRef(null);
   useEffect(() => { inputRef.current?.focus(); }, []);
-  const recent = getRecent().filter(k => ACTION_BY_KEY[k]);
-  const matches = q ? ACTIONS.filter(a => a.label.toLowerCase().includes(q.toLowerCase())) : null;
+  useEffect(() => { setSel(0); }, [q]);
+
+  const recent = getRecent().filter(k => ACTION_BY_KEY[k]).map(k => ACTION_BY_KEY[k]);
+  const sections = [];
+  if (q) { const ms = ACTIONS.filter(a => a.label.toLowerCase().includes(q.toLowerCase())); if (ms.length) sections.push({ label: 'Results', color: C.dim, items: ms }); }
+  else { if (recent.length) sections.push({ label: 'Recent', color: C.violetDim, items: recent }); GROUPS.forEach(g => { const items = ACTIONS.filter(a => a.group === g.key); if (items.length) sections.push({ label: g.label, color: g.color, items }); }); }
+  const flat = sections.flatMap(s => s.items);
+  const clamped = Math.max(0, Math.min(sel, flat.length - 1));
+  useEffect(() => { listRef.current?.querySelector('[data-active="1"]')?.scrollIntoView({ block: 'nearest' }); }, [clamped, q]);
+
+  const onKey = e => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setSel(s => Math.min(s + 1, flat.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setSel(s => Math.max(s - 1, 0)); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (flat[clamped]) onPick(flat[clamped]); }
+    else if (e.key === 'Escape') onClose();
+  };
+
+  let idx = -1;
   return (
-    <Modal title={undefined} onClose={onClose} width={460}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '2px 2px 12px' }}>
-        <Search size={18} style={{ color: C.dim }} />
-        <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)} placeholder="Search activities…"
-          onKeyDown={e => { if (e.key === 'Enter' && matches?.length) onPick(matches[0]); if (e.key === 'Escape') onClose(); }}
+    <Modal title={undefined} onClose={onClose} width={480}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '2px 2px 12px' }}>
+        <Search size={18} style={{ color: C.violet }} />
+        <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)} onKeyDown={onKey} placeholder="Search activities…"
           style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 16, color: C.ink }} />
         <span style={{ fontSize: 18, color: C.dim, cursor: 'pointer' }} onClick={onClose}>×</span>
       </div>
-      <div className="no-scrollbar" style={{ maxHeight: '60vh', overflow: 'auto', borderTop: '1px solid rgba(124,41,255,.1)', paddingTop: 8 }}>
-        {matches ? (
-          matches.length === 0 ? <div style={{ color: C.dim, fontSize: 13, padding: 12 }}>No match for “{q}”.</div>
-            : matches.map(a => <Row key={a.key} a={a} onPick={onPick} />)
-        ) : (<>
-          {recent.length > 0 && <>
-            <GroupLabel>Recent</GroupLabel>
-            {recent.map(k => <Row key={k} a={ACTION_BY_KEY[k]} onPick={onPick} />)}
-          </>}
-          {GROUPS.map(g => { const items = ACTIONS.filter(a => a.group === g.key); return (
-            <div key={g.key}><GroupLabel color={g.color}>{g.label}</GroupLabel>{items.map(a => <Row key={a.key} a={a} onPick={onPick} />)}</div>); })}
-        </>)}
+      <div ref={listRef} className="no-scrollbar" style={{ maxHeight: '56vh', overflow: 'auto', borderTop: '1px solid rgba(124,41,255,.1)', paddingTop: 6 }}>
+        {flat.length === 0 && <div style={{ color: C.dim, fontSize: 13, padding: 14 }}>No match for “{q}”.</div>}
+        {sections.map((s, si) => (
+          <div key={si}>
+            <GroupLabel color={s.color}>{s.label}</GroupLabel>
+            {s.items.map(a => { idx++; const myIdx = idx; const active = myIdx === clamped; return (
+              <button key={a.key} data-active={active ? '1' : '0'} onMouseMove={() => setSel(myIdx)} onClick={() => onPick(a)}
+                className="w-full rounded-xl" style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 12px', marginBottom: 2, background: active ? 'rgba(124,41,255,.10)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+                <span style={{ width: 27, height: 27, borderRadius: 8, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${groupColor(a.group)}1A` }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 9, background: groupColor(a.group) }} />
+                </span>
+                <span style={{ fontSize: 13.5, fontWeight: 600, color: C.ink, flex: 1 }}>{a.label}</span>
+                {active ? <span style={{ fontSize: 10.5, fontWeight: 800, color: C.violet }}>Add ↵</span> : <Plus size={14} style={{ color: C.violetLine }} />}
+              </button>
+            ); })}
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 16, padding: '10px 4px 0', marginTop: 4, borderTop: '1px solid rgba(124,41,255,.08)', fontSize: 10.5, color: C.dim }}>
+        <span><b style={{ color: C.muted }}>↑↓</b> navigate</span><span><b style={{ color: C.muted }}>↵</b> add</span><span><b style={{ color: C.muted }}>esc</b> close</span>
       </div>
     </Modal>
   );
 }
 const GroupLabel = ({ children, color = C.dim }) => <div style={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.12em', color, margin: '10px 6px 4px' }}>{children}</div>;
-const Row = ({ a, onPick }) => (
-  <button onClick={() => onPick(a)} className="w-full rounded-xl" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
-    onMouseEnter={e => e.currentTarget.style.background = 'rgba(124,41,255,.07)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-    <span style={{ width: 9, height: 9, borderRadius: 9, background: groupColor(a.group), flex: '0 0 auto' }} />
-    <span style={{ fontSize: 13.5, fontWeight: 600, color: C.ink }}>{a.label}</span>
-    <Plus size={14} style={{ marginLeft: 'auto', color: C.violetLine }} />
-  </button>
-);
 
 // ── Wrap up ──
 function WrapUp({ onClose, onSubmit, profile }) {
@@ -351,13 +379,13 @@ function WrapUp({ onClose, onSubmit, profile }) {
 }
 
 // ── Team log ──
-function TeamLog({ onBack }) {
+function TeamLog({ onBack, night }) {
   const [reports, setReports] = useState([]); const [all, setAll] = useState([]); const [open, setOpen] = useState(null);
   const load = useCallback(() => { db.listReports().then(setReports); db.allActions().then(setAll); }, []);
   useEffect(() => { load(); const off = db.subscribe(load); return off; }, [load]);
   const cf = id => { const m = {}; all.filter(a => a.report_id === id).forEach(a => m[a.type] = (m[a.type] || 0) + 1); return m; };
   return (
-    <Shell>
+    <Shell night={night}>
       <Header><div className="flex items-center gap-3"><Brand small /><span style={{ fontWeight: 800, fontSize: 15, color: C.ink }} className="hidden sm:inline">· Past reports</span></div>
         <Btn variant="ghost" onClick={onBack} style={{ padding: '8px 12px', fontSize: 12 }}><ChevronLeft size={13} style={{ verticalAlign: -2 }} /> Back</Btn></Header>
       <div className="mx-auto" style={{ maxWidth: 820, padding: '22px 20px 60px' }}>
@@ -395,6 +423,6 @@ function Header({ children }) {
     <div className="mx-auto flex items-center justify-between" style={{ maxWidth: 760, padding: '12px 20px' }}>{children}</div>
   </div>;
 }
-function Shell({ children, center }) {
-  return <div style={{ minHeight: '100vh', display: center ? 'flex' : 'block', alignItems: 'center', justifyContent: 'center', padding: center ? 16 : 0 }}>{children}</div>;
+function Shell({ children, center, night }) {
+  return <div className={night ? 'night' : ''} style={{ minHeight: '100vh', display: center ? 'flex' : 'block', alignItems: 'center', justifyContent: 'center', padding: center ? 16 : 0 }}>{children}</div>;
 }
