@@ -34,7 +34,7 @@ export const Pill = ({ children, color = C.violet }) => (
 );
 
 export const Select = ({ value, onChange, children, color }) => (
-  <select value={value} onChange={onChange} className="gi" style={{ padding: '8px 10px', width: 'auto', color: color || C.ink, fontWeight: color ? 700 : 500, fontSize: 12.5 }}>{children}</select>
+  <select value={value} onChange={onChange} className="gi" style={{ padding: '8px 32px 8px 11px', width: 'auto', color: color || C.ink, fontWeight: color ? 700 : 500, fontSize: 12.5 }}>{children}</select>
 );
 
 export const Chip = ({ active, onClick, children }) => (
