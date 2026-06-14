@@ -6,33 +6,34 @@ html, body, #root { height: 100%; margin: 0; }
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
-  color: #15082F;
+  color: #160A33;
   background:
-    radial-gradient(48rem 48rem at 4% -10%, rgba(124,77,255,.10), transparent 62%),
-    radial-gradient(42rem 42rem at 106% 2%, rgba(14,165,233,.07), transparent 60%),
-    radial-gradient(40rem 40rem at 50% 122%, rgba(236,72,153,.05), transparent 58%),
-    #FAFAFD;
+    radial-gradient(55rem 45rem at 100% -12%, rgba(255,176,128,.07), transparent 60%),
+    radial-gradient(50rem 50rem at 0% -8%, rgba(124,77,255,.09), transparent 60%),
+    radial-gradient(46rem 40rem at 50% 122%, rgba(14,165,233,.05), transparent 60%),
+    #FAFAFE;
   background-attachment: fixed;
 }
 * { box-sizing: border-box; }
-.mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-feature-settings: 'tnum' 1, 'cv01' 1; }
+.disp { font-family: 'Space Grotesk', 'Inter', sans-serif; letter-spacing: -0.02em; }
 input, select, textarea, button { font-family: inherit; }
 ::selection { background: rgba(124,77,255,.22); }
 
-/* ── Apple-style frosted glass ── */
+/* ── Frosted glass · Refero "Air" + soft elevation ── */
 .glass {
-  background: rgba(255,255,255,.55);
-  -webkit-backdrop-filter: blur(22px) saturate(180%);
-  backdrop-filter: blur(22px) saturate(180%);
-  border: 1px solid rgba(255,255,255,.65);
-  box-shadow: 0 10px 34px rgba(21,8,47,.10), inset 0 1px 0 rgba(255,255,255,.55);
+  background: rgba(255,255,255,.62);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255,255,255,.7);
+  box-shadow: 0 1px 2px rgba(22,10,51,.04), 0 16px 40px rgba(22,10,51,.08), inset 0 1px 0 rgba(255,255,255,.6);
 }
 .glass-2 {
-  background: rgba(255,255,255,.74);
+  background: rgba(255,255,255,.78);
   -webkit-backdrop-filter: blur(30px) saturate(190%);
   backdrop-filter: blur(30px) saturate(190%);
-  border: 1px solid rgba(255,255,255,.75);
-  box-shadow: 0 24px 60px rgba(21,8,47,.20), inset 0 1px 0 rgba(255,255,255,.6);
+  border: 1px solid rgba(255,255,255,.8);
+  box-shadow: 0 2px 6px rgba(22,10,51,.06), 0 30px 70px rgba(22,10,51,.16), inset 0 1px 0 rgba(255,255,255,.66);
 }
 .glass-soft {
   background: rgba(255,255,255,.40);
@@ -51,12 +52,12 @@ input, select, textarea, button { font-family: inherit; }
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
-.lift { transition: transform .16s ease, box-shadow .16s ease; }
-.lift:hover { transform: translateY(-2px); box-shadow: 0 18px 44px rgba(21,8,47,.16); }
+.lift { transition: transform .18s cubic-bezier(.2,.7,.3,1), box-shadow .18s ease; }
+.lift:hover { transform: translateY(-3px); box-shadow: 0 2px 6px rgba(22,10,51,.05), 0 22px 50px rgba(22,10,51,.14); }
 .gi { /* glass input */
   background: rgba(255,255,255,.6);
   border: 1px solid rgba(124,77,255,.18);
-  border-radius: 12px; padding: 10px 12px; font-size: 13.5px; color: #15082F; outline: none; width: 100%;
+  border-radius: 12px; padding: 10px 12px; font-size: 13.5px; color: #160A33; outline: none; width: 100%;
 }
 .gi:focus { border-color: rgba(124,77,255,.55); box-shadow: 0 0 0 3px rgba(124,77,255,.12); background-color: rgba(255,255,255,.85); }
 /* Native select: replace the cramped browser arrow with a balanced custom chevron + right padding */

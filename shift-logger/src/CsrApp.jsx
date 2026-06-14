@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Check, Clock, Sunrise, Sunset, Moon, Zap, ArrowRightLeft, Eye } from 'lucide-react';
 import { C, SHIFTS, PROFILES, ACTIONS, ACTION_BY_KEY, GROUPS, CHECKLIST, KPI_LABEL } from './config.js';
 import { db, todayPKT, timePKT } from './store.js';
-import { Btn, Card, Pill, Modal, Label, Field, actionSummary } from './ui.jsx';
+import { Btn, Card, Pill, Modal, Label, Field, actionSummary, Logo } from './ui.jsx';
 
 const groupColor = k => (GROUPS.find(g => g.key === k) || {}).color || C.violet;
 const QUICK = ['inquiry', 'followup_client', 'shared', 'revision_assigned', 'meeting', 'new_order'];
@@ -83,9 +83,12 @@ export default function CsrApp() {
                 <div style={{ position: 'absolute', width: 300, height: 300, borderRadius: '50%', background: 'rgba(255,255,255,.16)', filter: 'blur(60px)', top: -90, right: -60 }} />
                 <div style={{ position: 'absolute', width: 230, height: 230, borderRadius: '50%', background: 'rgba(159,102,255,.5)', filter: 'blur(70px)', bottom: -50, left: -40 }} />
 
-                <div style={{ position: 'relative' }}>
-                  <div style={{ fontWeight: 800, fontSize: 20, letterSpacing: '-.01em' }}>HaseebMadeIt</div>
-                  <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.2em', textTransform: 'uppercase', opacity: .72 }}>CSR Operations</div>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <img src="/favicon.svg" width={40} height={40} alt="HaseebMadeIt" style={{ display: 'block', borderRadius: 11, boxShadow: '0 8px 20px rgba(0,0,0,.18)' }} />
+                  <div>
+                    <div className="disp" style={{ fontWeight: 700, fontSize: 20 }}>HaseebMadeIt</div>
+                    <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.2em', textTransform: 'uppercase', opacity: .72 }}>CSR Operations</div>
+                  </div>
                 </div>
 
                 <div style={{ position: 'relative' }}>
@@ -108,12 +111,13 @@ export default function CsrApp() {
 
               {/* ── Form ── */}
               <div style={{ padding: '40px 38px' }}>
-                <div className="md:hidden" style={{ textAlign: 'center', marginBottom: 22 }}>
-                  <div style={{ fontWeight: 800, fontSize: 17, color: C.ink }}>HaseebMadeIt</div>
+                <div className="md:hidden flex flex-col items-center" style={{ marginBottom: 22 }}>
+                  <Logo size={44} />
+                  <div className="disp" style={{ fontWeight: 700, fontSize: 17, color: C.ink, marginTop: 9 }}>HaseebMadeIt</div>
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.2em', textTransform: 'uppercase', color: C.dim, marginTop: 2 }}>CSR Shift Logger</div>
                 </div>
 
-                <h1 style={{ fontSize: 25, fontWeight: 800, color: C.ink, letterSpacing: '-.02em', margin: 0 }}>Start your shift</h1>
+                <h1 className="disp" style={{ fontSize: 25, fontWeight: 700, color: C.ink, margin: 0 }}>Start your shift</h1>
                 <p style={{ color: C.muted, fontSize: 13, margin: '6px 0 0' }}>No password — just tell us who's on.</p>
 
                 <Label>Your name</Label>
@@ -186,7 +190,7 @@ export default function CsrApp() {
         {/* greeting + identity */}
         <div className="mb-5 flex items-end justify-between" style={{ gap: 12, flexWrap: 'wrap' }}>
           <div>
-            <h1 style={{ fontSize: 23, fontWeight: 800, color: C.ink, letterSpacing: '-.02em', margin: 0 }}>{greeting()}, {report.csr_name.split(' ')[0]}</h1>
+            <h1 className="disp" style={{ fontSize: 24, fontWeight: 700, color: C.ink, margin: 0 }}>{greeting()}, {report.csr_name.split(' ')[0]}</h1>
             <p style={{ fontSize: 13, color: C.muted, marginTop: 3 }}>Logging for <b style={{ color: C.violetDim }}>{report.profile}</b> · {report.shift} shift · in since {timePKT(report.start_at)} PKT</p>
           </div>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: C.mint, background: C.mintBg, padding: '6px 11px', borderRadius: 99 }}>
@@ -382,8 +386,8 @@ function TeamLog({ onBack }) {
 const h1 = { fontSize: 25, fontWeight: 800, color: C.ink, letterSpacing: '-.02em', margin: 0 };
 function Brand({ small }) {
   return <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-    <div style={{ width: small ? 28 : 30, height: small ? 28 : 30, borderRadius: 9, background: `linear-gradient(180deg,${C.glow},${C.violet})`, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: small ? 15 : 16, boxShadow: '0 6px 16px rgba(114,41,255,.3)' }}>C</div>
-    <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.16em', textTransform: 'uppercase', color: C.dim }} className="hidden sm:block">CSR Shift Logger</div>
+    <Logo size={small ? 28 : 30} />
+    <div className="disp hidden sm:block" style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>HaseebMadeIt <span style={{ fontWeight: 600, color: C.dim }}>· CSR Logger</span></div>
   </div>;
 }
 function Header({ children }) {

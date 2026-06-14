@@ -3,12 +3,13 @@
 // ════════════════════════════════════════════════════════════════
 
 // Brand theme (HaseebMadeIt violet · light)
+// HaseebMadeIt brand tokens — aligned with the CSR Pulse design system
 export const C = {
-  bg: '#FBFAFF', raised: '#F5F3FC', card: '#FFFFFF', ink: '#15082F',
-  muted: '#5B5280', dim: '#938AAE', border: '#EAE6F5', line: '#F0EDF8',
-  violet: '#7229FF', violetDim: '#5E1FD8', glow: '#9F66FF', violetBg: '#F3EEFF', violetLine: '#E2D6FF',
-  mint: '#10B981', mintBg: '#E7F8F1', amber: '#F59E0B', amberBg: '#FEF5E1',
-  coral: '#EF4444', coralBg: '#FDECEC', cyan: '#0EA5E9', cyanBg: '#E6F5FE', ink2: '#0E1330',
+  bg: '#FAFAFE', raised: '#F4F2FA', card: '#FFFFFF', ink: '#160A33',
+  muted: '#534A78', dim: '#8B82A8', border: '#E8E5F3', line: '#F0EDF8',
+  violet: '#7229FF', violetDim: '#5E1FD8', glow: '#9F66FF', violetBg: '#F1EBFF', violetLine: '#E2D6FF',
+  mint: '#10B981', mintBg: '#E7F8F1', amber: '#F59E0B', amberBg: '#FEF4DE',
+  coral: '#EF4444', coralBg: '#FDE9E9', cyan: '#0EA5E9', cyanBg: '#E5F4FE', ink2: '#0E1330',
 };
 
 // Shifts — Pakistan time

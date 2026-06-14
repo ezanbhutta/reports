@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock, Download, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, CEO_PASSWORD, GROUPS } from './config.js';
 import { db, todayPKT, timePKT, addDays, BACKEND } from './store.js';
-import { Btn, Card, StatCard, Pill, Select, Chip, SectionHeader, Modal, Label, actionSummary } from './ui.jsx';
+import { Btn, Card, StatCard, Pill, Select, Chip, SectionHeader, Modal, Label, actionSummary, Logo } from './ui.jsx';
 
 const AUTH_KEY = 'sl_ceo_ok';
 const uid = () => (crypto?.randomUUID ? crypto.randomUUID() : 'r_' + Math.random().toString(36).slice(2));
@@ -60,11 +60,11 @@ export default function CeoApp() {
     const tryOpen = () => { if (pw === CEO_PASSWORD) { sessionStorage.setItem(AUTH_KEY, '1'); setOk(true); } else setErr(true); };
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-        <div className="glass-2 rounded-2xl pop" style={{ width: 320, overflow: 'hidden' }}>
-          <div style={{ padding: 24, textAlign: 'center' }}>
-            <div style={{ width: 50, height: 50, borderRadius: 16, background: `linear-gradient(180deg,${C.glow},${C.violet})`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', boxShadow: '0 8px 20px rgba(114,41,255,.35)' }}><Lock size={22} color="#fff" /></div>
-            <div style={{ fontWeight: 800, fontSize: 17, color: C.ink }}>CEO / Manager</div>
-            <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>This screen is password-locked</div>
+        <div className="glass-2 rounded-2xl pop" style={{ width: 340, overflow: 'hidden' }}>
+          <div style={{ padding: '30px 26px 26px', textAlign: 'center' }}>
+            <Logo size={52} style={{ margin: '0 auto 14px' }} />
+            <div className="disp" style={{ fontWeight: 700, fontSize: 19, color: C.ink }}>CEO Console</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Lock size={11} /> Password-locked · managers only</div>
             <input type="password" value={pw} autoFocus onChange={e => { setPw(e.target.value); setErr(false); }} onKeyDown={e => e.key === 'Enter' && tryOpen()}
               className="gi" style={{ marginTop: 16, textAlign: 'center', borderColor: err ? C.coral : undefined }} placeholder="Password" />
             {err && <div style={{ color: C.coral, fontSize: 12, marginTop: 8 }}>Wrong password.</div>}
@@ -87,8 +87,8 @@ function Authed() {
       <div className="glass" style={{ position: 'sticky', top: 0, zIndex: 30, borderRadius: 0, borderLeft: 'none', borderRight: 'none', borderTop: 'none' }}>
         <div className="mx-auto flex max-w-[1500px] items-center justify-between px-6 py-3.5">
           <div className="flex items-center gap-3">
-            <div style={{ width: 30, height: 30, borderRadius: 9, background: C.ink, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>C</div>
-            <div><div style={{ fontSize: 14, fontWeight: 800, color: C.ink }}>CEO Console <span style={{ fontSize: 11, fontWeight: 700, color: C.mint }}>· <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 9, background: C.mint, boxShadow: `0 0 0 3px ${C.mintBg}` }} /> live</span></div>
+            <Logo size={32} />
+            <div><div className="disp" style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>CEO Console <span style={{ fontSize: 11, fontWeight: 700, color: C.mint }}>· <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 9, background: C.mint, boxShadow: `0 0 0 3px ${C.mintBg}` }} /> live</span></div>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.18em', textTransform: 'uppercase', color: C.dim }}>HaseebMadeIt · Operations</div></div>
           </div>
           <div className="flex items-center gap-2"><Tab id="live" icon={BarChart3} label="Live" /><Tab id="roster" icon={Users} label="Roster" /></div>

@@ -1,6 +1,12 @@
 import React from 'react';
 import { C } from './config.js';
 
+// Official HaseebMadeIt mark (served from /public/favicon.svg). Never substitute another logo.
+export const Logo = ({ size = 30, className = '', style }) => (
+  <img src="/favicon.svg" width={size} height={size} alt="HaseebMadeIt" className={className}
+    style={{ display: 'block', borderRadius: Math.round(size * 0.26), filter: 'drop-shadow(0 6px 14px rgba(114,41,255,.30))', ...style }} />
+);
+
 export const Btn = ({ children, onClick, variant = 'solid', disabled, style, className = '', ...p }) => {
   const base = 'rounded-xl font-bold transition-all';
   const v = {
@@ -46,7 +52,7 @@ export const SectionHeader = ({ eyebrow, title, right, color = C.violet }) => (
   <div className="mb-3 flex items-end justify-between">
     <div>
       {eyebrow && <div className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color }}>{eyebrow}</div>}
-      <div className="text-lg font-bold tracking-tight" style={{ color: C.ink }}>{title}</div>
+      <div className="disp text-lg font-bold" style={{ color: C.ink }}>{title}</div>
     </div>
     {right && <span className="text-[10px] uppercase tracking-wider" style={{ color: C.dim }}>{right}</span>}
   </div>
