@@ -1,12 +1,32 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock } from 'lucide-react';
+import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock, Download, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, CEO_PASSWORD } from './config.js';
-import { db, todayPKT, timePKT, BACKEND } from './store.js';
+import { db, todayPKT, timePKT, addDays, BACKEND } from './store.js';
 import { Btn, Card, StatCard, Pill, Select, Chip, SectionHeader, Modal, Label, actionSummary } from './ui.jsx';
 
 const AUTH_KEY = 'sl_ceo_ok';
 const uid = () => (crypto?.randomUUID ? crypto.randomUUID() : 'r_' + Math.random().toString(36).slice(2));
 const SHIFT_COLOR = { Morning: C.amber, Evening: C.cyan, Night: C.violet };
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const ymd = (y, m, d) => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+const parseYmd = s => { const [y, m, d] = (s || '').split('-').map(Number); return { y, m: m - 1, d }; };
+const fmtShort = s => { const p = parseYmd(s); return p.y ? `${MON[p.m]} ${p.d}` : '—'; };
+
+function winFor(r) {
+  const t = todayPKT();
+  if (r.mode === 'today') return { s: t, e: t };
+  if (r.mode === 'yesterday') { const y = addDays(t, -1); return { s: y, e: y }; }
+  if (r.mode === '7d') return { s: addDays(t, -6), e: t };
+  if (r.mode === '30d') return { s: addDays(t, -29), e: t };
+  if (r.mode === 'custom' && r.start) return { s: r.start, e: r.end || r.start };
+  return null;
+}
+const inWin = (d, w) => !w || (d >= w.s && d <= w.e);
+function winLabel(r) {
+  const m = { today: 'Today', yesterday: 'Yesterday', '7d': 'Last 7 days', '30d': 'Last 30 days', all: 'All time' };
+  if (r.mode === 'custom' && r.start) return `${fmtShort(r.start)} – ${fmtShort(r.end || r.start)}`;
+  return m[r.mode] || 'Today';
+}
 
 export default function CeoApp() {
   const [ok, setOk] = useState(() => sessionStorage.getItem(AUTH_KEY) === '1');
@@ -54,21 +74,69 @@ function Authed() {
   );
 }
 
-function withinRange(d, range) {
-  if (range === 'all') return true; const t = todayPKT();
-  if (range === 'today') return d === t;
-  if (range === 'week') { const a = new Date(d + 'T00:00:00'), n = new Date(t + 'T00:00:00'); return (n - a) / 864e5 <= 6 && a <= n; }
-  return true;
+// ── Date range picker (presets + custom calendar) ──
+function DateRangePicker({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const presets = [['today', 'Today'], ['yesterday', 'Yesterday'], ['7d', '7d'], ['30d', '30d'], ['all', 'All']];
+  const isCustom = value.mode === 'custom';
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap" style={{ position: 'relative' }}>
+      {presets.map(([v, l]) => <Chip key={v} active={value.mode === v} onClick={() => { setOpen(false); onChange({ mode: v }); }}>{l}</Chip>)}
+      <button onClick={() => setOpen(o => !o)} className="rounded-lg px-3 py-1.5 text-xs font-semibold transition-all"
+        style={isCustom ? { background: C.violet, color: '#fff', boxShadow: '0 4px 12px rgba(114,41,255,.25)' } : { background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }}>
+        <CalendarDays size={12} style={{ verticalAlign: -2, marginRight: 5 }} />{isCustom ? `${fmtShort(value.start)} – ${fmtShort(value.end || value.start)}` : 'Custom'}
+      </button>
+      {open && <Calendar value={value} onClose={() => setOpen(false)} onApply={(s, e) => { onChange({ mode: 'custom', start: s, end: e }); setOpen(false); }} />}
+    </div>
+  );
+}
+function Calendar({ value, onApply, onClose }) {
+  const seed = parseYmd(value.start || todayPKT());
+  const [vw, setVw] = useState({ y: seed.y, m: seed.m });
+  const [s, setS] = useState(value.mode === 'custom' ? value.start : null);
+  const [e, setE] = useState(value.mode === 'custom' ? (value.end || value.start) : null);
+  const firstDow = new Date(vw.y, vw.m, 1).getDay();
+  const days = new Date(vw.y, vw.m + 1, 0).getDate();
+  const cells = []; for (let i = 0; i < firstDow; i++) cells.push(null); for (let d = 1; d <= days; d++) cells.push(d);
+  const shift = delta => setVw(v => { let m = v.m + delta, y = v.y; if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; } return { y, m }; });
+  const pick = d => { const cur = ymd(vw.y, vw.m, d); if (!s || (s && e)) { setS(cur); setE(null); } else { if (cur < s) { setE(s); setS(cur); } else setE(cur); } };
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 60 }} onClick={onClose}>
+      <div onClick={ev => ev.stopPropagation()} className="glass-2 rounded-2xl pop" style={{ position: 'absolute', top: 150, left: '50%', transform: 'translateX(-50%)', width: 290, padding: 14 }}>
+        <div className="flex items-center justify-between mb-2">
+          <button onClick={() => shift(-1)} className="rounded-lg p-1" style={{ border: 'none', background: 'rgba(124,41,255,.08)', color: C.muted, cursor: 'pointer' }}><ChevronLeft size={16} /></button>
+          <span style={{ fontWeight: 800, fontSize: 13, color: C.ink }}>{MON[vw.m]} {vw.y}</span>
+          <button onClick={() => shift(1)} className="rounded-lg p-1" style={{ border: 'none', background: 'rgba(124,41,255,.08)', color: C.muted, cursor: 'pointer' }}><ChevronRight size={16} /></button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 4 }}>
+          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <div key={i} style={{ textAlign: 'center', fontSize: 9, fontWeight: 800, color: C.dim }}>{d}</div>)}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2 }}>
+          {cells.map((d, i) => {
+            if (!d) return <div key={i} />;
+            const cur = ymd(vw.y, vw.m, d);
+            const sel = cur === s || cur === e; const inr = s && e && cur > s && cur < e;
+            return <button key={i} onClick={() => pick(d)} className="rounded-lg" style={{ height: 30, fontSize: 12, fontWeight: sel ? 800 : 500, cursor: 'pointer', border: 'none', background: sel ? C.violet : inr ? 'rgba(124,41,255,.14)' : 'transparent', color: sel ? '#fff' : C.ink }}>{d}</button>;
+          })}
+        </div>
+        <div className="flex items-center justify-between mt-3">
+          <span style={{ fontSize: 11, color: C.muted }}>{s ? `${fmtShort(s)}${e ? ' – ' + fmtShort(e) : ''}` : 'Pick a range'}</span>
+          <Btn onClick={() => s && onApply(s, e || s)} disabled={!s} style={{ padding: '6px 14px', fontSize: 12 }}>Apply</Btn>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function Console() {
   const [reports, setReports] = useState([]); const [allActions, setAllActions] = useState([]); const [roster, setRoster] = useState([]);
-  const [fShift, setFShift] = useState('all'); const [fProfile, setFProfile] = useState('all'); const [fCSR, setFCSR] = useState('all'); const [fRange, setFRange] = useState('today');
+  const [fShift, setFShift] = useState('all'); const [fProfile, setFProfile] = useState('all'); const [fCSR, setFCSR] = useState('all'); const [range, setRange] = useState({ mode: 'today' });
   const [drill, setDrill] = useState(null);
   const load = useCallback(() => { db.listReports().then(setReports); db.allActions().then(setAllActions); }, []);
   useEffect(() => { load(); db.getRoster().then(setRoster); const off = db.subscribe(load); return off; }, [load]);
 
-  const filtered = useMemo(() => reports.filter(r => (fShift === 'all' || r.shift === fShift) && (fProfile === 'all' || r.profile === fProfile) && (fCSR === 'all' || r.csr_name === fCSR) && withinRange(r.date, fRange)), [reports, fShift, fProfile, fCSR, fRange]);
+  const win = useMemo(() => winFor(range), [range]);
+  const filtered = useMemo(() => reports.filter(r => (fShift === 'all' || r.shift === fShift) && (fProfile === 'all' || r.profile === fProfile) && (fCSR === 'all' || r.csr_name === fCSR) && inWin(r.date, win)), [reports, fShift, fProfile, fCSR, win]);
   const byReport = useMemo(() => { const m = {}; allActions.forEach(a => { (m[a.report_id] = m[a.report_id] || []).push(a); }); return m; }, [allActions]);
   const cnt = id => { const m = {}; (byReport[id] || []).forEach(a => m[a.type] = (m[a.type] || 0) + 1); return m; };
   const acts = useMemo(() => { const s = new Set(filtered.map(r => r.id)); return allActions.filter(a => s.has(a.report_id)); }, [filtered, allActions]);
@@ -76,39 +144,59 @@ function Console() {
   const online = filtered.filter(r => r.status === 'open').length;
   const ranked = useMemo(() => [...filtered].sort((a, b) => (byReport[b.id]?.length || 0) - (byReport[a.id]?.length || 0)), [filtered, byReport]);
   const sortedTypes = Object.keys(totals).sort((a, b) => totals[b] - totals[a]); const maxType = totals[sortedTypes[0]] || 1;
-  const rangeLabel = { today: 'Today', week: 'This week', all: 'All time' }[fRange];
-
-  // intelligence
+  const label = winLabel(range);
   const flags = acts.filter(a => a.type === 'frustrated' || a.type === 'disputed');
   const idle = filtered.filter(r => r.status === 'open' && !(byReport[r.id]?.length));
   const repById = id => filtered.find(r => r.id === id) || reports.find(r => r.id === id);
-
-  // by profile
   const byProfile = useMemo(() => { const m = {}; filtered.forEach(r => { m[r.profile] = (m[r.profile] || 0) + (byReport[r.id]?.length || 0); }); return Object.entries(m).sort((a, b) => b[1] - a[1]); }, [filtered, byReport]);
+
+  async function exportPdf() {
+    const { jsPDF } = await import('jspdf');
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const W = 210, M = 14; let y = 18;
+    const V = [114, 41, 255], INK = [21, 8, 47], MUT = [110, 100, 140];
+    doc.setFillColor(21, 8, 47); doc.rect(0, 0, W, 26, 'F');
+    doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.text('CSR Console Report', M, 13);
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(200, 190, 240);
+    doc.text(`${label}  ·  generated ${todayPKT()} ${timePKT()} PKT`, M, 20);
+    y = 36;
+    const kpis = [['Reports', filtered.length], ['Actions', acts.length], ['Open now', online], ['Needs attn.', flags.length + idle.length]];
+    const bw = (W - 2 * M - 9) / 4;
+    kpis.forEach(([l, v], i) => { const x = M + i * (bw + 3); doc.setFillColor(243, 240, 251); doc.roundedRect(x, y, bw, 18, 2, 2, 'F'); doc.setTextColor(...MUT); doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.text(String(l).toUpperCase(), x + 4, y + 6); doc.setTextColor(...INK); doc.setFontSize(15); doc.text(String(v), x + 4, y + 14); });
+    y += 28;
+    doc.setTextColor(...V); doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.text('REPORTS', M, y); y += 2; doc.setDrawColor(228, 224, 240); doc.line(M, y, W - M, y); y += 6;
+    doc.setFontSize(7); doc.setTextColor(...MUT); doc.text('CSR', M, y); doc.text('PROFILE', M + 40, y); doc.text('SHIFT', M + 90, y); doc.text('TIME', M + 120, y); doc.text('ACTIONS', W - M, y, { align: 'right' }); y += 2; doc.line(M, y, W - M, y); y += 5;
+    ranked.forEach(r => { if (y > 270) { doc.addPage(); y = 20; } const n = byReport[r.id]?.length || 0; doc.setTextColor(...INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text(r.csr_name, M, y); doc.setFont('helvetica', 'normal'); doc.setTextColor(...MUT); doc.setFontSize(8.5); doc.text(r.profile || '—', M + 40, y); doc.text(r.shift || '—', M + 90, y); doc.text(timePKT(r.start_at) + (r.finish_at ? '-' + timePKT(r.finish_at) : ''), M + 120, y); doc.setTextColor(...INK); doc.setFont('helvetica', 'bold'); doc.text(String(n), W - M, y, { align: 'right' }); y += 6; doc.setDrawColor(240, 237, 248); doc.line(M, y - 2, W - M, y - 2); });
+    y += 6; if (y > 250) { doc.addPage(); y = 20; }
+    doc.setTextColor(...V); doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.text('BY ACTIVITY', M, y); y += 2; doc.setDrawColor(228, 224, 240); doc.line(M, y, W - M, y); y += 6;
+    sortedTypes.forEach(t => { doc.setTextColor(...INK); doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(KPI_LABEL[t] || t, M, y); doc.setFont('helvetica', 'bold'); doc.text(String(totals[t]), M + 60, y, { align: 'right' }); y += 6; });
+    doc.save(`CSR-Console-${todayPKT()}.pdf`);
+  }
 
   return (
     <>
-      {/* filter bar */}
       <Card className="mb-6 p-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 pr-3" style={{ borderRight: '1px solid rgba(124,41,255,.14)' }}><Filter size={14} style={{ color: C.dim }} /><span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.dim }}>Filters</span></div>
-          <div className="flex gap-1.5">{[['today', 'Today'], ['week', 'This week'], ['all', 'All']].map(([v, l]) => <Chip key={v} active={fRange === v} onClick={() => setFRange(v)}>{l}</Chip>)}</div>
+          <DateRangePicker value={range} onChange={setRange} />
           <Select value={fCSR} onChange={e => setFCSR(e.target.value)}><option value="all">All CSRs</option>{roster.filter(r => r.active).map(r => <option key={r.id} value={r.name}>{r.name}</option>)}</Select>
           <Select value={fShift} onChange={e => setFShift(e.target.value)}><option value="all">All shifts</option>{SHIFTS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}</Select>
           <Select value={fProfile} onChange={e => setFProfile(e.target.value)}><option value="all">All profiles</option>{PROFILES.map(p => <option key={p} value={p}>{p}</option>)}</Select>
-          <span className="ml-auto text-[10px] uppercase tracking-wider" style={{ color: C.dim }}>{filtered.length} reports · {rangeLabel}</span>
+          <div className="ml-auto flex items-center gap-3">
+            <span className="text-[10px] uppercase tracking-wider" style={{ color: C.dim }}>{filtered.length} · {label}</span>
+            <Btn onClick={exportPdf} disabled={!filtered.length} className="lift" style={{ padding: '8px 13px', fontSize: 12 }}><Download size={13} style={{ verticalAlign: -2, marginRight: 4 }} />Export PDF</Btn>
+          </div>
         </div>
       </Card>
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard label="Open now" value={online} sub="reports in progress" accent={C.mint} icon={Activity} />
-        <StatCard label="Reports" value={filtered.length} sub={rangeLabel.toLowerCase()} accent={C.violet} icon={ClipboardList} />
-        <StatCard label="Actions logged" value={acts.length} sub="across reports" accent={C.violetGlow} icon={BarChart3} />
+        <StatCard label="Reports" value={filtered.length} sub={label.toLowerCase()} accent={C.violet} icon={ClipboardList} />
+        <StatCard label="Actions logged" value={acts.length} sub="across reports" accent={C.glow} icon={BarChart3} />
         <StatCard label="Needs attention" value={flags.length + idle.length} sub="flags + idle" accent={flags.length + idle.length ? C.coral : C.mint} icon={AlertTriangle} />
       </div>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        {/* reports */}
         <div className="lg:col-span-2">
           <SectionHeader eyebrow="Live" title="Reports" right={`${filtered.length} · tap to open`} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -120,12 +208,9 @@ function Console() {
                     {r.status === 'open' && <span style={{ width: 8, height: 8, borderRadius: 9, background: C.mint, boxShadow: `0 0 0 3px ${C.mintBg}`, flex: '0 0 auto' }} />}
                     <span style={{ fontWeight: 800, fontSize: 14, color: C.ink }}>{r.csr_name}</span>
                     <Pill color={C.violet}>{r.profile}</Pill><Pill color={SHIFT_COLOR[r.shift]}>{r.shift}</Pill>
-                    <span style={{ fontSize: 11, color: C.dim }}>{timePKT(r.start_at)}{r.finish_at ? '–' + timePKT(r.finish_at) : ''}</span>
+                    <span style={{ fontSize: 11, color: C.dim }}>{r.date} · {timePKT(r.start_at)}{r.finish_at ? '–' + timePKT(r.finish_at) : ''}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="mono" style={{ fontSize: 16, fontWeight: 700, color: C.ink }}>{n}</span>
-                    <span style={{ fontSize: 9, color: C.dim, textTransform: 'uppercase', letterSpacing: '.08em' }}>actions</span>
-                  </div>
+                  <div className="flex items-center gap-2"><span className="mono" style={{ fontSize: 16, fontWeight: 700, color: C.ink }}>{n}</span><span style={{ fontSize: 9, color: C.dim, textTransform: 'uppercase', letterSpacing: '.08em' }}>actions</span></div>
                 </div>
                 <div className="mt-2.5 flex gap-1.5 flex-wrap">
                   {Object.keys(c).slice(0, 7).map(t => <span key={t} style={{ background: 'rgba(124,41,255,.08)', borderRadius: 6, padding: '2px 8px', fontSize: 10, fontWeight: 700, color: C.violetDim }}>{(KPI_LABEL[t] || t)} {c[t]}</span>)}
@@ -135,44 +220,33 @@ function Console() {
           </div>
         </div>
 
-        {/* right rail */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div>
             <SectionHeader eyebrow="Watch" title="Needs attention" color={C.coral} right={`${flags.length + idle.length}`} />
             <Card className="p-4">
               {flags.length + idle.length === 0 && <div style={{ color: C.mint, fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}><Activity size={14} /> All clear — nothing flagged.</div>}
               {flags.map(a => { const r = repById(a.report_id); return (
-                <div key={a.id} className="mb-2 flex items-start gap-2.5">
-                  <span style={{ width: 7, height: 7, borderRadius: 9, marginTop: 5, background: C.coral, flex: '0 0 auto' }} />
-                  <div style={{ fontSize: 12, color: C.ink }}><b>{ACTION_BY_KEY[a.type]?.label}</b> · {a.client}<div style={{ fontSize: 11, color: C.muted }}>{actionSummary(a)}{r ? ` — ${r.csr_name}/${r.profile}` : ''}</div></div>
-                </div>); })}
+                <div key={a.id} className="mb-2 flex items-start gap-2.5"><span style={{ width: 7, height: 7, borderRadius: 9, marginTop: 5, background: C.coral, flex: '0 0 auto' }} />
+                  <div style={{ fontSize: 12, color: C.ink }}><b>{ACTION_BY_KEY[a.type]?.label}</b> · {a.client}<div style={{ fontSize: 11, color: C.muted }}>{actionSummary(a)}{r ? ` — ${r.csr_name}/${r.profile}` : ''}</div></div></div>); })}
               {idle.length > 0 && <div style={{ marginTop: flags.length ? 10 : 0, paddingTop: flags.length ? 10 : 0, borderTop: flags.length ? '1px dashed rgba(124,41,255,.15)' : 'none' }}>
                 <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.1em', color: C.amber, marginBottom: 5 }}>Idle now</div>
-                {idle.map(r => <div key={r.id} style={{ fontSize: 12, color: C.muted, marginBottom: 3 }}><b style={{ color: C.ink }}>{r.csr_name}</b> · {r.profile} — open, 0 logged</div>)}
-              </div>}
+                {idle.map(r => <div key={r.id} style={{ fontSize: 12, color: C.muted, marginBottom: 3 }}><b style={{ color: C.ink }}>{r.csr_name}</b> · {r.profile} — open, 0 logged</div>)}</div>}
             </Card>
           </div>
-
           <div>
             <SectionHeader eyebrow="Totals" title="By activity" right={`${acts.length}`} />
             <Card className="p-5">
               {sortedTypes.length === 0 && <div style={{ color: C.dim, fontSize: 13 }}>Nothing logged.</div>}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
                 {sortedTypes.slice(0, 9).map(t => (
-                  <div key={t}>
-                    <div className="mb-1 flex items-center justify-between text-xs"><span style={{ color: C.ink, fontWeight: 600 }}>{KPI_LABEL[t] || t}</span><span className="mono" style={{ color: C.muted }}>{totals[t]}</span></div>
-                    <div style={{ height: 6, borderRadius: 6, background: 'rgba(124,41,255,.12)' }}><div style={{ height: 6, borderRadius: 6, width: `${(totals[t] / maxType) * 100}%`, background: `linear-gradient(90deg,${C.glow},${C.violet})` }} /></div>
-                  </div>
-                ))}
+                  <div key={t}><div className="mb-1 flex items-center justify-between text-xs"><span style={{ color: C.ink, fontWeight: 600 }}>{KPI_LABEL[t] || t}</span><span className="mono" style={{ color: C.muted }}>{totals[t]}</span></div>
+                    <div style={{ height: 6, borderRadius: 6, background: 'rgba(124,41,255,.12)' }}><div style={{ height: 6, borderRadius: 6, width: `${(totals[t] / maxType) * 100}%`, background: `linear-gradient(90deg,${C.glow},${C.violet})` }} /></div></div>))}
               </div>
             </Card>
           </div>
-
           {byProfile.length > 0 && <div>
             <SectionHeader eyebrow="Split" title="By profile" />
-            <Card className="p-4">
-              {byProfile.slice(0, 8).map(([p, n]) => <div key={p} className="flex items-center justify-between" style={{ padding: '4px 0', fontSize: 12 }}><span style={{ color: C.ink, fontWeight: 600 }}>{p}</span><span className="mono" style={{ color: C.muted }}>{n}</span></div>)}
-            </Card>
+            <Card className="p-4">{byProfile.slice(0, 8).map(([p, n]) => <div key={p} className="flex items-center justify-between" style={{ padding: '4px 0', fontSize: 12 }}><span style={{ color: C.ink, fontWeight: 600 }}>{p}</span><span className="mono" style={{ color: C.muted }}>{n}</span></div>)}</Card>
           </div>}
         </div>
       </div>
@@ -189,25 +263,19 @@ function DrillDrawer({ report, actions, onClose }) {
     <div onClick={onClose} className="scrim" style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', justifyContent: 'flex-end' }}>
       <div onClick={e => e.stopPropagation()} className="glass-2 no-scrollbar" style={{ width: 440, maxWidth: '100%', height: '100%', overflow: 'auto', animation: 'pop .2s ease' }}>
         <div style={{ position: 'sticky', top: 0, padding: '16px 18px', borderBottom: '1px solid rgba(124,41,255,.12)', background: 'rgba(255,255,255,.5)' }} className="flex items-center justify-between">
-          <div><div style={{ fontWeight: 800, fontSize: 16, color: C.ink }}>{report.csr_name}</div>
-            <div style={{ fontSize: 11.5, color: C.muted, marginTop: 1 }}>{report.profile} · {report.shift} · {report.date}</div></div>
+          <div><div style={{ fontWeight: 800, fontSize: 16, color: C.ink }}>{report.csr_name}</div><div style={{ fontSize: 11.5, color: C.muted, marginTop: 1 }}>{report.profile} · {report.shift} · {report.date}</div></div>
           <button onClick={onClose} className="rounded-lg" style={{ border: 'none', background: 'rgba(124,41,255,.08)', width: 30, height: 30, color: C.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} /></button>
         </div>
         <div style={{ padding: 18 }}>
-          <div className="flex items-center gap-3 mb-4" style={{ fontSize: 12, color: C.muted }}>
-            <span className="flex items-center gap-1"><Clock size={13} /> {timePKT(report.start_at)}{report.finish_at ? ' – ' + timePKT(report.finish_at) : ' · in progress'}</span>
-            <Pill color={report.status === 'open' ? C.mint : C.dim}>{report.status}</Pill>
-          </div>
+          <div className="flex items-center gap-3 mb-4" style={{ fontSize: 12, color: C.muted }}><span className="flex items-center gap-1"><Clock size={13} /> {timePKT(report.start_at)}{report.finish_at ? ' – ' + timePKT(report.finish_at) : ' · in progress'}</span><Pill color={report.status === 'open' ? C.mint : C.dim}>{report.status}</Pill></div>
           <div className="mb-4 flex flex-wrap gap-1.5">{Object.keys(c).map(t => <span key={t} style={{ background: 'rgba(124,41,255,.08)', borderRadius: 7, padding: '3px 9px', fontSize: 10.5, fontWeight: 700, color: C.violetDim }}>{(KPI_LABEL[t] || t)} {c[t]}</span>)}</div>
           <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.12em', color: C.dim, marginBottom: 8 }}>Timeline</div>
           {actions.length === 0 && <div style={{ color: C.dim, fontSize: 12.5 }}>No actions logged.</div>}
           {[...actions].reverse().map(a => (
             <div key={a.id} className="glass-soft rounded-xl" style={{ display: 'flex', gap: 10, padding: '10px 12px', marginBottom: 8 }}>
               <span style={{ width: 8, height: 8, borderRadius: 9, marginTop: 5, flex: '0 0 auto', background: C.violet }} />
-              <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 700, color: C.ink }}>{ACTION_BY_KEY[a.type]?.label || a.type}</div>
-                <div style={{ fontSize: 11.5, color: C.muted }}>{a.client}{actionSummary(a) ? ' · ' + actionSummary(a) : ''}</div></div>
-              <span style={{ fontSize: 10, color: C.dim }}>{timePKT(a.created_at)}</span>
-            </div>))}
+              <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 700, color: C.ink }}>{ACTION_BY_KEY[a.type]?.label || a.type}</div><div style={{ fontSize: 11.5, color: C.muted }}>{a.client}{actionSummary(a) ? ' · ' + actionSummary(a) : ''}</div></div>
+              <span style={{ fontSize: 10, color: C.dim }}>{timePKT(a.created_at)}</span></div>))}
           {report.note_for_next && <div className="mt-3 glass-soft rounded-xl" style={{ padding: 12 }}><div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', color: C.violetDim, marginBottom: 4 }}>Note for next shift</div><div style={{ fontSize: 12.5, color: C.ink }}>{report.note_for_next}</div></div>}
         </div>
       </div>

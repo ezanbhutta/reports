@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Users, Package, Star, Check } from 'lucide-react';
+import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Check, Clock } from 'lucide-react';
 import { C, SHIFTS, PROFILES, ACTIONS, ACTION_BY_KEY, GROUPS, CHECKLIST, KPI_LABEL } from './config.js';
 import { db, todayPKT, timePKT } from './store.js';
-import { Btn, Card, StatCard, Pill, Modal, Label, Field, actionSummary } from './ui.jsx';
+import { Btn, Card, Pill, Modal, Label, Field, actionSummary } from './ui.jsx';
 
 const groupColor = k => (GROUPS.find(g => g.key === k) || {}).color || C.violet;
 const QUICK = ['inquiry', 'followup_client', 'shared', 'revision_assigned', 'meeting', 'new_order'];
@@ -10,6 +10,11 @@ const getRecent = () => { try { return JSON.parse(localStorage.getItem('sl_recen
 const bumpRecent = k => { const r = [k, ...getRecent().filter(x => x !== k)].slice(0, 8); localStorage.setItem('sl_recent_actions', JSON.stringify(r)); };
 const getClients = () => { try { return JSON.parse(localStorage.getItem('sl_clients')) || []; } catch { return []; } };
 const addClient = c => { if (!c) return; const r = [c, ...getClients().filter(x => x !== c)].slice(0, 60); localStorage.setItem('sl_clients', JSON.stringify(r)); };
+
+// ── PKT time intelligence ──
+const pktHour = () => parseInt(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', hour: '2-digit', hour12: false }).format(new Date()), 10);
+const currentShift = () => { const h = pktHour(); if (h >= 9 && h < 17) return 'Morning'; if (h >= 17 || h < 1) return 'Evening'; return 'Night'; };
+const greeting = () => { const h = pktHour(); return h >= 5 && h < 12 ? 'Good morning' : h >= 12 && h < 17 ? 'Good afternoon' : h >= 17 && h < 22 ? 'Good evening' : 'Working late'; };
 
 export default function CsrApp() {
   const [roster, setRoster] = useState([]);
@@ -20,11 +25,16 @@ export default function CsrApp() {
   const [picker, setPicker] = useState(false);
   const [form, setForm] = useState(null);   // { action, values, editId, error }
   const [wrap, setWrap] = useState(false);
-  const [name, setName] = useState(''); const [shift, setShift] = useState('Night'); const [profile, setProfile] = useState('');
+  const [name, setName] = useState(''); const [shift, setShift] = useState(currentShift()); const [profile, setProfile] = useState('');
 
   useEffect(() => { db.getRoster().then(setRoster); }, []);
   const refresh = useCallback(() => { if (report) db.listActions(report.id).then(setActions); }, [report]);
   useEffect(() => { refresh(); const off = db.subscribe(refresh); return off; }, [refresh]);
+  // ⌘K / Ctrl-K opens the activity palette
+  useEffect(() => {
+    const onKey = e => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); if (report && report.status === 'open') setPicker(true); } };
+    window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
+  }, [report]);
 
   const counts = useMemo(() => { const m = {}; actions.forEach(a => m[a.type] = (m[a.type] || 0) + 1); return m; }, [actions]);
   const clientSug = useMemo(() => [...new Set([...actions.map(a => a.client), ...getClients()].filter(Boolean))], [actions]);
@@ -51,33 +61,50 @@ export default function CsrApp() {
   }
   async function submit(checklist, note) { const rep = await db.submitReport(report.id, { checklist, note_for_next: note }); setReport(rep); setWrap(false); setView('done'); }
 
-  // ════ LOGIN ════
+  // ════════════════════════════ LOGIN ════════════════════════════
   if (view === 'login') {
     const names = roster.filter(r => r.active);
+    const nowShift = currentShift();
     return (
       <Shell center>
-        <div className="pop" style={{ width: 440, maxWidth: '100%' }}>
-          <Brand /><h1 style={h1}>Start your report</h1>
-          <p style={{ color: C.muted, fontSize: 13.5, margin: '6px 0 18px' }}>Pick who you are, your shift and your profile. No password needed.</p>
-          <Card className="p-6">
+        <div className="pop" style={{ width: 396, maxWidth: '100%' }}>
+          <div style={{ textAlign: 'center', marginBottom: 18 }}>
+            <div style={{ width: 52, height: 52, borderRadius: 16, margin: '0 auto', background: `linear-gradient(180deg,${C.glow},${C.violet})`, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 24, boxShadow: '0 12px 28px rgba(114,41,255,.34)' }}>C</div>
+            <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '.22em', textTransform: 'uppercase', color: C.dim, marginTop: 11 }}>CSR Shift Logger</div>
+          </div>
+          <Card strong className="p-6">
+            <h1 style={{ fontSize: 21, fontWeight: 800, color: C.ink, letterSpacing: '-.02em', textAlign: 'center', margin: 0 }}>Start your shift</h1>
+            <p style={{ textAlign: 'center', color: C.muted, fontSize: 12.5, margin: '5px 0 4px' }}>No password — just tell us who's on.</p>
+
             <Label>Your name</Label>
-            <select value={name} onChange={e => { setName(e.target.value); const r = names.find(x => x.name === e.target.value); if (r?.shift) setShift(r.shift); if (r?.profile) setProfile(r.profile); }} className="gi">
+            <select value={name} onChange={e => { setName(e.target.value); const r = names.find(x => x.name === e.target.value); if (r?.shift) setShift(r.shift); if (r?.profile) setProfile(r.profile); }}
+              className="gi" style={{ fontSize: 15, fontWeight: 600, padding: '12px 12px' }}>
               <option value="">Select your name…</option>
               {names.map(r => <option key={r.id} value={r.name}>{r.name}{r.role === 'Manager' ? ' (manager)' : ''}</option>)}
             </select>
-            <Label>Your shift · Pakistan time</Label>
-            <div style={{ display: 'flex', gap: 7 }}>
-              {SHIFTS.map(s => { const on = shift === s.key; return (
-                <button key={s.key} onClick={() => setShift(s.key)} className="rounded-xl lift" style={{ flex: 1, padding: '10px 4px', border: on ? 'none' : '1px solid rgba(124,41,255,.18)', background: on ? C.violet : 'rgba(255,255,255,.5)', color: on ? '#fff' : C.muted, fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}>
-                  {s.label}<div style={{ fontSize: 9, opacity: .85, fontWeight: 600 }}>{s.time}</div></button>); })}
+
+            <Label>Shift · Pakistan time</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {SHIFTS.map(s => { const on = shift === s.key; const now = s.key === nowShift; return (
+                <button key={s.key} onClick={() => setShift(s.key)} className="rounded-xl lift" style={{ position: 'relative', padding: '11px 4px', border: on ? 'none' : '1px solid rgba(124,41,255,.18)', background: on ? C.violet : 'rgba(255,255,255,.5)', color: on ? '#fff' : C.muted, fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}>
+                  {now && !on && <span style={{ position: 'absolute', top: 6, right: 6, width: 6, height: 6, borderRadius: 9, background: C.mint }} />}
+                  {s.label}<div style={{ fontSize: 9, opacity: .85, fontWeight: 600 }}>{s.time}</div>
+                  {now && on && <div style={{ fontSize: 8, fontWeight: 800, letterSpacing: '.08em', opacity: .9 }}>NOW</div>}
+                </button>); })}
             </div>
+
             <Label>Profile</Label>
             <select value={profile} onChange={e => setProfile(e.target.value)} className="gi"><option value="">Select profile…</option>{PROFILES.map(p => <option key={p} value={p}>{p}</option>)}</select>
-            <Label>Date &amp; start time</Label>
-            <div className="gi" style={{ display: 'flex', justifyContent: 'space-between', color: C.muted }}><span>{todayPKT()} · {timePKT()}</span><span style={{ fontSize: 11, color: C.dim }}>auto · PKT</span></div>
-            <Btn onClick={startReport} disabled={!name || !profile} className="lift" style={{ width: '100%', marginTop: 16, padding: 12 }}>Start my report</Btn>
+
+            <Btn onClick={startReport} disabled={!name || !profile} className="lift" style={{ width: '100%', marginTop: 18, padding: 13, fontSize: 14 }}>Start my shift →</Btn>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 14, paddingTop: 13, borderTop: '1px solid rgba(124,41,255,.1)', fontSize: 11, color: C.dim }}>
+              <Clock size={11} /> {todayPKT()} · check-in {timePKT()} PKT · auto
+            </div>
           </Card>
-          <button onClick={() => setView('teamlog')} style={link}><ClipboardList size={13} /> See past reports</button>
+          <div style={{ textAlign: 'center' }}>
+            <button onClick={() => setView('teamlog')} style={link}><ClipboardList size={13} /> View past reports</button>
+          </div>
         </div>
       </Shell>
     );
@@ -85,88 +112,112 @@ export default function CsrApp() {
   if (view === 'teamlog') return <TeamLog onBack={() => setView(report ? 'dashboard' : 'login')} />;
   if (view === 'done') return (
     <Shell center>
-      <div className="pop" style={{ textAlign: 'center', width: 440, maxWidth: '100%' }}>
-        <Card className="p-8">
+      <div className="pop" style={{ textAlign: 'center', width: 420, maxWidth: '100%' }}>
+        <Card strong className="p-8">
           <div style={{ width: 60, height: 60, borderRadius: 18, margin: '0 auto 14px', background: `${C.mint}22`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Check size={30} style={{ color: C.mint }} /></div>
-          <h1 style={h1}>Report submitted</h1>
-          <p style={{ color: C.muted, fontSize: 13, margin: '6px 0 18px' }}>{report.csr_name} · {report.profile} · finished {timePKT(report.finish_at)} PKT. Locked now — the CEO sees it live.</p>
-          <Btn onClick={() => { setReport(null); setProfile(''); setView('login'); }} style={{ padding: '11px 22px' }}>Start another report</Btn>
+          <h1 style={h1}>Shift submitted</h1>
+          <p style={{ color: C.muted, fontSize: 13, margin: '6px 0 18px' }}>{report.csr_name} · {report.profile} · checked out {timePKT(report.finish_at)} PKT. Locked now — the CEO sees it live.</p>
+          <Btn onClick={() => { setReport(null); setProfile(''); setView('login'); }} style={{ padding: '11px 22px' }}>Start another shift</Btn>
         </Card>
       </div>
     </Shell>
   );
 
-  // ════ DASHBOARD ════
+  // ════════════════════════════ DASHBOARD ════════════════════════════
   const locked = report.status !== 'open';
   const recent = getRecent().filter(k => ACTION_BY_KEY[k]);
   const quickKeys = [...new Set([...recent, ...QUICK])].slice(0, 6);
+  const topTypes = Object.keys(counts).sort((a, b) => counts[b] - counts[a]).slice(0, 3);
+  const strip = [['Total', actions.length, true], ...topTypes.map(t => [KPI_LABEL[t] || t, counts[t], false])];
+  while (strip.length < 4) strip.push(null);
+
   return (
     <Shell>
       <Header>
-        <div><Brand small /><div style={{ fontWeight: 800, fontSize: 18, color: C.ink, letterSpacing: '-.01em' }}>{report.csr_name} · {report.shift} · {report.profile}</div>
-          <div style={{ fontSize: 11, color: C.dim }}>started {timePKT(report.start_at)} PKT · {report.date}</div></div>
+        <Brand small />
         <div style={{ display: 'flex', gap: 8 }}>
           <Btn variant="ghost" onClick={() => setView('teamlog')} style={{ padding: '8px 12px', fontSize: 12 }}><ClipboardList size={13} style={{ verticalAlign: -2 }} /> Past reports</Btn>
           <Btn variant="ghost" onClick={() => { setReport(null); setView('login'); }} style={{ padding: '8px 12px', fontSize: 12 }}><LogOut size={13} style={{ verticalAlign: -2 }} /> Switch</Btn>
         </div>
       </Header>
 
-      <div className="mx-auto" style={{ maxWidth: 1180, padding: '8px 22px 60px' }}>
-        <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-          <StatCard label="Total logged" value={actions.length} sub="this report" accent={C.violet} icon={ClipboardList} />
-          {(() => { const top = Object.keys(counts).sort((a, b) => counts[b] - counts[a]); const pick = (top.length ? top : ['inquiry', 'followup_client', 'shared']).slice(0, 3); const acc = [C.cyan, C.amber, C.mint]; const ic = [Users, Package, Star];
-            return pick.map((t, i) => <StatCard key={t} label={KPI_LABEL[t] || t} value={counts[t] || 0} sub="logged" accent={acc[i]} icon={ic[i]} />); })()}
+      <div className="mx-auto" style={{ maxWidth: 760, padding: '22px 20px 64px' }}>
+        {/* greeting + identity */}
+        <div className="mb-5 flex items-end justify-between" style={{ gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <h1 style={{ fontSize: 23, fontWeight: 800, color: C.ink, letterSpacing: '-.02em', margin: 0 }}>{greeting()}, {report.csr_name.split(' ')[0]}</h1>
+            <p style={{ fontSize: 13, color: C.muted, marginTop: 3 }}>Logging for <b style={{ color: C.violetDim }}>{report.profile}</b> · {report.shift} shift · in since {timePKT(report.start_at)} PKT</p>
+          </div>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: C.mint, background: C.mintBg, padding: '6px 11px', borderRadius: 99 }}>
+            <span style={{ width: 7, height: 7, borderRadius: 9, background: C.mint, boxShadow: `0 0 0 3px rgba(16,185,129,.18)` }} /> Live to CEO
+          </span>
         </div>
 
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
-          {/* Log activity */}
-          <div className="lg:col-span-3">
-            <Card className="p-6">
-              <div className="text-lg font-bold tracking-tight" style={{ color: C.ink }}>Log an activity</div>
-              <div style={{ fontSize: 12.5, color: C.muted, margin: '3px 0 14px' }}>Search 20+ actions, or tap a quick one. Fill the little box, done.</div>
-              <button onClick={() => !locked && setPicker(true)} disabled={locked} className="lift w-full rounded-2xl"
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', cursor: locked ? 'not-allowed' : 'pointer', background: `linear-gradient(180deg, ${C.glow}, ${C.violet})`, color: '#fff', border: 'none', boxShadow: '0 10px 24px rgba(114,41,255,.3)', opacity: locked ? .5 : 1 }}>
-                <span className="flex h-8 w-8 items-center justify-center rounded-xl" style={{ background: 'rgba(255,255,255,.22)' }}><Search size={16} /></span>
-                <span style={{ fontWeight: 800, fontSize: 15 }}>Log an activity</span>
-                <span style={{ marginLeft: 'auto', fontSize: 11, opacity: .85 }}>search ▾</span>
-              </button>
-              {!locked && <>
-                <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.12em', color: C.dim, margin: '16px 0 8px' }}>Quick</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {quickKeys.map(k => { const a = ACTION_BY_KEY[k]; if (!a) return null; return (
-                    <button key={k} onClick={() => openForm(a)} className="lift rounded-xl" style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 13px', background: 'rgba(255,255,255,.55)', border: '1px solid rgba(124,41,255,.16)', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, color: C.ink }}>
-                      <span style={{ width: 8, height: 8, borderRadius: 9, background: groupColor(a.group) }} />{a.label}</button>); })}
+        {/* primary action */}
+        {!locked ? (
+          <Card strong className="p-5" style={{ marginBottom: 16 }}>
+            <button onClick={() => setPicker(true)} className="lift w-full rounded-2xl"
+              style={{ display: 'flex', alignItems: 'center', gap: 13, padding: '15px 18px', cursor: 'pointer', background: `linear-gradient(135deg, ${C.glow}, ${C.violet})`, color: '#fff', border: 'none', boxShadow: '0 12px 28px rgba(114,41,255,.32)' }}>
+              <span className="flex items-center justify-center rounded-xl" style={{ width: 36, height: 36, background: 'rgba(255,255,255,.22)', flex: '0 0 auto' }}><Plus size={20} strokeWidth={2.6} /></span>
+              <span style={{ textAlign: 'left', minWidth: 0 }}>
+                <span style={{ display: 'block', fontWeight: 800, fontSize: 15.5 }}>Log an activity</span>
+                <span style={{ display: 'block', fontSize: 11, opacity: .85, fontWeight: 600 }}>Search 20+ actions or pick a quick one below</span>
+              </span>
+              <span className="hidden sm:flex" style={{ marginLeft: 'auto', alignItems: 'center', gap: 5, fontSize: 11, opacity: .9, background: 'rgba(255,255,255,.18)', padding: '5px 9px', borderRadius: 8, flex: '0 0 auto' }}><Search size={12} /> ⌘K</span>
+            </button>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 14 }}>
+              {quickKeys.map(k => { const a = ACTION_BY_KEY[k]; if (!a) return null; return (
+                <button key={k} onClick={() => openForm(a)} className="lift rounded-xl" style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 12px', background: 'rgba(255,255,255,.6)', border: '1px solid rgba(124,41,255,.16)', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, color: C.ink }}>
+                  <span style={{ width: 7, height: 7, borderRadius: 9, background: groupColor(a.group) }} />{a.label}</button>); })}
+            </div>
+          </Card>
+        ) : (
+          <Card className="p-5" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10, color: C.mint, fontWeight: 700, fontSize: 13.5 }}>
+            <Check size={17} /> Shift submitted &amp; locked — no more edits.
+          </Card>
+        )}
+
+        {/* compact metric strip */}
+        <div className="glass rounded-2xl" style={{ display: 'flex', marginBottom: 16, overflow: 'hidden' }}>
+          {strip.map((it, i) => (
+            <div key={i} style={{ flex: 1, padding: '13px 8px', textAlign: 'center', borderLeft: i ? '1px solid rgba(124,41,255,.10)' : 'none' }}>
+              {it ? <>
+                <div className="mono" style={{ fontSize: 22, fontWeight: 800, lineHeight: 1, color: it[2] ? C.violet : C.ink }}>{it[1]}</div>
+                <div style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: C.dim, marginTop: 5 }}>{it[0]}</div>
+              </> : <div style={{ fontSize: 18, color: 'rgba(124,41,255,.14)' }}>·</div>}
+            </div>
+          ))}
+        </div>
+
+        {/* timeline */}
+        <Card className="p-5">
+          <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
+            <div style={{ fontWeight: 800, fontSize: 15, color: C.ink }}>Today's timeline</div>
+            <span style={{ fontSize: 11, color: C.dim }}>{actions.length} {actions.length === 1 ? 'entry' : 'entries'}{!locked && actions.length > 0 ? ' · tap to edit' : ''}</span>
+          </div>
+          {actions.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '26px 0', color: C.dim }}>
+              <ClipboardList size={26} style={{ opacity: .5, marginBottom: 8 }} />
+              <div style={{ fontSize: 13 }}>Nothing logged yet.</div>
+              <div style={{ fontSize: 12, marginTop: 2 }}>Tap <b style={{ color: C.violetDim }}>Log an activity</b> to add your first one.</div>
+            </div>
+          )}
+          <div className="no-scrollbar" style={{ maxHeight: 460, overflow: 'auto' }}>
+            {actions.map(a => (
+              <div key={a.id} onClick={() => !locked && openForm(ACTION_BY_KEY[a.type], { ...a.details, client: a.client }, a.id)}
+                className="glass-soft rounded-xl lift" style={{ display: 'flex', gap: 11, padding: '11px 13px', marginBottom: 8, cursor: locked ? 'default' : 'pointer' }}>
+                <span style={{ width: 8, height: 8, borderRadius: 9, marginTop: 5, flex: '0 0 auto', background: groupColor(ACTION_BY_KEY[a.type]?.group) }} />
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{ACTION_BY_KEY[a.type]?.label || a.type}</div>
+                  <div style={{ fontSize: 11.5, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.client}{actionSummary(a) ? ' · ' + actionSummary(a) : ''}</div>
                 </div>
-              </>}
-              {locked && <div style={{ marginTop: 16, fontSize: 13, fontWeight: 700, color: C.mint, display: 'flex', alignItems: 'center', gap: 6 }}><Check size={15} /> Report submitted &amp; locked</div>}
-            </Card>
+                <span style={{ fontSize: 10.5, color: C.dim, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3 }}>{timePKT(a.created_at)}{!locked && <Pencil size={10} style={{ color: C.violetLine }} />}</span>
+              </div>
+            ))}
           </div>
+        </Card>
 
-          {/* Timeline */}
-          <div className="lg:col-span-2">
-            <Card className="p-5">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="text-sm font-bold" style={{ color: C.ink }}>Today's timeline</div>
-                <span style={{ fontSize: 10, color: C.dim }}>{actions.length} entries{!locked && ' · tap to edit'}</span>
-              </div>
-              <div className="no-scrollbar" style={{ maxHeight: 380, overflow: 'auto' }}>
-                {actions.length === 0 && <div style={{ color: C.dim, fontSize: 12.5, padding: '14px 0', textAlign: 'center' }}>Nothing yet — log your first activity.</div>}
-                {actions.map(a => (
-                  <div key={a.id} onClick={() => !locked && openForm(ACTION_BY_KEY[a.type], { ...a.details, client: a.client }, a.id)}
-                    className="glass-soft rounded-xl" style={{ display: 'flex', gap: 10, padding: '10px 12px', marginBottom: 8, cursor: locked ? 'default' : 'pointer' }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 9, marginTop: 5, flex: '0 0 auto', background: groupColor(ACTION_BY_KEY[a.type]?.group) }} />
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: 12.5, fontWeight: 700, color: C.ink }}>{ACTION_BY_KEY[a.type]?.label || a.type}</div>
-                      <div style={{ fontSize: 11.5, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.client}{actionSummary(a) ? ' · ' + actionSummary(a) : ''}</div>
-                    </div>
-                    <span style={{ fontSize: 10, color: C.dim, whiteSpace: 'nowrap' }}>{timePKT(a.created_at)}{!locked && <Pencil size={10} style={{ marginLeft: 4, verticalAlign: -1, color: C.violetLine }} />}</span>
-                  </div>
-                ))}
-              </div>
-              {!locked && <Btn onClick={() => setWrap(true)} className="lift" style={{ width: '100%', marginTop: 12 }}>Wrap up &amp; submit</Btn>}
-            </Card>
-          </div>
-        </div>
+        {!locked && <Btn variant="ok" onClick={() => setWrap(true)} className="lift" style={{ width: '100%', marginTop: 14, padding: 13, fontSize: 14 }}><Check size={16} style={{ verticalAlign: -3, marginRight: 6 }} />Wrap up &amp; submit my shift</Btn>}
       </div>
 
       {handoff && <Modal title="Note from the last shift" subtitle={`for ${report.profile} · left by ${handoff.csr_name}`} onClose={ackHandoff} width={380}>
@@ -237,7 +288,7 @@ const Row = ({ a, onPick }) => (
 function WrapUp({ onClose, onSubmit, profile }) {
   const [done, setDone] = useState({}); const [note, setNote] = useState('');
   return (
-    <Modal title="Wrap up & submit" subtitle="Submitting locks the report — no more edits" onClose={onClose} width={440}>
+    <Modal title="Wrap up & submit" subtitle="Submitting checks you out and locks the report" onClose={onClose} width={440}>
       <Label>Tick what's done</Label>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
         {CHECKLIST.map(item => { const on = done[item]; return (
@@ -248,7 +299,7 @@ function WrapUp({ onClose, onSubmit, profile }) {
       <textarea value={note} onChange={e => setNote(e.target.value)} rows={3} placeholder="Anything they should know…" className="gi" style={{ resize: 'vertical' }} />
       <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
         <Btn variant="ghost" onClick={onClose} style={{ flex: 1 }}>Back</Btn>
-        <Btn onClick={() => onSubmit(done, note)} className="lift" style={{ flex: 1 }}>Submit my report</Btn>
+        <Btn variant="ok" onClick={() => onSubmit(done, note)} className="lift" style={{ flex: 1 }}>Submit &amp; check out</Btn>
       </div>
     </Modal>
   );
@@ -262,10 +313,11 @@ function TeamLog({ onBack }) {
   const cf = id => { const m = {}; all.filter(a => a.report_id === id).forEach(a => m[a.type] = (m[a.type] || 0) + 1); return m; };
   return (
     <Shell>
-      <Header><div><Brand small /><div style={{ fontWeight: 800, fontSize: 18, color: C.ink }}>Past reports</div></div>
+      <Header><div className="flex items-center gap-3"><Brand small /><span style={{ fontWeight: 800, fontSize: 15, color: C.ink }} className="hidden sm:inline">· Past reports</span></div>
         <Btn variant="ghost" onClick={onBack} style={{ padding: '8px 12px', fontSize: 12 }}><ChevronLeft size={13} style={{ verticalAlign: -2 }} /> Back</Btn></Header>
-      <div className="mx-auto" style={{ maxWidth: 920, padding: '8px 22px 60px' }}>
-        <p style={{ color: C.muted, fontSize: 13, margin: '0 0 14px' }}>Read-only — anyone can read; nothing changes after submit.</p>
+      <div className="mx-auto" style={{ maxWidth: 820, padding: '22px 20px 60px' }}>
+        <h1 style={{ fontSize: 21, fontWeight: 800, color: C.ink, letterSpacing: '-.02em', margin: 0 }}>Past reports</h1>
+        <p style={{ color: C.muted, fontSize: 13, margin: '4px 0 16px' }}>Read-only — anyone can read; nothing changes after submit.</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
           {reports.length === 0 && <Card className="p-5"><span style={{ color: C.dim, fontSize: 13 }}>No reports yet.</span></Card>}
           {reports.map(r => { const c = cf(r.id); const chips = Object.keys(c).slice(0, 5); return (
@@ -287,16 +339,16 @@ function TeamLog({ onBack }) {
 
 // ── chrome ──
 const h1 = { fontSize: 25, fontWeight: 800, color: C.ink, letterSpacing: '-.02em', margin: 0 };
-const link = { display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 14, background: 'none', border: 'none', color: C.violetDim, fontWeight: 700, fontSize: 12.5, cursor: 'pointer' };
+const link = { display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 16, background: 'none', border: 'none', color: C.violetDim, fontWeight: 700, fontSize: 12.5, cursor: 'pointer' };
 function Brand({ small }) {
-  return <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: small ? 2 : 12 }}>
-    <div style={{ width: small ? 20 : 28, height: small ? 20 : 28, borderRadius: 8, background: `linear-gradient(180deg,${C.glow},${C.violet})`, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: small ? 12 : 15, boxShadow: '0 4px 12px rgba(114,41,255,.3)' }}>C</div>
-    <div style={{ fontSize: small ? 10 : 12, fontWeight: 800, letterSpacing: '.18em', textTransform: 'uppercase', color: C.dim }}>CSR Shift Logger</div>
+  return <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+    <div style={{ width: small ? 28 : 30, height: small ? 28 : 30, borderRadius: 9, background: `linear-gradient(180deg,${C.glow},${C.violet})`, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: small ? 15 : 16, boxShadow: '0 6px 16px rgba(114,41,255,.3)' }}>C</div>
+    <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.16em', textTransform: 'uppercase', color: C.dim }} className="hidden sm:block">CSR Shift Logger</div>
   </div>;
 }
 function Header({ children }) {
   return <div className="glass" style={{ position: 'sticky', top: 0, zIndex: 20, borderLeft: 'none', borderRight: 'none', borderTop: 'none', borderRadius: 0 }}>
-    <div className="mx-auto flex items-center justify-between" style={{ maxWidth: 1180, padding: '12px 22px' }}>{children}</div>
+    <div className="mx-auto flex items-center justify-between" style={{ maxWidth: 760, padding: '12px 20px' }}>{children}</div>
   </div>;
 }
 function Shell({ children, center }) {

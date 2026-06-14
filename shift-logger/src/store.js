@@ -20,6 +20,11 @@ export function timePKT(iso) {
   const d = iso ? new Date(iso) : new Date();
   return new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
 }
+export function addDays(ymd, n) {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d)); dt.setUTCDate(dt.getUTCDate() + n);
+  return dt.toISOString().slice(0, 10);
+}
 
 // ════════════════════════════════════════════════════════════════
 // localStorage backend
