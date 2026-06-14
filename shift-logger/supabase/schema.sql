@@ -43,9 +43,9 @@ create table if not exists actions (
 );
 create index if not exists actions_report_idx on actions (report_id);
 
--- ── Live updates ──
-alter publication supabase_realtime add table reports;
-alter publication supabase_realtime add table actions;
+-- ── Live updates (idempotent — safe to re-run) ──
+do $$ begin alter publication supabase_realtime add table reports; exception when duplicate_object then null; end $$;
+do $$ begin alter publication supabase_realtime add table actions; exception when duplicate_object then null; end $$;
 
 -- ── Row-level security ──
 -- The reports are not secret (the team log is open), so reads are allowed.
@@ -55,13 +55,22 @@ alter table roster  enable row level security;
 alter table reports enable row level security;
 alter table actions enable row level security;
 
+-- drop-if-exists before create so the whole file can be re-run without errors
+drop policy if exists "roster read"  on roster;
+drop policy if exists "roster write" on roster;
 create policy "roster read"   on roster  for select using (true);
 create policy "roster write"  on roster  for all    using (true) with check (true);
 
+drop policy if exists "reports read"             on reports;
+drop policy if exists "reports insert"           on reports;
+drop policy if exists "reports update while open" on reports;
 create policy "reports read"   on reports for select using (true);
 create policy "reports insert" on reports for insert with check (true);
 create policy "reports update while open" on reports for update using (status = 'open');
 
+drop policy if exists "actions read"                  on actions;
+drop policy if exists "actions insert"                on actions;
+drop policy if exists "actions update while report open" on actions;
 create policy "actions read"   on actions for select using (true);
 create policy "actions insert" on actions for insert with check (true);
 create policy "actions update while report open" on actions for update using (
