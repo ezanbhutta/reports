@@ -92,11 +92,16 @@ export const ACTIONS = [
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
               { name: 'project', label: 'Project', type: 'text' } ] },
 
-  // Consolidated client-facing delivery: pick one or more elements that were shared in chat
-  { key: 'shared', label: 'Shared to client', group: 'deliveries',
+  // Project delivered = the formal deliverable — initial draft / final files only.
+  { key: 'project_delivered', label: 'Project delivered', group: 'deliveries',
+    fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
+              { name: 'project', label: 'Project', type: 'text' },
+              { name: 'stage', label: 'What was delivered', type: 'segment', options: ['Initial draft', 'Final files'], required: true } ] },
+  // Shared in chat = anything sent in chat (multi-select, any elements).
+  { key: 'shared', label: 'Shared to client (chat)', group: 'deliveries',
     fields: [ { name: 'client', label: 'Client / username', type: 'text', required: true },
               { name: 'project', label: 'Project', type: 'text' },
-              { name: 'elements', label: 'What did you share?', type: 'multiselect', options: SHARE_ELEMENTS, required: true } ] },
+              { name: 'elements', label: 'What did you share? (pick any)', type: 'multiselect', options: SHARE_ELEMENTS, required: true } ] },
 
   { key: 'followup_client', label: 'Follow-up with client', group: 'followups',
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true } ] },
@@ -145,7 +150,7 @@ export const CHECKLIST = [
 export const KPI_LABEL = {
   inquiry: 'Inquiries', lead_followup: 'Lead F/U', new_order: 'New orders',
   order_assigned: 'Orders assigned', project_assigned: 'Projects assigned', order_completed: 'Completed',
-  revision_assigned: 'Rev. assigned', revision_done: 'Rev. done', shared: 'Shared',
+  revision_assigned: 'Rev. assigned', revision_done: 'Rev. done', project_delivered: 'Delivered', shared: 'Shared',
   followup_client: 'Follow-ups', followup_designer: 'Designer F/U', upsell: 'Upsells', offer: 'Offers',
   meeting: 'Meetings', frustrated: 'Frustrated', disputed: 'Disputed', extension: 'Extensions', spam: 'Spam',
 };
