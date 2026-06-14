@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock, Download, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
-import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, CEO_PASSWORD } from './config.js';
+import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, CEO_PASSWORD, GROUPS } from './config.js';
 import { db, todayPKT, timePKT, addDays, BACKEND } from './store.js';
 import { Btn, Card, StatCard, Pill, Select, Chip, SectionHeader, Modal, Label, actionSummary } from './ui.jsx';
 
@@ -11,6 +11,15 @@ const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct
 const ymd = (y, m, d) => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 const parseYmd = s => { const [y, m, d] = (s || '').split('-').map(Number); return { y, m: m - 1, d }; };
 const fmtShort = s => { const p = parseYmd(s); return p.y ? `${MON[p.m]} ${p.d}` : '—'; };
+const groupColor = k => (GROUPS.find(g => g.key === k) || {}).color || C.violet;
+function ago(iso) {
+  if (!iso) return '';
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 45) return 'just now';
+  const m = Math.floor(s / 60); if (m < 60) return m + 'm ago';
+  const h = Math.floor(m / 60); if (h < 24) return h + 'h ago';
+  return Math.floor(h / 24) + 'd ago';
+}
 
 function winFor(r) {
   const t = todayPKT();
@@ -77,20 +86,28 @@ function Authed() {
 // ── Date range picker (presets + custom calendar) ──
 function DateRangePicker({ value, onChange }) {
   const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  // The calendar opens ONLY when "Custom" is clicked; clicking anywhere outside closes it.
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = ev => { if (ref.current && !ref.current.contains(ev.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
   const presets = [['today', 'Today'], ['yesterday', 'Yesterday'], ['7d', '7d'], ['30d', '30d'], ['all', 'All']];
   const isCustom = value.mode === 'custom';
   return (
-    <div className="flex items-center gap-1.5 flex-wrap" style={{ position: 'relative' }}>
+    <div ref={ref} className="flex items-center gap-1.5 flex-wrap" style={{ position: 'relative' }}>
       {presets.map(([v, l]) => <Chip key={v} active={value.mode === v} onClick={() => { setOpen(false); onChange({ mode: v }); }}>{l}</Chip>)}
       <button onClick={() => setOpen(o => !o)} className="rounded-lg px-3 py-1.5 text-xs font-semibold transition-all"
-        style={isCustom ? { background: C.violet, color: '#fff', boxShadow: '0 4px 12px rgba(114,41,255,.25)' } : { background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }}>
+        style={isCustom || open ? { background: C.violet, color: '#fff', boxShadow: '0 4px 12px rgba(114,41,255,.25)' } : { background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }}>
         <CalendarDays size={12} style={{ verticalAlign: -2, marginRight: 5 }} />{isCustom ? `${fmtShort(value.start)} – ${fmtShort(value.end || value.start)}` : 'Custom'}
       </button>
-      {open && <Calendar value={value} onClose={() => setOpen(false)} onApply={(s, e) => { onChange({ mode: 'custom', start: s, end: e }); setOpen(false); }} />}
+      {open && <Calendar value={value} onApply={(s, e) => { onChange({ mode: 'custom', start: s, end: e }); setOpen(false); }} />}
     </div>
   );
 }
-function Calendar({ value, onApply, onClose }) {
+function Calendar({ value, onApply }) {
   const seed = parseYmd(value.start || todayPKT());
   const [vw, setVw] = useState({ y: seed.y, m: seed.m });
   const [s, setS] = useState(value.mode === 'custom' ? value.start : null);
@@ -101,28 +118,26 @@ function Calendar({ value, onApply, onClose }) {
   const shift = delta => setVw(v => { let m = v.m + delta, y = v.y; if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; } return { y, m }; });
   const pick = d => { const cur = ymd(vw.y, vw.m, d); if (!s || (s && e)) { setS(cur); setE(null); } else { if (cur < s) { setE(s); setS(cur); } else setE(cur); } };
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 60 }} onClick={onClose}>
-      <div onClick={ev => ev.stopPropagation()} className="glass-2 rounded-2xl pop" style={{ position: 'absolute', top: 150, left: '50%', transform: 'translateX(-50%)', width: 290, padding: 14 }}>
-        <div className="flex items-center justify-between mb-2">
-          <button onClick={() => shift(-1)} className="rounded-lg p-1" style={{ border: 'none', background: 'rgba(124,41,255,.08)', color: C.muted, cursor: 'pointer' }}><ChevronLeft size={16} /></button>
-          <span style={{ fontWeight: 800, fontSize: 13, color: C.ink }}>{MON[vw.m]} {vw.y}</span>
-          <button onClick={() => shift(1)} className="rounded-lg p-1" style={{ border: 'none', background: 'rgba(124,41,255,.08)', color: C.muted, cursor: 'pointer' }}><ChevronRight size={16} /></button>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 4 }}>
-          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <div key={i} style={{ textAlign: 'center', fontSize: 9, fontWeight: 800, color: C.dim }}>{d}</div>)}
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2 }}>
-          {cells.map((d, i) => {
-            if (!d) return <div key={i} />;
-            const cur = ymd(vw.y, vw.m, d);
-            const sel = cur === s || cur === e; const inr = s && e && cur > s && cur < e;
-            return <button key={i} onClick={() => pick(d)} className="rounded-lg" style={{ height: 30, fontSize: 12, fontWeight: sel ? 800 : 500, cursor: 'pointer', border: 'none', background: sel ? C.violet : inr ? 'rgba(124,41,255,.14)' : 'transparent', color: sel ? '#fff' : C.ink }}>{d}</button>;
-          })}
-        </div>
-        <div className="flex items-center justify-between mt-3">
-          <span style={{ fontSize: 11, color: C.muted }}>{s ? `${fmtShort(s)}${e ? ' – ' + fmtShort(e) : ''}` : 'Pick a range'}</span>
-          <Btn onClick={() => s && onApply(s, e || s)} disabled={!s} style={{ padding: '6px 14px', fontSize: 12 }}>Apply</Btn>
-        </div>
+    <div className="glass-2 rounded-2xl pop" style={{ position: 'absolute', top: '100%', left: 0, marginTop: 8, width: 290, padding: 14, zIndex: 70 }}>
+      <div className="flex items-center justify-between mb-2">
+        <button onClick={() => shift(-1)} className="rounded-lg p-1" style={{ border: 'none', background: 'rgba(124,41,255,.08)', color: C.muted, cursor: 'pointer' }}><ChevronLeft size={16} /></button>
+        <span style={{ fontWeight: 800, fontSize: 13, color: C.ink }}>{MON[vw.m]} {vw.y}</span>
+        <button onClick={() => shift(1)} className="rounded-lg p-1" style={{ border: 'none', background: 'rgba(124,41,255,.08)', color: C.muted, cursor: 'pointer' }}><ChevronRight size={16} /></button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 4 }}>
+        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <div key={i} style={{ textAlign: 'center', fontSize: 9, fontWeight: 800, color: C.dim }}>{d}</div>)}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2 }}>
+        {cells.map((d, i) => {
+          if (!d) return <div key={i} />;
+          const cur = ymd(vw.y, vw.m, d);
+          const sel = cur === s || cur === e; const inr = s && e && cur > s && cur < e;
+          return <button key={i} onClick={() => pick(d)} className="rounded-lg" style={{ height: 30, fontSize: 12, fontWeight: sel ? 800 : 500, cursor: 'pointer', border: 'none', background: sel ? C.violet : inr ? 'rgba(124,41,255,.14)' : 'transparent', color: sel ? '#fff' : C.ink }}>{d}</button>;
+        })}
+      </div>
+      <div className="flex items-center justify-between mt-3">
+        <span style={{ fontSize: 11, color: C.muted }}>{s ? `${fmtShort(s)}${e ? ' – ' + fmtShort(e) : ''}` : 'Pick a range'}</span>
+        <Btn onClick={() => s && onApply(s, e || s)} disabled={!s} style={{ padding: '6px 14px', fontSize: 12 }}>Apply</Btn>
       </div>
     </div>
   );
@@ -149,6 +164,9 @@ function Console() {
   const idle = filtered.filter(r => r.status === 'open' && !(byReport[r.id]?.length));
   const repById = id => filtered.find(r => r.id === id) || reports.find(r => r.id === id);
   const byProfile = useMemo(() => { const m = {}; filtered.forEach(r => { m[r.profile] = (m[r.profile] || 0) + (byReport[r.id]?.length || 0); }); return Object.entries(m).sort((a, b) => b[1] - a[1]); }, [filtered, byReport]);
+  // Live feed — newest actions across EVERY shift / profile / CSR (ignores filters on purpose)
+  const repMap = useMemo(() => Object.fromEntries(reports.map(r => [r.id, r])), [reports]);
+  const latest = useMemo(() => [...allActions].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 8), [allActions]);
 
   async function exportPdf() {
     const { jsPDF } = await import('jspdf');
@@ -175,7 +193,7 @@ function Console() {
 
   return (
     <>
-      <Card className="mb-6 p-4">
+      <Card className="mb-6 p-4" style={{ position: 'relative', zIndex: 40 }}>
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 pr-3" style={{ borderRight: '1px solid rgba(124,41,255,.14)' }}><Filter size={14} style={{ color: C.dim }} /><span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.dim }}>Filters</span></div>
           <DateRangePicker value={range} onChange={setRange} />
@@ -194,6 +212,26 @@ function Console() {
         <StatCard label="Reports" value={filtered.length} sub={label.toLowerCase()} accent={C.violet} icon={ClipboardList} />
         <StatCard label="Actions logged" value={acts.length} sub="across reports" accent={C.glow} icon={BarChart3} />
         <StatCard label="Needs attention" value={flags.length + idle.length} sub="flags + idle" accent={flags.length + idle.length ? C.coral : C.mint} icon={AlertTriangle} />
+      </div>
+
+      <div className="mb-6">
+        <SectionHeader eyebrow="Pulse · live" title="Latest activity" color={C.mint}
+          right={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 6, height: 6, borderRadius: 9, background: C.mint, boxShadow: `0 0 0 3px ${C.mintBg}` }} /> all shifts &amp; profiles</span>} />
+        <Card className="p-4">
+          {latest.length === 0 ? <div style={{ color: C.dim, fontSize: 13 }}>No activity logged yet.</div> : (
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+              {latest.map(a => { const r = repMap[a.report_id]; return (
+                <div key={a.id} onClick={() => r && setDrill(r.id)} className="glass-soft rounded-xl lift" style={{ display: 'flex', gap: 10, padding: '9px 12px', alignItems: 'center', cursor: r ? 'pointer' : 'default' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 9, flex: '0 0 auto', background: groupColor(ACTION_BY_KEY[a.type]?.group) }} />
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ACTION_BY_KEY[a.type]?.label || a.type}{a.client ? <span style={{ color: C.muted, fontWeight: 500 }}> · {a.client}</span> : ''}</div>
+                    <div style={{ fontSize: 11, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r ? <><b style={{ color: C.violetDim, fontWeight: 700 }}>{r.csr_name}</b> · {r.profile} · {r.shift}</> : '—'}</div>
+                  </div>
+                  <span style={{ fontSize: 10.5, color: C.dim, whiteSpace: 'nowrap', flex: '0 0 auto' }}>{ago(a.created_at)}</span>
+                </div>); })}
+            </div>
+          )}
+        </Card>
       </div>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
