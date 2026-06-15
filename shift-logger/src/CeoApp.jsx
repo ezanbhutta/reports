@@ -467,7 +467,7 @@ function RosterManager() {
           <Card key={c.id} className="lift p-4" style={{ opacity: c.active ? 1 : 0.55 }}>
             <div className="mb-3 flex items-start justify-between">
               <div><div style={{ fontWeight: 800, color: C.ink }}>{c.name || 'Unnamed'}</div>
-                <div className="mt-1 flex items-center gap-1.5 flex-wrap"><Pill color={c.role === 'Manager' ? C.amber : C.cyan}>{c.role}</Pill>{c.profile && <Pill color={C.violet}>{c.profile}</Pill>}{!c.active && <Pill color={C.coral}>Archived</Pill>}</div></div>
+                <div className="mt-1 flex items-center gap-1.5 flex-wrap"><Pill color={C.cyan}>CSR</Pill>{c.profile && <Pill color={C.violet}>{c.profile}</Pill>}{!c.active && <Pill color={C.coral}>Archived</Pill>}</div></div>
               <Actions c={c} />
             </div>
             <div className="flex items-center justify-between">
@@ -506,8 +506,6 @@ function RosterManager() {
         ) : (<>
           <Label>Shift</Label><select value={edit.shift} onChange={e => setEdit({ ...edit, shift: e.target.value })} className="gi">{SHIFTS.map(s => <option key={s.key} value={s.key}>{s.label} ({s.time})</option>)}</select>
           <Label>Profile</Label><select value={edit.profile} onChange={e => setEdit({ ...edit, profile: e.target.value })} className="gi"><option value="">No profile</option>{PROFILES.map(p => <option key={p} value={p}>{p}</option>)}</select>
-          <Label>Role</Label>
-          <div style={{ display: 'flex', gap: 6 }}>{['CSR', 'Manager'].map(role => { const on = edit.role === role; return <button key={role} onClick={() => setEdit({ ...edit, role })} className="rounded-xl" style={{ flex: 1, padding: 9, border: on ? 'none' : `1px solid ${C.surfaceLine}`, background: on ? C.violet : C.surface, color: on ? '#fff' : C.muted, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>{role}</button>; })}</div>
         </>)}
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}><Btn variant="ghost" onClick={() => setEdit(null)} style={{ flex: 1 }}>Cancel</Btn><Btn variant="ok" onClick={() => edit.name.trim() && (!editDesigner || edit.role.trim()) && save(edit)} className="lift" style={{ flex: 1 }}>Save</Btn></div>
       </Modal>}
