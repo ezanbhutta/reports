@@ -104,17 +104,13 @@ export const Label = ({ children }) => (
   <div style={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.12em', color: C.dim, margin: '13px 0 5px' }}>{children}</div>
 );
 
-// Dynamic field renderer (powers every action form). `suggestions` adds autocomplete.
-export function Field({ field, value, onChange, suggestions }) {
-  const { type, label, options, required, name } = field;
-  const listId = suggestions && suggestions.length ? `dl_${name}` : undefined;
+// Dynamic field renderer (powers every action form).
+export function Field({ field, value, onChange }) {
+  const { type, label, options, required } = field;
   return (
     <div>
       <Label>{label}{required && <span style={{ color: C.violet }}> *</span>}</Label>
-      {type === 'text' && (<>
-        <input className="gi" value={value || ''} onChange={e => onChange(e.target.value)} placeholder={label} list={listId} autoComplete="off" />
-        {listId && <datalist id={listId}>{suggestions.map(s => <option key={s} value={s} />)}</datalist>}
-      </>)}
+      {type === 'text' && <input className="gi" value={value || ''} onChange={e => onChange(e.target.value)} placeholder={label} autoComplete="off" />}
       {type === 'date' && <input type="date" className="gi" value={value || ''} onChange={e => onChange(e.target.value)} />}
       {type === 'select' && (
         <select className="gi" value={value || ''} onChange={e => onChange(e.target.value)}>

@@ -8,8 +8,6 @@ const groupColor = k => (GROUPS.find(g => g.key === k) || {}).color || C.violet;
 const QUICK = ['inquiry', 'followup_client', 'shared', 'revision_assigned', 'meeting', 'new_order'];
 const getRecent = () => { try { return JSON.parse(localStorage.getItem('sl_recent_actions')) || []; } catch { return []; } };
 const bumpRecent = k => { const r = [k, ...getRecent().filter(x => x !== k)].slice(0, 8); localStorage.setItem('sl_recent_actions', JSON.stringify(r)); };
-const getClients = () => { try { return JSON.parse(localStorage.getItem('sl_clients')) || []; } catch { return []; } };
-const addClient = c => { if (!c) return; const r = [c, ...getClients().filter(x => x !== c)].slice(0, 60); localStorage.setItem('sl_clients', JSON.stringify(r)); };
 
 // ── PKT time intelligence ──
 const pktHour = () => parseInt(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', hour: '2-digit', hour12: false }).format(new Date()), 10);
@@ -47,7 +45,6 @@ export default function CsrApp() {
   }, [report]);
 
   const counts = useMemo(() => { const m = {}; actions.forEach(a => m[a.type] = (m[a.type] || 0) + 1); return m; }, [actions]);
-  const clientSug = useMemo(() => [...new Set([...actions.map(a => a.client), ...getClients()].filter(Boolean))], [actions]);
 
   async function startReport() {
     if (!name || !profile) return;
@@ -66,7 +63,7 @@ export default function CsrApp() {
     const details = { ...values }; delete details.client;
     if (editId) await db.updateAction(editId, { client, details });
     else await db.addAction(report.id, { type: action.key, client, details });
-    bumpRecent(action.key); addClient(client);
+    bumpRecent(action.key);
     setForm(null); refresh();
   }
   async function submit(checklist, note) {
@@ -288,7 +285,7 @@ export default function CsrApp() {
       {picker && <CommandPalette onClose={() => setPicker(false)} onPick={openForm} />}
 
       {form && <Modal title={form.action.label} subtitle={form.editId ? 'Edit entry' : 'New entry'} onClose={() => setForm(null)} width={400}>
-        {form.action.fields.map(f => <Field key={f.name} field={f} value={form.values[f.name]} suggestions={f.name === 'client' ? clientSug : undefined}
+        {form.action.fields.map(f => <Field key={f.name} field={f} value={form.values[f.name]}
           onChange={v => setForm(m => ({ ...m, values: { ...m.values, [f.name]: v }, error: null }))} />)}
         {form.error && <div style={{ color: C.coral, fontSize: 12, marginTop: 10 }}>{form.error}</div>}
         <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
