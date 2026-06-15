@@ -43,8 +43,8 @@ export const DEFAULT_ROSTER = [
   { id: 'samama',  name: 'Samama',  shift: 'Night', profile: '', role: 'CSR', active: true },
   { id: 'ahmad',   name: 'Ahmad',   shift: 'Night', profile: '', role: 'CSR', active: true },
   { id: 'nadir',   name: 'Nadir',   shift: 'Night', profile: '', role: 'CSR', active: true },
-  { id: 'zubair',  name: 'Zubair',  shift: 'Night', profile: '', role: 'Manager', active: true },
-  { id: 'ezan',    name: 'Ezan',    shift: 'Night', profile: '', role: 'Manager', active: true },
+  { id: 'zubair',  name: 'Zubair',  shift: 'Night', profile: '', role: 'CSR', active: true },
+  { id: 'ezan',    name: 'Ezan',    shift: 'Night', profile: '', role: 'CSR', active: true },
   // ── Design Team (role = specialty; anything that isn't CSR/Manager is a designer) ──
   { id: 'd-owais-nadeem',  name: 'Owais Nadeem',     shift: '', profile: '', role: 'Branding', active: true },
   { id: 'd-khubaib',       name: 'Khubaib',          shift: '', profile: '', role: 'Branding', active: true },
