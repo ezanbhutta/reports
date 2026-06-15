@@ -131,7 +131,9 @@ export const ACTIONS = [
               { name: 'other_text', label: 'Other — please specify', type: 'text', required: true, showIf: v => Array.isArray(v.elements) && v.elements.includes('Other') } ] },
 
   { key: 'followup_client', label: 'Follow-up with client', group: 'followups',
-    fields: [ { name: 'client', label: 'Client', type: 'text', required: true } ] },
+    fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
+              { name: 'project', label: 'Project name', type: 'text' },
+              { name: 'attempt', label: 'Which follow-up?', type: 'segment', options: ['1st', '2nd', '3rd', '4th+'] } ] },
   { key: 'followup_designer', label: 'Follow-up with designer', group: 'followups',
     fields: [ { name: 'project', label: 'Project / client', type: 'text', required: true },
               { name: 'designer', label: 'Designer', type: 'designer', required: true },
