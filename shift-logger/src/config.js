@@ -73,7 +73,7 @@ export const isDesigner = r => !!r && r.role !== 'CSR' && r.role !== 'Manager';
 // What can be shared to a client in chat (multi-select on the "Shared to client" action)
 export const SHARE_ELEMENTS = [
   'Initial draft', 'Revision', 'Final files', 'Brand guidelines',
-  'Social media kit', 'Stationery', 'Animation', 'Other',
+  'Social media kit', 'Stationery', 'Animation', 'PowerPoint', 'Website contents', 'Other',
 ];
 
 // Action groups (order + colour)
@@ -127,7 +127,8 @@ export const ACTIONS = [
   { key: 'shared', label: 'Shared to client (chat)', group: 'deliveries',
     fields: [ { name: 'client', label: 'Client / username', type: 'text', required: true },
               { name: 'project', label: 'Project', type: 'text' },
-              { name: 'elements', label: 'What did you share? (pick any)', type: 'multiselect', options: SHARE_ELEMENTS, required: true } ] },
+              { name: 'elements', label: 'What did you share? (pick any)', type: 'multiselect', options: SHARE_ELEMENTS, required: true },
+              { name: 'other_text', label: 'Other — please specify', type: 'text', required: true, showIf: v => Array.isArray(v.elements) && v.elements.includes('Other') } ] },
 
   { key: 'followup_client', label: 'Follow-up with client', group: 'followups',
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true } ] },

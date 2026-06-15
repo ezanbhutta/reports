@@ -58,7 +58,7 @@ export default function CsrApp() {
   function openForm(action, prefill, editId) { setPicker(false); setForm({ action, values: prefill || {}, editId }); }
   async function saveForm() {
     const { action, values, editId } = form;
-    const miss = action.fields.filter(f => f.required && !(Array.isArray(values[f.name]) ? values[f.name].length : values[f.name]));
+    const miss = action.fields.filter(f => f.required && (!f.showIf || f.showIf(values)) && !(Array.isArray(values[f.name]) ? values[f.name].length : values[f.name]));
     if (miss.length) return setForm({ ...form, error: 'Fill: ' + miss.map(m => m.label).join(', ') });
     const client = values.client || '';
     const details = { ...values }; delete details.client;
@@ -286,7 +286,7 @@ export default function CsrApp() {
       {picker && <CommandPalette onClose={() => setPicker(false)} onPick={openForm} />}
 
       {form && <Modal title={form.action.label} subtitle={form.editId ? 'Edit entry' : 'New entry'} onClose={() => setForm(null)} width={400}>
-        {form.action.fields.map(f => { const ff = f.type === 'designer' ? { ...f, type: 'select', options: [...new Set([...designerNames, form.values[f.name]].filter(Boolean))] } : f;
+        {form.action.fields.filter(f => !f.showIf || f.showIf(form.values)).map(f => { const ff = f.type === 'designer' ? { ...f, type: 'select', options: [...new Set([...designerNames, form.values[f.name]].filter(Boolean))] } : f;
           return <Field key={f.name} field={ff} value={form.values[f.name]}
             onChange={v => setForm(m => ({ ...m, values: { ...m.values, [f.name]: v }, error: null }))} />; })}
         {form.error && <div style={{ color: C.coral, fontSize: 12, marginTop: 10 }}>{form.error}</div>}
