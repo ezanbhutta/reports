@@ -193,8 +193,8 @@ export default function CsrApp() {
       <Header>
         <Brand small />
         <div style={{ display: 'flex', gap: 8 }}>
-          <Btn variant="ghost" onClick={() => setView('teamlog')} style={{ padding: '8px 12px', fontSize: 12 }}><ClipboardList size={13} style={{ verticalAlign: -2 }} /> Past reports</Btn>
-          <Btn variant="ghost" onClick={() => { setReport(null); setView('login'); }} style={{ padding: '8px 12px', fontSize: 12 }}><LogOut size={13} style={{ verticalAlign: -2 }} /> Switch</Btn>
+          <Btn variant="ghost" onClick={() => setView('teamlog')} style={{ padding: '8px 13px', fontSize: 12 }}><ClipboardList size={13} />Past reports</Btn>
+          <Btn variant="ghost" onClick={() => { setReport(null); setView('login'); }} style={{ padding: '8px 13px', fontSize: 12 }}><LogOut size={13} />Switch</Btn>
         </div>
       </Header>
 

@@ -17,7 +17,7 @@ export const Btn = ({ children, onClick, variant = 'solid', disabled, style, cla
     subtle: { background: 'rgba(124,41,255,.08)', color: C.violetDim },
   }[variant];
   return <button onClick={onClick} disabled={disabled} className={`${base} ${className}`}
-    style={{ fontSize: 13, padding: '10px 16px', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1, border: 'none', ...v, ...style }} {...p}>{children}</button>;
+    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, whiteSpace: 'nowrap', fontSize: 13, padding: '10px 16px', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1, border: 'none', ...v, ...style }} {...p}>{children}</button>;
 };
 
 export const Card = ({ children, className = '', strong, style }) => (
@@ -69,8 +69,8 @@ export const Select = ({ value, onChange, children, color }) => (
 );
 
 export const Chip = ({ active, onClick, children }) => (
-  <button onClick={onClick} className="rounded-lg px-3 py-1.5 text-xs font-semibold transition-all"
-    style={active ? { background: C.violet, color: '#fff', boxShadow: '0 4px 12px rgba(114,41,255,.25)' } : { background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }}>{children}</button>
+  <button onClick={onClick} className="rounded-lg px-3 py-2 text-xs font-semibold transition-all"
+    style={active ? { background: C.violet, color: '#fff', border: '1px solid transparent', boxShadow: '0 4px 12px rgba(114,41,255,.25)' } : { background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }}>{children}</button>
 );
 
 export const SectionHeader = ({ eyebrow, title, right, color = C.violet }) => (

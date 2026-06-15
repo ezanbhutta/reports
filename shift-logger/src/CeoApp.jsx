@@ -141,8 +141,8 @@ function DateRangePicker({ value, onChange }) {
   return (
     <div className="flex items-center gap-1.5 flex-wrap" style={{ position: 'relative' }}>
       {presets.map(([v, l]) => <Chip key={v} active={value.mode === v} onClick={() => { setOpen(false); onChange({ mode: v }); }}>{l}</Chip>)}
-      <button ref={btnRef} onClick={toggle} className="rounded-lg text-xs font-semibold transition-all"
-        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px', whiteSpace: 'nowrap', lineHeight: 1, ...(isCustom || open ? { background: C.violet, color: '#fff', boxShadow: '0 4px 12px rgba(114,41,255,.25)' } : { background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }) }}>
+      <button ref={btnRef} onClick={toggle} className="rounded-lg px-3 py-2 text-xs font-semibold transition-all"
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap', ...(isCustom || open ? { background: C.violet, color: '#fff', border: '1px solid transparent', boxShadow: '0 4px 12px rgba(114,41,255,.25)' } : { background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }) }}>
         <CalendarDays size={12} />{isCustom ? `${fmtShort(value.start)} – ${fmtShort(value.end || value.start)}` : 'Custom'}
       </button>
       {open && <Calendar popRef={popRef} pos={pos} value={value} onApply={(s, e) => { onChange({ mode: 'custom', start: s, end: e }); setOpen(false); }} />}
@@ -259,7 +259,7 @@ function Console() {
           <Select value={fProfile} onChange={e => setFProfile(e.target.value)}><option value="all">All profiles</option>{PROFILES.map(p => <option key={p} value={p}>{p}</option>)}</Select>
           <div className="ml-auto flex items-center gap-3">
             <span className="text-[10px] uppercase tracking-wider" style={{ color: C.dim }}>{filtered.length} · {label}</span>
-            <Btn onClick={exportPdf} disabled={!filtered.length} className="lift" style={{ padding: '8px 13px', fontSize: 12 }}><Download size={13} style={{ verticalAlign: -2, marginRight: 4 }} />Export PDF</Btn>
+            <Btn onClick={exportPdf} disabled={!filtered.length} className="lift" style={{ padding: '8px 14px', fontSize: 12, border: '1px solid transparent' }}><Download size={13} />Export PDF</Btn>
           </div>
         </div>
       </Card>
@@ -458,8 +458,8 @@ function RosterManager() {
   return (
     <>
       <div className="mb-4 flex items-center justify-between">
-        <div><h2 className="disp text-lg font-bold" style={{ color: C.ink }}>CSRs &amp; Managers</h2><p className="mt-1 text-xs" style={{ color: C.muted }}>These names fill the CSR “Your name” list. Archived people keep their history.</p></div>
-        <Btn onClick={() => setEdit({ id: uid(), name: '', shift: 'Night', profile: '', role: 'CSR', active: true })} className="lift"><Plus size={13} style={{ verticalAlign: -2 }} /> Add person</Btn>
+        <div><h2 className="disp text-lg font-bold" style={{ color: C.ink }}>CSRs &amp; Managers <span style={{ fontSize: 13, fontWeight: 600, color: C.dim }}>· {csrs.length}</span></h2><p className="mt-1 text-xs" style={{ color: C.muted }}>These names fill the CSR “Your name” list. Archived people keep their history.</p></div>
+        <Btn onClick={() => setEdit({ id: uid(), name: '', shift: 'Night', profile: '', role: 'CSR', active: true })} className="lift"><Plus size={15} strokeWidth={2.6} />Add person</Btn>
       </div>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
         {csrs.map(c => (
@@ -477,9 +477,9 @@ function RosterManager() {
         ))}
       </div>
 
-      <div className="mb-4 mt-8 flex items-center justify-between">
-        <div><h2 className="disp text-lg font-bold" style={{ color: C.ink }}>Design Team</h2><p className="mt-1 text-xs" style={{ color: C.muted }}>These fill the “Designer” dropdown when assigning work. Archived designers keep their history.</p></div>
-        <Btn onClick={() => setEdit({ id: 'd-' + uid(), name: '', shift: '', profile: '', role: '', active: true })} className="lift"><Plus size={13} style={{ verticalAlign: -2 }} /> Add designer</Btn>
+      <div className="mb-4 flex items-center justify-between" style={{ marginTop: 38, paddingTop: 28, borderTop: '1px solid rgba(124,41,255,.16)' }}>
+        <div><h2 className="disp text-lg font-bold" style={{ color: C.ink }}>Design Team <span style={{ fontSize: 13, fontWeight: 600, color: C.dim }}>· {designers.length}</span></h2><p className="mt-1 text-xs" style={{ color: C.muted }}>These fill the “Designer” dropdown when assigning work. Archived designers keep their history.</p></div>
+        <Btn onClick={() => setEdit({ id: 'd-' + uid(), name: '', shift: '', profile: '', role: '', active: true })} className="lift"><Plus size={15} strokeWidth={2.6} />Add designer</Btn>
       </div>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {designers.length === 0 && <Card className="p-5"><span style={{ color: C.dim, fontSize: 13 }}>No designers yet — add your design team.</span></Card>}
