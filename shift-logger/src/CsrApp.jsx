@@ -140,7 +140,7 @@ export default function CsrApp() {
                 <select value={name} onChange={e => { setName(e.target.value); const r = names.find(x => x.name === e.target.value); if (r?.shift) setShift(r.shift); if (r?.profile) setProfile(r.profile); }}
                   className="gi" style={{ fontSize: 15, fontWeight: 600, padding: '13px 34px 13px 13px' }}>
                   <option value="">Select your name…</option>
-                  {names.map(r => <option key={r.id} value={r.name}>{r.name}{r.role === 'Manager' ? ' (manager)' : ''}</option>)}
+                  {names.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
                 </select>
 
                 <Label>Shift · Pakistan time</Label>
