@@ -8,6 +8,8 @@ const groupColor = k => (GROUPS.find(g => g.key === k) || {}).color || C.violet;
 const QUICK = ['inquiry', 'followup_client', 'shared', 'revision_assigned', 'meeting', 'new_order'];
 const getRecent = () => { try { return JSON.parse(localStorage.getItem('sl_recent_actions')) || []; } catch { return []; } };
 const bumpRecent = k => { const r = [k, ...getRecent().filter(x => x !== k)].slice(0, 8); localStorage.setItem('sl_recent_actions', JSON.stringify(r)); };
+const getUsage = () => { try { return JSON.parse(localStorage.getItem('sl_action_usage')) || {}; } catch { return {}; } };
+const bumpUsage = k => { const u = getUsage(); u[k] = (u[k] || 0) + 1; localStorage.setItem('sl_action_usage', JSON.stringify(u)); };
 
 // ── PKT time intelligence ──
 const pktHour = () => parseInt(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', hour: '2-digit', hour12: false }).format(new Date()), 10);
@@ -64,7 +66,7 @@ export default function CsrApp() {
     const details = { ...values }; delete details.client;
     if (editId) await db.updateAction(editId, { client, details });
     else await db.addAction(report.id, { type: action.key, client, details });
-    bumpRecent(action.key);
+    bumpRecent(action.key); bumpUsage(action.key);
     setForm(null); refresh();
   }
   async function submit(checklist, note) {
@@ -172,11 +174,11 @@ export default function CsrApp() {
 
   // ════════════════════════════ DASHBOARD ════════════════════════════
   const locked = report.status !== 'open';
-  const recent = getRecent().filter(k => ACTION_BY_KEY[k]);
-  const quickKeys = [...new Set([...recent, ...QUICK])].slice(0, 6);
-  const topTypes = Object.keys(counts).sort((a, b) => counts[b] - counts[a]).slice(0, 3);
-  const strip = [['Total', actions.length, true], ...topTypes.map(t => [KPI_LABEL[t] || t, counts[t], false])];
-  while (strip.length < 4) strip.push(null);
+  const usage = getUsage();
+  const quickKeys = [...new Set([...Object.keys(usage).filter(k => ACTION_BY_KEY[k]).sort((a, b) => usage[b] - usage[a]), ...QUICK])].slice(0, 6);
+  // Moving ticker: every logged activity count (Total stays static, the rest scroll)
+  const tickerItems = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([t, n]) => [KPI_LABEL[t] || t, n]);
+  let tickerLoop = []; if (tickerItems.length) { while (tickerLoop.length < 8) tickerLoop = tickerLoop.concat(tickerItems); }
   // Group the timeline by hour (newest first) for color-railed sections
   const tlGroups = [];
   actions.forEach(a => { const hr = hourLabel(a.created_at); let g = tlGroups[tlGroups.length - 1]; if (!g || g.hr !== hr) { g = { hr, items: [] }; tlGroups.push(g); } g.items.push(a); });
@@ -227,16 +229,24 @@ export default function CsrApp() {
           </Card>
         )}
 
-        {/* compact metric strip */}
-        <div className="glass rounded-2xl" style={{ display: 'flex', marginBottom: 16, overflow: 'hidden' }}>
-          {strip.map((it, i) => (
-            <div key={i} style={{ flex: 1, padding: '13px 8px', textAlign: 'center', borderLeft: i ? '1px solid rgba(124,41,255,.10)' : 'none' }}>
-              {it ? <>
-                <div className="mono" style={{ fontSize: 22, fontWeight: 800, lineHeight: 1, color: it[2] ? C.violet : C.ink }}>{it[1]}</div>
-                <div style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: C.dim, marginTop: 5 }}>{it[0]}</div>
-              </> : <div style={{ fontSize: 18, color: 'rgba(124,41,255,.14)' }}>·</div>}
-            </div>
-          ))}
+        {/* metric strip — static Total + scrolling ticker of every activity */}
+        <div className="glass rounded-2xl" style={{ display: 'flex', alignItems: 'stretch', marginBottom: 16, overflow: 'hidden' }}>
+          <div style={{ flex: '0 0 auto', padding: '13px 24px', textAlign: 'center', borderRight: '1px solid rgba(124,41,255,.12)' }}>
+            <div className="mono" style={{ fontSize: 22, fontWeight: 800, lineHeight: 1, color: C.violet }}>{actions.length}</div>
+            <div style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: C.dim, marginTop: 5 }}>Total</div>
+          </div>
+          <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', alignItems: 'center' }}>
+            {tickerLoop.length === 0
+              ? <span style={{ paddingLeft: 18, fontSize: 12, color: C.dim }}>Your activity will scroll here as you log…</span>
+              : <div className="marquee" style={{ display: 'flex', whiteSpace: 'nowrap' }}>
+                  {[...tickerLoop, ...tickerLoop].map((it, i) => (
+                    <span key={i} style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6, padding: '0 18px' }}>
+                      <span className="mono" style={{ fontSize: 18, fontWeight: 800, color: C.ink }}>{it[1]}</span>
+                      <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.dim }}>{it[0]}</span>
+                    </span>
+                  ))}
+                </div>}
+          </div>
         </div>
 
         {/* timeline */}
@@ -247,7 +257,6 @@ export default function CsrApp() {
           </div>
           {actions.length === 0 && (
             <div style={{ textAlign: 'center', padding: '26px 0', color: C.dim }}>
-              <ClipboardList size={26} style={{ opacity: .5, marginBottom: 8 }} />
               <div style={{ fontSize: 13 }}>Nothing logged yet.</div>
               <div style={{ fontSize: 12, marginTop: 2 }}>Tap <b style={{ color: C.violetDim }}>Log an activity</b> to add your first one.</div>
             </div>

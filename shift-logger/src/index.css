@@ -91,3 +91,6 @@ select.gi {
 .no-scrollbar::-webkit-scrollbar { display: none; }
 @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
 .pop { animation: pop .18s ease both; }
+@keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.marquee { animation: marquee 22s linear infinite; will-change: transform; }
+.marquee:hover { animation-play-state: paused; }
