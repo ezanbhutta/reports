@@ -277,7 +277,7 @@ export default function CsrApp() {
           </div>
         </Card>
 
-        {!locked && <Btn variant="ok" onClick={() => setWrap(true)} className="lift" style={{ width: '100%', marginTop: 14, padding: 13, fontSize: 14 }}><Check size={16} style={{ verticalAlign: -3, marginRight: 6 }} />Wrap up &amp; submit my report</Btn>}
+        {!locked && <Btn variant="ok" onClick={() => setWrap(true)} className="lift" style={{ width: '100%', marginTop: 14, padding: 13, fontSize: 14, textAlign: 'center' }}>Wrap up &amp; submit my report</Btn>}
       </div>
 
       {handoff && <Modal title="Note from the last shift" subtitle={`for ${report.profile} · left by ${handoff.csr_name}`} onClose={ackHandoff} width={380}>
