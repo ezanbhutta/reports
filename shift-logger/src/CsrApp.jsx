@@ -87,7 +87,7 @@ export default function CsrApp() {
       <Shell center night={shift === 'Night'}>
         {flash && (
           <div className="pop" style={{ position: 'fixed', top: 18, left: '50%', transform: 'translateX(-50%)', zIndex: 80, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 99, background: `linear-gradient(180deg, #34D399, ${C.mint})`, color: '#fff', fontWeight: 700, fontSize: 13, boxShadow: '0 12px 28px rgba(16,185,129,.32)' }}>
-            <Check size={16} /> Shift submitted — ready for the next person
+            <Check size={16} /> Report submitted — ready for the next person
           </div>
         )}
         <div className="pop w-full" style={{ maxWidth: 940 }}>
@@ -133,7 +133,7 @@ export default function CsrApp() {
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.2em', textTransform: 'uppercase', color: C.dim, marginTop: 2 }}>CSR Shift Logger</div>
                 </div>
 
-                <h1 className="disp" style={{ fontSize: 25, fontWeight: 700, color: C.ink, margin: 0 }}>Start your shift</h1>
+                <h1 className="disp" style={{ fontSize: 25, fontWeight: 700, color: C.ink, margin: 0 }}>Start your report</h1>
                 <p style={{ color: C.muted, fontSize: 13, margin: '6px 0 0' }}>No password — just tell us who's on.</p>
 
                 <Label>Your name</Label>
@@ -157,7 +157,7 @@ export default function CsrApp() {
                 <Label>Profile</Label>
                 <select value={profile} onChange={e => setProfile(e.target.value)} className="gi" style={{ padding: '13px 34px 13px 13px' }}><option value="">Select profile…</option>{PROFILES.map(p => <option key={p} value={p}>{p}</option>)}</select>
 
-                <Btn onClick={startReport} disabled={!name || !profile} className="lift" style={{ width: '100%', marginTop: 20, padding: 14, fontSize: 14.5 }}>Start my shift →</Btn>
+                <Btn onClick={startReport} disabled={!name || !profile} className="lift" style={{ width: '100%', marginTop: 20, padding: 14, fontSize: 14.5 }}>Start my report →</Btn>
 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(124,41,255,.1)', fontSize: 11, color: C.dim }}>
                   <Clock size={11} /> {todayPKT()} · check-in {timePKT()} PKT · auto
@@ -225,7 +225,7 @@ export default function CsrApp() {
           </Card>
         ) : (
           <Card className="p-5" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10, color: C.mint, fontWeight: 700, fontSize: 13.5 }}>
-            <Check size={17} /> Shift submitted &amp; locked — no more edits.
+            <Check size={17} /> Report submitted &amp; locked — no more edits.
           </Card>
         )}
 
@@ -277,7 +277,7 @@ export default function CsrApp() {
           </div>
         </Card>
 
-        {!locked && <Btn variant="ok" onClick={() => setWrap(true)} className="lift" style={{ width: '100%', marginTop: 14, padding: 13, fontSize: 14 }}><Check size={16} style={{ verticalAlign: -3, marginRight: 6 }} />Wrap up &amp; submit my shift</Btn>}
+        {!locked && <Btn variant="ok" onClick={() => setWrap(true)} className="lift" style={{ width: '100%', marginTop: 14, padding: 13, fontSize: 14 }}><Check size={16} style={{ verticalAlign: -3, marginRight: 6 }} />Wrap up &amp; submit my report</Btn>}
       </div>
 
       {handoff && <Modal title="Note from the last shift" subtitle={`for ${report.profile} · left by ${handoff.csr_name}`} onClose={ackHandoff} width={380}>
