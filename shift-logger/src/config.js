@@ -156,16 +156,18 @@ export const ACTIONS = [
 
   { key: 'frustrated', label: 'Frustrated client', group: 'problems',
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
-              { name: 'what', label: 'What happened', type: 'text', required: true } ] },
+              { name: 'what', label: 'What happened', type: 'text', required: true },
+              { name: 'project', label: 'Project name', type: 'text' } ] },
   { key: 'disputed', label: 'Disputed client', group: 'problems',
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
               { name: 'reason', label: 'Reason', type: 'text', required: true },
-              { name: 'order', label: 'Order (if any)', type: 'text' } ] },
+              { name: 'project', label: 'Project name', type: 'text' } ] },
   { key: 'extension', label: 'Extension sent', group: 'problems',
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
               { name: 'reason', label: 'Reason', type: 'text' } ] },
   { key: 'spam', label: 'Spam / not relevant', group: 'problems',
-    fields: [ { name: 'client', label: 'Username', type: 'text', required: true } ] },
+    fields: [ { name: 'client', label: 'Username', type: 'text', required: true },
+              { name: 'reason', label: 'Reason', type: 'text' } ] },
 ];
 
 export const ACTION_BY_KEY = Object.fromEntries(ACTIONS.map(a => [a.key, a]));
