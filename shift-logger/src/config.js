@@ -76,7 +76,8 @@ export const ACTIONS = [
 
   { key: 'new_order', label: 'New order', group: 'orders',
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
-              { name: 'service', label: 'Service', type: 'text', required: true },
+              { name: 'project', label: 'Project name', type: 'text' },
+              { name: 'service', label: 'Service', type: 'text' },
               { name: 'value', label: 'Price', type: 'text' } ] },
   { key: 'order_assigned', label: 'Order given to designer', group: 'orders',
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
