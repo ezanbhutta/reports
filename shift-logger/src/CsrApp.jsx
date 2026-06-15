@@ -176,9 +176,8 @@ export default function CsrApp() {
   const locked = report.status !== 'open';
   const usage = getUsage();
   const quickKeys = [...new Set([...Object.keys(usage).filter(k => ACTION_BY_KEY[k]).sort((a, b) => usage[b] - usage[a]), ...QUICK])].slice(0, 6);
-  // Moving ticker: every logged activity count (Total stays static, the rest scroll)
+  // Moving ticker: each logged activity shown once, scrolling (Total stays static)
   const tickerItems = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([t, n]) => [KPI_LABEL[t] || t, n]);
-  let tickerLoop = []; if (tickerItems.length) { while (tickerLoop.length < 8) tickerLoop = tickerLoop.concat(tickerItems); }
   // Group the timeline by hour (newest first) for color-railed sections
   const tlGroups = [];
   actions.forEach(a => { const hr = hourLabel(a.created_at); let g = tlGroups[tlGroups.length - 1]; if (!g || g.hr !== hr) { g = { hr, items: [] }; tlGroups.push(g); } g.items.push(a); });
@@ -236,13 +235,13 @@ export default function CsrApp() {
             <div style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: C.dim, marginTop: 5 }}>Total</div>
           </div>
           <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', alignItems: 'center' }}>
-            {tickerLoop.length === 0
+            {tickerItems.length === 0
               ? <span style={{ paddingLeft: 18, fontSize: 12, color: C.dim }}>Your activity will scroll here as you log…</span>
-              : <div className="marquee" style={{ display: 'flex', whiteSpace: 'nowrap' }}>
-                  {[...tickerLoop, ...tickerLoop].map((it, i) => (
-                    <span key={i} style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6, padding: '0 18px' }}>
+              : <div className="marquee">
+                  {tickerItems.map((it, i) => (
+                    <span key={i} style={{ padding: '0 18px' }}>
                       <span className="mono" style={{ fontSize: 18, fontWeight: 800, color: C.ink }}>{it[1]}</span>
-                      <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.dim }}>{it[0]}</span>
+                      <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: C.dim, marginLeft: 6 }}>{it[0]}</span>
                     </span>
                   ))}
                 </div>}
@@ -369,21 +368,33 @@ function CommandPalette({ onClose, onPick }) {
 const GroupLabel = ({ children, color = C.dim }) => <div style={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.12em', color, margin: '10px 6px 4px' }}>{children}</div>;
 
 // ── Wrap up ──
+const COUNT_ITEMS = ['CRM updated', 'Portfolio updated']; // these ask for a number once ticked
 function WrapUp({ onClose, onSubmit, profile }) {
-  const [done, setDone] = useState({}); const [note, setNote] = useState('');
+  const [done, setDone] = useState({}); const [nums, setNums] = useState({}); const [note, setNote] = useState('');
+  const submit = () => {
+    const checklist = { ...done };
+    COUNT_ITEMS.forEach(it => { if (done[it] && nums[it]) checklist[it + ' — count'] = nums[it]; });
+    onSubmit(checklist, note);
+  };
   return (
     <Modal title="Wrap up & submit" subtitle="Submitting checks you out and locks the report" onClose={onClose} width={440}>
       <Label>Tick what's done</Label>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-        {CHECKLIST.map(item => { const on = done[item]; return (
-          <button key={item} onClick={() => setDone(d => ({ ...d, [item]: !d[item] }))} className="glass-soft rounded-xl" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: C.ink, textAlign: 'left', border: 'none' }}>
-            <span style={{ width: 19, height: 19, borderRadius: 7, border: `1.5px solid ${on ? C.mint : C.violetLine}`, background: on ? C.mint : 'transparent', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{on && <Check size={12} />}</span>{item}</button>); })}
+        {CHECKLIST.map(item => { const on = done[item]; const needsNum = COUNT_ITEMS.includes(item); return (
+          <div key={item} className="glass-soft rounded-xl" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px' }}>
+            <button onClick={() => setDone(d => ({ ...d, [item]: !d[item] }))} style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, padding: '2px 0', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: C.ink, textAlign: 'left' }}>
+              <span style={{ width: 19, height: 19, flex: '0 0 auto', borderRadius: 7, border: `1.5px solid ${on ? C.mint : C.violetLine}`, background: on ? C.mint : 'transparent', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{on && <Check size={12} />}</span>{item}</button>
+            {needsNum && on && (
+              <input type="number" min="0" value={nums[item] || ''} onChange={e => setNums(n => ({ ...n, [item]: e.target.value }))} placeholder="No." autoFocus
+                style={{ width: 76, flex: '0 0 auto', padding: '7px 9px', borderRadius: 9, border: `1px solid ${C.surfaceLine}`, background: 'rgba(255,255,255,.75)', fontSize: 13, fontWeight: 700, color: C.ink, textAlign: 'center', outline: 'none' }} />
+            )}
+          </div>); })}
       </div>
       <Label>Note for the next CSR on {profile}</Label>
       <textarea value={note} onChange={e => setNote(e.target.value)} rows={3} placeholder="Anything they should know…" className="gi" style={{ resize: 'vertical' }} />
       <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
         <Btn variant="ghost" onClick={onClose} style={{ flex: 1 }}>Back</Btn>
-        <Btn variant="ok" onClick={() => onSubmit(done, note)} className="lift" style={{ flex: 1 }}>Submit &amp; check out</Btn>
+        <Btn variant="ok" onClick={submit} className="lift" style={{ flex: 1 }}>Submit &amp; check out</Btn>
       </div>
     </Modal>
   );

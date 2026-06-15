@@ -444,6 +444,7 @@ function RosterManager() {
   const save = async p => { const ex = roster.some(r => r.id === p.id); await persist(ex ? roster.map(r => r.id === p.id ? p : r) : [...roster, p]); setEdit(null); };
   const csrs = roster.filter(r => !isDesigner(r));
   const designers = roster.filter(r => isDesigner(r));
+  const designerRoles = [...new Set([...designers.map(d => d.role).filter(Boolean), 'Branding', 'Logo', 'Animation', 'PPT Designer', 'Canva Designer'])];
   const editing = edit && roster.some(r => r.id === edit.id);
   const editDesigner = edit && isDesigner(edit);
 
@@ -481,19 +482,18 @@ function RosterManager() {
         <div><h2 className="disp text-lg font-bold" style={{ color: C.ink }}>Design Team <span style={{ fontSize: 13, fontWeight: 600, color: C.dim }}>· {designers.length}</span></h2><p className="mt-1 text-xs" style={{ color: C.muted }}>These fill the “Designer” dropdown when assigning work. Archived designers keep their history.</p></div>
         <Btn onClick={() => setEdit({ id: 'd-' + uid(), name: '', shift: '', profile: '', role: '', active: true })} className="lift"><Plus size={15} strokeWidth={2.6} />Add designer</Btn>
       </div>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
         {designers.length === 0 && <Card className="p-5"><span style={{ color: C.dim, fontSize: 13 }}>No designers yet — add your design team.</span></Card>}
         {designers.map(c => (
           <Card key={c.id} className="lift p-4" style={{ opacity: c.active ? 1 : 0.55 }}>
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3" style={{ minWidth: 0 }}>
-                <div style={{ width: 38, height: 38, borderRadius: 11, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 13, color: '#fff', background: `linear-gradient(150deg, ${C.glow}, ${C.violet})` }}>{initials(c.name)}</div>
-                <div style={{ minWidth: 0 }}>
-                  <div className="truncate" style={{ fontWeight: 800, color: C.ink }}>{c.name || 'Unnamed'}</div>
-                  <div className="mt-1 flex items-center gap-1.5 flex-wrap">{c.role && <Pill color={C.violet}>{c.role}</Pill>}{!c.active && <Pill color={C.coral}>Archived</Pill>}</div>
-                </div>
-              </div>
+            <div className="mb-3 flex items-start justify-between">
+              <div><div style={{ fontWeight: 800, color: C.ink }}>{c.name || 'Unnamed'}</div>
+                <div className="mt-1 flex items-center gap-1.5 flex-wrap"><Pill color={C.violet}>Designer</Pill>{!c.active && <Pill color={C.coral}>Archived</Pill>}</div></div>
               <Actions c={c} />
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase tracking-wider" style={{ color: C.dim }}>Role</span>
+              <Select value={c.role} color={C.violet} onChange={e => persist(roster.map(r => r.id === c.id ? { ...r, role: e.target.value } : r))}>{designerRoles.map(rr => <option key={rr} value={rr}>{rr}</option>)}</Select>
             </div>
           </Card>
         ))}
