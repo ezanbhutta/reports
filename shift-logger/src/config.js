@@ -135,7 +135,7 @@ export const ACTIONS = [
               { name: 'project', label: 'Project name', type: 'text' },
               { name: 'attempt', label: 'Which follow-up?', type: 'segment', options: ['1st', '2nd', '3rd', '4th+'] } ] },
   { key: 'followup_designer', label: 'Follow-up with designer', group: 'followups',
-    fields: [ { name: 'project', label: 'Project / client', type: 'text', required: true },
+    fields: [ { name: 'project', label: 'Project name', type: 'text', required: true },
               { name: 'designer', label: 'Designer', type: 'designer', required: true },
               { name: 'note', label: 'Note', type: 'text' } ] },
   { key: 'upsell', label: 'Upsell', group: 'followups',
