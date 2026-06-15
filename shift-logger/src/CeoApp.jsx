@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock, Download, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
-import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, CEO_PASSWORD, GROUPS } from './config.js';
+import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, CEO_PASSWORD, GROUPS, isDesigner } from './config.js';
 import { db, todayPKT, timePKT, addDays, BACKEND } from './store.js';
 import { Btn, Card, StatCard, Pill, Select, Chip, SectionHeader, Modal, Label, actionSummary, Logo, Sparkline } from './ui.jsx';
 
@@ -254,7 +254,7 @@ function Console() {
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 pr-3" style={{ borderRight: '1px solid rgba(124,41,255,.14)' }}><Filter size={14} style={{ color: C.dim }} /><span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.dim }}>Filters</span></div>
           <DateRangePicker value={range} onChange={setRange} />
-          <Select value={fCSR} onChange={e => setFCSR(e.target.value)}><option value="all">All CSRs</option>{roster.filter(r => r.active).map(r => <option key={r.id} value={r.name}>{r.name}</option>)}</Select>
+          <Select value={fCSR} onChange={e => setFCSR(e.target.value)}><option value="all">All CSRs</option>{roster.filter(r => r.active && !isDesigner(r)).map(r => <option key={r.id} value={r.name}>{r.name}</option>)}</Select>
           <Select value={fShift} onChange={e => setFShift(e.target.value)}><option value="all">All shifts</option>{SHIFTS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}</Select>
           <Select value={fProfile} onChange={e => setFProfile(e.target.value)}><option value="all">All profiles</option>{PROFILES.map(p => <option key={p} value={p}>{p}</option>)}</Select>
           <div className="ml-auto flex items-center gap-3">
@@ -442,23 +442,32 @@ function RosterManager() {
   useEffect(() => { load(); }, [load]);
   const persist = async n => { setRoster(n); await db.saveRoster(n); };
   const save = async p => { const ex = roster.some(r => r.id === p.id); await persist(ex ? roster.map(r => r.id === p.id ? p : r) : [...roster, p]); setEdit(null); };
+  const csrs = roster.filter(r => !isDesigner(r));
+  const designers = roster.filter(r => isDesigner(r));
+  const editing = edit && roster.some(r => r.id === edit.id);
+  const editDesigner = edit && isDesigner(edit);
+
+  const Actions = ({ c }) => (
+    <div className="flex gap-0.5">
+      <button onClick={() => setEdit(c)} className="rounded-lg p-1.5" style={{ color: C.dim, background: 'transparent', border: 'none', cursor: 'pointer' }}><Pencil size={14} /></button>
+      <button onClick={() => persist(roster.map(r => r.id === c.id ? { ...r, active: !r.active } : r))} className="rounded-lg p-1.5" style={{ color: c.active ? C.dim : C.mint, background: 'transparent', border: 'none', cursor: 'pointer' }}>{c.active ? <Archive size={14} /> : <ArchiveRestore size={14} />}</button>
+      <button onClick={() => persist(roster.filter(r => r.id !== c.id))} className="rounded-lg p-1.5" style={{ color: C.coral, background: 'transparent', border: 'none', cursor: 'pointer' }}><Trash2 size={14} /></button>
+    </div>
+  );
+
   return (
     <>
       <div className="mb-4 flex items-center justify-between">
-        <div><h2 className="text-lg font-bold" style={{ color: C.ink }}>Team roster</h2><p className="mt-1 text-xs" style={{ color: C.muted }}>These names fill the CSR “Your name” list. Archived people keep their history.</p></div>
+        <div><h2 className="disp text-lg font-bold" style={{ color: C.ink }}>CSRs &amp; Managers</h2><p className="mt-1 text-xs" style={{ color: C.muted }}>These names fill the CSR “Your name” list. Archived people keep their history.</p></div>
         <Btn onClick={() => setEdit({ id: uid(), name: '', shift: 'Night', profile: '', role: 'CSR', active: true })} className="lift"><Plus size={13} style={{ verticalAlign: -2 }} /> Add person</Btn>
       </div>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-        {roster.map(c => (
+        {csrs.map(c => (
           <Card key={c.id} className="lift p-4" style={{ opacity: c.active ? 1 : 0.55 }}>
             <div className="mb-3 flex items-start justify-between">
               <div><div style={{ fontWeight: 800, color: C.ink }}>{c.name || 'Unnamed'}</div>
                 <div className="mt-1 flex items-center gap-1.5 flex-wrap"><Pill color={c.role === 'Manager' ? C.amber : C.cyan}>{c.role}</Pill>{c.profile && <Pill color={C.violet}>{c.profile}</Pill>}{!c.active && <Pill color={C.coral}>Archived</Pill>}</div></div>
-              <div className="flex gap-0.5">
-                <button onClick={() => setEdit(c)} className="rounded-lg p-1.5" style={{ color: C.dim, background: 'transparent', border: 'none', cursor: 'pointer' }}><Pencil size={14} /></button>
-                <button onClick={() => persist(roster.map(r => r.id === c.id ? { ...r, active: !r.active } : r))} className="rounded-lg p-1.5" style={{ color: c.active ? C.dim : C.mint, background: 'transparent', border: 'none', cursor: 'pointer' }}>{c.active ? <Archive size={14} /> : <ArchiveRestore size={14} />}</button>
-                <button onClick={() => persist(roster.filter(r => r.id !== c.id))} className="rounded-lg p-1.5" style={{ color: C.coral, background: 'transparent', border: 'none', cursor: 'pointer' }}><Trash2 size={14} /></button>
-              </div>
+              <Actions c={c} />
             </div>
             <div className="flex items-center justify-between">
               <span className="text-[10px] uppercase tracking-wider" style={{ color: C.dim }}>Shift</span>
@@ -467,13 +476,40 @@ function RosterManager() {
           </Card>
         ))}
       </div>
-      {edit && <Modal title={roster.some(r => r.id === edit.id) ? 'Edit person' : 'Add person'} onClose={() => setEdit(null)}>
+
+      <div className="mb-4 mt-8 flex items-center justify-between">
+        <div><h2 className="disp text-lg font-bold" style={{ color: C.ink }}>Design Team</h2><p className="mt-1 text-xs" style={{ color: C.muted }}>These fill the “Designer” dropdown when assigning work. Archived designers keep their history.</p></div>
+        <Btn onClick={() => setEdit({ id: 'd-' + uid(), name: '', shift: '', profile: '', role: '', active: true })} className="lift"><Plus size={13} style={{ verticalAlign: -2 }} /> Add designer</Btn>
+      </div>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {designers.length === 0 && <Card className="p-5"><span style={{ color: C.dim, fontSize: 13 }}>No designers yet — add your design team.</span></Card>}
+        {designers.map(c => (
+          <Card key={c.id} className="lift p-4" style={{ opacity: c.active ? 1 : 0.55 }}>
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3" style={{ minWidth: 0 }}>
+                <div style={{ width: 38, height: 38, borderRadius: 11, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 13, color: '#fff', background: `linear-gradient(150deg, ${C.glow}, ${C.violet})` }}>{initials(c.name)}</div>
+                <div style={{ minWidth: 0 }}>
+                  <div className="truncate" style={{ fontWeight: 800, color: C.ink }}>{c.name || 'Unnamed'}</div>
+                  <div className="mt-1 flex items-center gap-1.5 flex-wrap">{c.role && <Pill color={C.violet}>{c.role}</Pill>}{!c.active && <Pill color={C.coral}>Archived</Pill>}</div>
+                </div>
+              </div>
+              <Actions c={c} />
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      {edit && <Modal title={(editing ? 'Edit ' : 'Add ') + (editDesigner ? 'designer' : 'person')} onClose={() => setEdit(null)}>
         <Label>Name</Label><input value={edit.name} onChange={e => setEdit({ ...edit, name: e.target.value })} placeholder="Full name" className="gi" />
-        <Label>Shift</Label><select value={edit.shift} onChange={e => setEdit({ ...edit, shift: e.target.value })} className="gi">{SHIFTS.map(s => <option key={s.key} value={s.key}>{s.label} ({s.time})</option>)}</select>
-        <Label>Profile</Label><select value={edit.profile} onChange={e => setEdit({ ...edit, profile: e.target.value })} className="gi"><option value="">No profile</option>{PROFILES.map(p => <option key={p} value={p}>{p}</option>)}</select>
-        <Label>Role</Label>
-        <div style={{ display: 'flex', gap: 6 }}>{['CSR', 'Manager'].map(role => { const on = edit.role === role; return <button key={role} onClick={() => setEdit({ ...edit, role })} className="rounded-xl" style={{ flex: 1, padding: 9, border: on ? 'none' : '1px solid rgba(124,41,255,.18)', background: on ? C.violet : 'rgba(255,255,255,.5)', color: on ? '#fff' : C.muted, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>{role}</button>; })}</div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}><Btn variant="ghost" onClick={() => setEdit(null)} style={{ flex: 1 }}>Cancel</Btn><Btn variant="ok" onClick={() => edit.name.trim() && save(edit)} className="lift" style={{ flex: 1 }}>Save</Btn></div>
+        {editDesigner ? (
+          <><Label>Role / specialty</Label><input value={edit.role} onChange={e => setEdit({ ...edit, role: e.target.value })} placeholder="e.g. Logo, Branding, Animation" className="gi" /></>
+        ) : (<>
+          <Label>Shift</Label><select value={edit.shift} onChange={e => setEdit({ ...edit, shift: e.target.value })} className="gi">{SHIFTS.map(s => <option key={s.key} value={s.key}>{s.label} ({s.time})</option>)}</select>
+          <Label>Profile</Label><select value={edit.profile} onChange={e => setEdit({ ...edit, profile: e.target.value })} className="gi"><option value="">No profile</option>{PROFILES.map(p => <option key={p} value={p}>{p}</option>)}</select>
+          <Label>Role</Label>
+          <div style={{ display: 'flex', gap: 6 }}>{['CSR', 'Manager'].map(role => { const on = edit.role === role; return <button key={role} onClick={() => setEdit({ ...edit, role })} className="rounded-xl" style={{ flex: 1, padding: 9, border: on ? 'none' : `1px solid ${C.surfaceLine}`, background: on ? C.violet : C.surface, color: on ? '#fff' : C.muted, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>{role}</button>; })}</div>
+        </>)}
+        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}><Btn variant="ghost" onClick={() => setEdit(null)} style={{ flex: 1 }}>Cancel</Btn><Btn variant="ok" onClick={() => edit.name.trim() && (!editDesigner || edit.role.trim()) && save(edit)} className="lift" style={{ flex: 1 }}>Save</Btn></div>
       </Modal>}
     </>
   );

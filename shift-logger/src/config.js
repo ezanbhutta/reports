@@ -45,7 +45,30 @@ export const DEFAULT_ROSTER = [
   { id: 'nadir',   name: 'Nadir',   shift: 'Night', profile: '', role: 'CSR', active: true },
   { id: 'zubair',  name: 'Zubair',  shift: 'Night', profile: '', role: 'Manager', active: true },
   { id: 'ezan',    name: 'Ezan',    shift: 'Night', profile: '', role: 'Manager', active: true },
+  // ── Design Team (role = specialty; anything that isn't CSR/Manager is a designer) ──
+  { id: 'd-owais-nadeem',  name: 'Owais Nadeem',     shift: '', profile: '', role: 'Branding', active: true },
+  { id: 'd-khubaib',       name: 'Khubaib',          shift: '', profile: '', role: 'Branding', active: true },
+  { id: 'd-hamid',         name: 'Hamid',            shift: '', profile: '', role: 'Branding', active: true },
+  { id: 'd-owais-rehan',   name: 'Owais Rehan',      shift: '', profile: '', role: 'Branding', active: true },
+  { id: 'd-afjal-hussain', name: 'Afjal Hussain',    shift: '', profile: '', role: 'Branding', active: true },
+  { id: 'd-amin-ullah',    name: 'Amin Ullah',       shift: '', profile: '', role: 'Logo', active: true },
+  { id: 'd-rejaul-karim',  name: 'Rejaul Karim',     shift: '', profile: '', role: 'Logo', active: true },
+  { id: 'd-abiha-imran',   name: 'Abiha Imran',      shift: '', profile: '', role: 'Logo', active: true },
+  { id: 'd-nimeazad',      name: 'Nimeazad',         shift: '', profile: '', role: 'Logo', active: true },
+  { id: 'd-m-tariq',       name: 'M. Tariq',         shift: '', profile: '', role: 'Logo', active: true },
+  { id: 'd-md-dulal',      name: 'Md Dulal',         shift: '', profile: '', role: 'Logo', active: true },
+  { id: 'd-md-rashadul',   name: 'Md Rashadul Haque', shift: '', profile: '', role: 'Logo', active: true },
+  { id: 'd-md-zahid',      name: 'Md Zahid Hasan',   shift: '', profile: '', role: 'Logo', active: true },
+  { id: 'd-md-rezaul',     name: 'Md Rezaul',        shift: '', profile: '', role: 'Logo', active: true },
+  { id: 'd-atta-razaq',    name: 'Atta Razaq',       shift: '', profile: '', role: 'Logo', active: true },
+  { id: 'd-shaoor-haider', name: 'Shaoor Haider',    shift: '', profile: '', role: 'Logo', active: true },
+  { id: 'd-syed-mubahat',  name: 'Syed Mubahat',     shift: '', profile: '', role: 'Animation', active: true },
+  { id: 'd-aqeel',         name: 'Aqeel',            shift: '', profile: '', role: 'PPT Designer', active: true },
+  { id: 'd-shahmeer',      name: 'Shahmeer',         shift: '', profile: '', role: 'Canva Designer', active: true },
 ];
+
+// A roster entry is a designer when its role isn't a CSR/Manager role.
+export const isDesigner = r => !!r && r.role !== 'CSR' && r.role !== 'Manager';
 
 // What can be shared to a client in chat (multi-select on the "Shared to client" action)
 export const SHARE_ELEMENTS = [
@@ -81,12 +104,7 @@ export const ACTIONS = [
               { name: 'value', label: 'Price', type: 'text' } ] },
   { key: 'order_assigned', label: 'Order given to designer', group: 'orders',
     fields: [ { name: 'client', label: 'Project name', type: 'text', required: true },
-              { name: 'designer', label: 'Designer', type: 'text', required: true },
-              { name: 'due', label: 'Due date', type: 'date' } ] },
-  { key: 'project_assigned', label: 'Project given to designer', group: 'orders',
-    fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
-              { name: 'designer', label: 'Designer', type: 'text', required: true },
-              { name: 'project', label: 'Project', type: 'text', required: true },
+              { name: 'designer', label: 'Designer', type: 'designer', required: true },
               { name: 'due', label: 'Due date', type: 'date' } ] },
   { key: 'order_completed', label: 'Order completed', group: 'orders',
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
@@ -94,7 +112,7 @@ export const ACTIONS = [
 
   { key: 'revision_assigned', label: 'Revision given to designer', group: 'revisions',
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
-              { name: 'designer', label: 'Designer', type: 'text', required: true } ] },
+              { name: 'designer', label: 'Designer', type: 'designer', required: true } ] },
   { key: 'revision_done', label: 'Revision done (by designer)', group: 'revisions',
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
               { name: 'project', label: 'Project', type: 'text' } ] },
@@ -114,7 +132,7 @@ export const ACTIONS = [
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true } ] },
   { key: 'followup_designer', label: 'Follow-up with designer', group: 'followups',
     fields: [ { name: 'project', label: 'Project / client', type: 'text', required: true },
-              { name: 'designer', label: 'Designer', type: 'text', required: true },
+              { name: 'designer', label: 'Designer', type: 'designer', required: true },
               { name: 'note', label: 'Note', type: 'text' } ] },
   { key: 'upsell', label: 'Upsell', group: 'followups',
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
@@ -156,7 +174,7 @@ export const CHECKLIST = [
 // Short labels for KPI tiles / summaries
 export const KPI_LABEL = {
   inquiry: 'Inquiries', lead_followup: 'Lead F/U', new_order: 'New orders',
-  order_assigned: 'Orders assigned', project_assigned: 'Projects assigned', order_completed: 'Completed',
+  order_assigned: 'Orders assigned', order_completed: 'Completed',
   revision_assigned: 'Rev. assigned', revision_done: 'Rev. done', project_delivered: 'Delivered', shared: 'Shared',
   followup_client: 'Follow-ups', followup_designer: 'Designer F/U', upsell: 'Upsells', offer: 'Offers',
   meeting: 'Meetings', frustrated: 'Frustrated', disputed: 'Disputed', extension: 'Extensions', spam: 'Spam',

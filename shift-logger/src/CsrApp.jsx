@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Check, Clock, Sunrise, Sunset, Moon, Zap, ArrowRightLeft, ShieldCheck } from 'lucide-react';
-import { C, SHIFTS, PROFILES, ACTIONS, ACTION_BY_KEY, GROUPS, CHECKLIST, KPI_LABEL } from './config.js';
+import { C, SHIFTS, PROFILES, ACTIONS, ACTION_BY_KEY, GROUPS, CHECKLIST, KPI_LABEL, isDesigner } from './config.js';
 import { db, todayPKT, timePKT } from './store.js';
 import { Btn, Card, Pill, Modal, Label, Field, actionSummary, Logo } from './ui.jsx';
 
@@ -45,6 +45,7 @@ export default function CsrApp() {
   }, [report]);
 
   const counts = useMemo(() => { const m = {}; actions.forEach(a => m[a.type] = (m[a.type] || 0) + 1); return m; }, [actions]);
+  const designerNames = useMemo(() => roster.filter(r => r.active && isDesigner(r)).map(r => r.name).sort((a, b) => a.localeCompare(b)), [roster]);
 
   async function startReport() {
     if (!name || !profile) return;
@@ -78,7 +79,7 @@ export default function CsrApp() {
 
   // ════════════════════════════ LOGIN ════════════════════════════
   if (view === 'login') {
-    const names = roster.filter(r => r.active);
+    const names = roster.filter(r => r.active && !isDesigner(r));
     const nowShift = currentShift();
     return (
       <Shell center night={shift === 'Night'}>
@@ -285,8 +286,9 @@ export default function CsrApp() {
       {picker && <CommandPalette onClose={() => setPicker(false)} onPick={openForm} />}
 
       {form && <Modal title={form.action.label} subtitle={form.editId ? 'Edit entry' : 'New entry'} onClose={() => setForm(null)} width={400}>
-        {form.action.fields.map(f => <Field key={f.name} field={f} value={form.values[f.name]}
-          onChange={v => setForm(m => ({ ...m, values: { ...m.values, [f.name]: v }, error: null }))} />)}
+        {form.action.fields.map(f => { const ff = f.type === 'designer' ? { ...f, type: 'select', options: [...new Set([...designerNames, form.values[f.name]].filter(Boolean))] } : f;
+          return <Field key={f.name} field={ff} value={form.values[f.name]}
+            onChange={v => setForm(m => ({ ...m, values: { ...m.values, [f.name]: v }, error: null }))} />; })}
         {form.error && <div style={{ color: C.coral, fontSize: 12, marginTop: 10 }}>{form.error}</div>}
         <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
           <Btn variant="ghost" onClick={() => setForm(null)} style={{ flex: 1 }}>Cancel</Btn>
