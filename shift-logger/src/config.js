@@ -117,9 +117,6 @@ export const ACTIONS = [
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
               { name: 'project', label: 'Project name', type: 'text' },
               { name: 'designer', label: 'Designer', type: 'designer', required: true } ] },
-  { key: 'revision_done', label: 'Revision done (by designer)', group: 'revisions',
-    fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
-              { name: 'project', label: 'Project', type: 'text' } ] },
 
   // Project delivered = the formal deliverable — initial draft / final files only.
   { key: 'project_delivered', label: 'Project delivered', group: 'deliveries',
@@ -179,7 +176,7 @@ export const CHECKLIST = [
 export const KPI_LABEL = {
   inquiry: 'Inquiries', lead_followup: 'Lead F/U', new_order: 'New orders',
   order_assigned: 'Orders assigned', order_completed: 'Completed',
-  revision_assigned: 'Rev. assigned', revision_done: 'Rev. done', project_delivered: 'Delivered', shared: 'Shared',
+  revision_assigned: 'Rev. assigned', project_delivered: 'Delivered', shared: 'Shared',
   followup_client: 'Follow-ups', followup_designer: 'Designer F/U', upsell: 'Upsells', offer: 'Offers',
   meeting: 'Meetings', frustrated: 'Frustrated', disputed: 'Disputed', extension: 'Extensions', spam: 'Spam',
 };
