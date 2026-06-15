@@ -71,7 +71,8 @@ export const ACTIONS = [
     fields: [ { name: 'client', label: 'Username', type: 'text', required: true },
               { name: 'agenda', label: 'What they want', type: 'text' } ] },
   { key: 'lead_followup', label: 'Lead follow-up', group: 'inquiries',
-    fields: [ { name: 'client', label: 'Name', type: 'text', required: true } ] },
+    fields: [ { name: 'client', label: 'Name', type: 'text', required: true },
+              { name: 'attempt', label: 'Which follow-up?', type: 'segment', options: ['1st', '2nd', '3rd', '4th+'], required: true } ] },
 
   { key: 'new_order', label: 'New order', group: 'orders',
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
