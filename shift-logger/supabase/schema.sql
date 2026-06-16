@@ -79,3 +79,24 @@ create policy "actions insert" on actions for insert with check (true);
 create policy "actions update while report open" on actions for update using (
   exists (select 1 from reports r where r.id = actions.report_id and r.status = 'open')
 );
+
+-- ── Access security log ──
+-- Every wrong-password attempt on the CEO console is recorded here so the CEO
+-- can review intrusion attempts. Only failed attempts store the typed password
+-- (the real one is never written). Anon may insert + read; no update/delete.
+create table if not exists security_log (
+  id         uuid primary key default gen_random_uuid(),
+  event      text not null,                 -- 'failed' | 'success'
+  pw_tried   text default '',               -- the (wrong) password that was typed
+  ua         text default '',               -- browser / device user-agent
+  created_at timestamptz default now()
+);
+create index if not exists security_log_created_idx on security_log (created_at desc);
+
+do $$ begin alter publication supabase_realtime add table security_log; exception when duplicate_object then null; end $$;
+
+alter table security_log enable row level security;
+drop policy if exists "security read"  on security_log;
+drop policy if exists "security write" on security_log;
+create policy "security read"  on security_log for select using (true);
+create policy "security write" on security_log for insert with check (true);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock, Download, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
+import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock, Download, ChevronLeft, ChevronRight, CalendarDays, ShieldAlert, ShieldCheck, Monitor } from 'lucide-react';
 import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, CEO_PASSWORD, GROUPS, isDesigner } from './config.js';
 import { db, todayPKT, timePKT, addDays, BACKEND } from './store.js';
 import { Btn, Card, StatCard, Pill, Select, Chip, SectionHeader, Modal, Label, actionSummary, Logo, TrendChart } from './ui.jsx';
@@ -20,6 +20,14 @@ function ago(iso) {
   const m = Math.floor(s / 60); if (m < 60) return m + 'm ago';
   const h = Math.floor(m / 60); if (h < 24) return h + 'h ago';
   return Math.floor(h / 24) + 'd ago';
+}
+const SEEN_KEY = 'sl_sec_seen';
+// Short, readable device label from a user-agent string.
+function deviceLabel(ua) {
+  if (!ua) return 'Unknown device';
+  const os = /Windows/.test(ua) ? 'Windows' : /iPhone|iPad|iPod/.test(ua) ? 'iOS' : /Android/.test(ua) ? 'Android' : /Mac OS/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : 'Unknown OS';
+  const br = /Edg\//.test(ua) ? 'Edge' : /OPR\/|Opera/.test(ua) ? 'Opera' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'Browser';
+  return `${br} · ${os}`;
 }
 // Full field-by-field detail for an action — mirrors exactly what the CSR typed.
 function actionDetails(action) {
@@ -98,7 +106,11 @@ export default function CeoApp() {
   const [ok, setOk] = useState(() => sessionStorage.getItem(AUTH_KEY) === '1');
   const [pw, setPw] = useState(''); const [err, setErr] = useState(false);
   if (!ok) {
-    const tryOpen = () => { if (pw === CEO_PASSWORD) { sessionStorage.setItem(AUTH_KEY, '1'); setOk(true); } else setErr(true); };
+    const tryOpen = () => {
+      const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+      if (pw === CEO_PASSWORD) { db.logAccess('success', { ua }); sessionStorage.setItem(AUTH_KEY, '1'); setOk(true); }
+      else { db.logAccess('failed', { pw, ua }); setErr(true); }
+    };
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
         <div className="glass-2 rounded-2xl pop" style={{ width: 340, overflow: 'hidden' }}>
@@ -120,9 +132,22 @@ export default function CeoApp() {
 
 function Authed() {
   const [view, setView] = useState('live');
-  const Tab = ({ id, icon: Icon, label }) => { const on = view === id; return (
+  const [secLog, setSecLog] = useState([]);
+  const [seenAt, setSeenAt] = useState(() => localStorage.getItem(SEEN_KEY) || '');
+  useEffect(() => {
+    const reload = () => db.listAccessLog().then(setSecLog);
+    reload();
+    const onFocus = () => reload();
+    window.addEventListener('focus', onFocus);
+    let t; const off = db.subscribe(() => { clearTimeout(t); t = setTimeout(reload, 300); });
+    return () => { clearTimeout(t); off && off(); window.removeEventListener('focus', onFocus); };
+  }, []);
+  const unseen = secLog.filter(e => e.event === 'failed' && (e.created_at || '') > seenAt).length;
+  const markSeen = useCallback(() => { const now = new Date().toISOString(); localStorage.setItem(SEEN_KEY, now); setSeenAt(now); }, []);
+  const Tab = ({ id, icon: Icon, label, badge }) => { const on = view === id; return (
     <button onClick={() => setView(id)} className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-all"
-      style={on ? { background: C.violet, color: '#fff', boxShadow: '0 6px 16px rgba(114,41,255,.28)' } : { background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }}><Icon size={14} />{label}</button>); };
+      style={on ? { background: C.violet, color: '#fff', boxShadow: '0 6px 16px rgba(114,41,255,.28)' } : { background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }}><Icon size={14} />{label}
+      {badge > 0 && <span className="mono" style={{ marginLeft: 1, minWidth: 16, height: 16, padding: '0 4px', borderRadius: 9, fontSize: 10, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: on ? 'rgba(255,255,255,.25)' : C.coral, color: '#fff' }}>{badge}</span>}</button>); };
   return (
     <div style={{ minHeight: '100vh' }}>
       <div className="glass" style={{ position: 'sticky', top: 0, zIndex: 30, borderRadius: 0, borderLeft: 'none', borderRight: 'none', borderTop: 'none' }}>
@@ -132,11 +157,78 @@ function Authed() {
             <div><div className="disp" style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>CEO Console <span style={{ fontSize: 11, fontWeight: 700, color: C.mint }}>· <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 9, background: C.mint, boxShadow: `0 0 0 3px ${C.mintBg}` }} /> live</span></div>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.18em', textTransform: 'uppercase', color: C.dim }}>HaseebMadeIt · Operations</div></div>
           </div>
-          <div className="flex items-center gap-2"><Tab id="live" icon={BarChart3} label="Live" /><Tab id="roster" icon={Users} label="Roster" /></div>
+          <div className="flex items-center gap-2"><Tab id="live" icon={BarChart3} label="Live" /><Tab id="roster" icon={Users} label="Roster" /><Tab id="security" icon={ShieldAlert} label="Security" badge={unseen} /></div>
         </div>
       </div>
-      <main className="mx-auto max-w-[1500px] px-6 py-6">{view === 'live' ? <Console /> : <RosterManager />}</main>
+      <main className="mx-auto max-w-[1500px] px-6 py-6">
+        {unseen > 0 && view !== 'security' && (
+          <div onClick={() => setView('security')} className="lift" style={{ cursor: 'pointer', marginBottom: 20, padding: '13px 18px', borderRadius: 16, display: 'flex', alignItems: 'center', gap: 12, color: '#fff', background: `linear-gradient(135deg, ${C.coral}, #E11D48)`, boxShadow: '0 12px 30px rgba(225,29,72,.28)' }}>
+            <ShieldAlert size={20} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 800, fontSize: 14 }}>{unseen} failed access attempt{unseen > 1 ? 's' : ''} on the CEO console</div>
+              <div style={{ fontSize: 12, opacity: .9 }}>Someone tried a wrong password since you last checked. Tap to review.</div>
+            </div>
+            <span style={{ fontWeight: 800, fontSize: 13, whiteSpace: 'nowrap' }}>Review →</span>
+          </div>
+        )}
+        {view === 'live' ? <Console /> : view === 'roster' ? <RosterManager /> : <SecurityPanel log={secLog} seenAt={seenAt} onSeen={markSeen} />}
+      </main>
     </div>
+  );
+}
+
+function SecurityPanel({ log, seenAt, onSeen }) {
+  const [hiSince] = useState(seenAt); // snapshot so "new" highlight survives marking-seen
+  useEffect(() => { onSeen(); }, [onSeen]);
+  const failed = log.filter(e => e.event === 'failed');
+  const success = log.filter(e => e.event === 'success');
+  const stamp = iso => `${fmtShort(dayPKT(iso))} · ${timePKT(iso)}`;
+  return (
+    <>
+      <div className="mb-4">
+        <h2 className="disp text-lg font-bold" style={{ color: C.ink }}>Access security</h2>
+        <p className="mt-1 text-xs" style={{ color: C.muted }}>Every wrong-password attempt on the CEO console is recorded here. The real password is never stored — only what an intruder typed.</p>
+      </div>
+
+      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3">
+        <StatCard label="Failed attempts" value={failed.length} sub={failed[0] ? `last ${ago(failed[0].created_at)}` : 'none yet'} accent={failed.length ? C.coral : C.mint} icon={ShieldAlert} />
+        <StatCard label="Successful unlocks" value={success.length} sub={success[0] ? `last ${ago(success[0].created_at)}` : 'none yet'} accent={C.mint} icon={ShieldCheck} />
+        <StatCard label="Distinct devices" value={new Set(log.map(e => deviceLabel(e.ua))).size} sub="seen on this console" accent={C.violet} icon={Monitor} />
+      </div>
+
+      <SectionHeader eyebrow="Watch" title="Failed attempts" color={C.coral} right={`${failed.length}`} />
+      <Card className="p-4 mb-6">
+        {failed.length === 0
+          ? <div style={{ color: C.mint, fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}><ShieldCheck size={15} /> No failed attempts — nobody's tried a wrong password.</div>
+          : <div className="scroll-y" style={{ maxHeight: 460, overflowY: 'auto', paddingRight: 6 }}>
+              {failed.map(e => { const isNew = (e.created_at || '') > hiSince; return (
+                <div key={e.id} className="glass-soft rounded-xl" style={{ padding: '11px 13px', marginBottom: 8, borderLeft: `3px solid ${C.coral}` }}>
+                  <div className="flex items-center justify-between gap-2" style={{ flexWrap: 'wrap' }}>
+                    <div className="flex items-center gap-2" style={{ minWidth: 0 }}>
+                      <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em', color: C.dim }}>Tried</span>
+                      <span className="mono" style={{ fontSize: 13, fontWeight: 800, color: C.coral, background: 'rgba(244,63,94,.10)', padding: '2px 8px', borderRadius: 7, wordBreak: 'break-all' }}>{e.pw_tried || '(blank)'}</span>
+                      {isNew && <Pill color={C.coral}>New</Pill>}
+                    </div>
+                    <span style={{ fontSize: 10.5, color: C.dim, whiteSpace: 'nowrap' }}>{stamp(e.created_at)}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: C.dim, marginTop: 6, display: 'flex', alignItems: 'center', gap: 5 }}><Monitor size={12} /> {deviceLabel(e.ua)} · {ago(e.created_at)}</div>
+                </div>); })}
+            </div>}
+      </Card>
+
+      {success.length > 0 && <>
+        <SectionHeader eyebrow="Log" title="Successful unlocks" right={`${success.length}`} />
+        <Card className="p-4">
+          <div className="scroll-y" style={{ maxHeight: 240, overflowY: 'auto', paddingRight: 6 }}>
+            {success.map(e => (
+              <div key={e.id} className="flex items-center justify-between" style={{ padding: '8px 2px', borderBottom: '1px solid rgba(124,41,255,.06)' }}>
+                <span style={{ fontSize: 12.5, color: C.ink, display: 'flex', alignItems: 'center', gap: 6 }}><ShieldCheck size={13} style={{ color: C.mint }} /> {deviceLabel(e.ua)}</span>
+                <span style={{ fontSize: 11, color: C.dim, whiteSpace: 'nowrap' }}>{stamp(e.created_at)}</span>
+              </div>))}
+          </div>
+        </Card>
+      </>}
+    </>
   );
 }
 

@@ -30,7 +30,7 @@ export function addDays(ymd, n) {
 // localStorage backend
 // ════════════════════════════════════════════════════════════════
 const LS = {
-  reports: 'sl_reports_v1', actions: 'sl_actions_v1', roster: 'sl_roster_v1',
+  reports: 'sl_reports_v1', actions: 'sl_actions_v1', roster: 'sl_roster_v1', security: 'sl_security_v1',
 };
 const read = (k, fallback) => { try { return JSON.parse(localStorage.getItem(k)) ?? fallback; } catch { return fallback; } };
 const write = (k, v) => { localStorage.setItem(k, JSON.stringify(v)); ping(); };
@@ -105,6 +105,14 @@ const localDb = {
     return read(LS.reports, []).sort((a, b) => (b.start_at || '').localeCompare(a.start_at || ''));
   },
   async allActions() { return read(LS.actions, []); },
+  async logAccess(event, detail) {
+    const log = read(LS.security, []);
+    log.push({ id: uid(), event, pw_tried: (detail && detail.pw) || '', ua: (detail && detail.ua) || '', created_at: new Date().toISOString() });
+    write(LS.security, log);
+  },
+  async listAccessLog() {
+    return read(LS.security, []).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+  },
   subscribe(cb) {
     const bc = (() => { try { return new BroadcastChannel('sl'); } catch { return null; } })();
     const onMsg = () => cb();
@@ -206,12 +214,19 @@ const supaDb = {
     const { data } = await c.from('actions').select('*');
     return data || [];
   },
+  async logAccess(event, detail) {
+    try { const c = await client(); await c.from('security_log').insert({ event, pw_tried: (detail && detail.pw) || '', ua: (detail && detail.ua) || '' }); } catch {}
+  },
+  async listAccessLog() {
+    try { const c = await client(); const { data } = await c.from('security_log').select('*').order('created_at', { ascending: false }).limit(200); return data || []; } catch { return []; }
+  },
   subscribe(cb) {
     let ch;
     client().then(c => {
       ch = c.channel('sl-changes')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' }, cb)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'actions' }, cb)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'security_log' }, cb)
         .subscribe();
     });
     return () => { if (ch && sb) sb.removeChannel(ch); };
