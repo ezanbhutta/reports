@@ -9,7 +9,7 @@ html, body, #root { height: 100%; margin: 0; }
   --surface: rgba(255,255,255,.6); --surface-line: rgba(124,41,255,.16); --violet-dim: #5E1FD8;
 }
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
   color: #160A33;
   background:
@@ -20,8 +20,9 @@ body {
   background-attachment: fixed;
 }
 * { box-sizing: border-box; }
-.mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-feature-settings: 'tnum' 1, 'cv01' 1; }
-.disp { font-family: 'Space Grotesk', 'Inter', sans-serif; letter-spacing: -0.02em; }
+/* Numbers stay column-aligned via tabular figures, but use the main font (no coding-mono look). */
+.mono { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-feature-settings: 'tnum' 1; font-variant-numeric: tabular-nums; }
+.disp { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; letter-spacing: -0.02em; }
 input, select, textarea, button { font-family: inherit; }
 ::selection { background: rgba(124,77,255,.22); }
 
