@@ -44,6 +44,31 @@ export const Sparkline = ({ data = [], color = C.violet, w = 84, h = 28 }) => {
   );
 };
 
+// Labeled bar trend — a time axis + highlighted peak so the busiest bucket stands out.
+export const TrendChart = ({ data = [], labels = [], peak = -1, color = '#fff', w = 300, h = 80 }) => {
+  if (!data.length) return <div style={{ width: w, height: h }} />;
+  const max = Math.max(...data, 1);
+  const padB = 16, chartH = h - padB, n = data.length;
+  const slot = w / n, bw = Math.max(2, Math.min(slot - 2, 13));
+  const step = Math.max(1, Math.ceil(n / 5));
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ display: 'block', overflow: 'visible' }}>
+      <line x1="0" y1={chartH} x2={w} y2={chartH} stroke={color} strokeOpacity=".25" strokeWidth="1" />
+      {data.map((v, i) => {
+        const bh = (v / max) * (chartH - 4);
+        const x = i * slot + (slot - bw) / 2, isPeak = i === peak && v > 0;
+        return <rect key={i} x={x} y={chartH - Math.max(bh, v > 0 ? 2 : 0)} width={bw} height={Math.max(bh, v > 0 ? 2 : 0)} rx={Math.min(bw / 2, 3)}
+          fill={color} fillOpacity={isPeak ? 1 : v > 0 ? .5 : .16} />;
+      })}
+      {data.map((v, i) => {
+        if (!labels[i] || !(i % step === 0 || i === peak || i === n - 1)) return null;
+        const isPeak = i === peak && v > 0;
+        return <text key={'l' + i} x={i * slot + slot / 2} y={h - 3} textAnchor="middle" fontSize="8.5" fontWeight={isPeak ? 800 : 600} fill={color} fillOpacity={isPeak ? 1 : .6}>{labels[i]}</text>;
+      })}
+    </svg>
+  );
+};
+
 export const StatCard = ({ label, value, sub, accent = C.violet, icon: Icon, series }) => (
   <div className="glass lift rounded-2xl p-5">
     <div className="mb-3 flex items-center justify-between">

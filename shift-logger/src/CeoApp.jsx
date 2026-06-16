@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock, Download, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, CEO_PASSWORD, GROUPS, isDesigner } from './config.js';
 import { db, todayPKT, timePKT, addDays, BACKEND } from './store.js';
-import { Btn, Card, StatCard, Pill, Select, Chip, SectionHeader, Modal, Label, actionSummary, Logo, Sparkline } from './ui.jsx';
+import { Btn, Card, StatCard, Pill, Select, Chip, SectionHeader, Modal, Label, actionSummary, Logo, TrendChart } from './ui.jsx';
 
 const AUTH_KEY = 'sl_ceo_ok';
 const uid = () => (crypto?.randomUUID ? crypto.randomUUID() : 'r_' + Math.random().toString(36).slice(2));
@@ -67,6 +67,26 @@ function seriesFor(times, win) {
   const b = new Array(days.length).fill(0);
   times.forEach(t => { const dd = dayPKT(t); if (dd in idx) b[idx[dd]]++; });
   return b;
+}
+// Trend with time-axis labels: hourly buckets for a single day, else daily buckets.
+const hourShort = h => { const hh = h % 12 || 12; return hh + (h < 12 ? 'a' : 'p'); };
+const hourFull = h => { const hh = h % 12 || 12; return hh + (h < 12 ? ' AM' : ' PM'); };
+function buildTrend(times, win) {
+  const single = win && win.s === win.e;
+  if (single) {
+    const data = new Array(24).fill(0);
+    (times || []).forEach(t => { data[hourPKT(t)]++; });
+    return { data, labels: data.map((_, h) => hourShort(h)), full: data.map((_, h) => hourFull(h)) };
+  }
+  const start = win ? win.s : ((times || []).map(dayPKT).sort()[0] || todayPKT());
+  const end = win ? win.e : todayPKT();
+  const days = []; let d = start, guard = 0;
+  while (d <= end && guard++ < 200) { days.push(d); d = addDays(d, 1); }
+  const idx = Object.fromEntries(days.map((dd, i) => [dd, i]));
+  const data = new Array(days.length).fill(0);
+  (times || []).forEach(t => { const dd = dayPKT(t); if (dd in idx) data[idx[dd]]++; });
+  const lab = days.map(fmtShort);
+  return { data, labels: lab, full: lab };
 }
 
 export default function CeoApp() {
@@ -200,7 +220,11 @@ function Console() {
   const acts = useMemo(() => { const s = new Set(filtered.map(r => r.id)); return allActions.filter(a => s.has(a.report_id)); }, [filtered, allActions]);
   const totals = useMemo(() => { const m = {}; acts.forEach(a => m[a.type] = (m[a.type] || 0) + 1); return m; }, [acts]);
   const online = filtered.filter(r => r.status === 'open').length;
-  const ranked = useMemo(() => [...filtered].sort((a, b) => (byReport[b.id]?.length || 0) - (byReport[a.id]?.length || 0)), [filtered, byReport]);
+  const ranked = useMemo(() => [...filtered].sort((a, b) => {
+    const ao = a.status === 'open' ? 1 : 0, bo = b.status === 'open' ? 1 : 0;
+    if (ao !== bo) return bo - ao;                                          // live (open) reports first
+    return (byReport[b.id]?.length || 0) - (byReport[a.id]?.length || 0);    // then by activity
+  }), [filtered, byReport]);
   const sortedTypes = Object.keys(totals).sort((a, b) => totals[b] - totals[a]); const maxType = totals[sortedTypes[0]] || 1;
   const label = winLabel(range);
   const flags = acts.filter(a => a.type === 'frustrated' || a.type === 'disputed');
@@ -209,10 +233,12 @@ function Console() {
   const byProfile = useMemo(() => { const m = {}; filtered.forEach(r => { m[r.profile] = (m[r.profile] || 0) + (byReport[r.id]?.length || 0); }); return Object.entries(m).sort((a, b) => b[1] - a[1]); }, [filtered, byReport]);
   // Live feed — newest actions across EVERY shift / profile / CSR (ignores filters on purpose)
   const repMap = useMemo(() => Object.fromEntries(reports.map(r => [r.id, r])), [reports]);
-  const latest = useMemo(() => [...allActions].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 8), [allActions]);
-  // Trend series + per-CSR roll-ups for the hero band, sparklines and team profiles
-  const actsSeries = useMemo(() => seriesFor(acts.map(a => a.created_at), win), [acts, win]);
-  const repsSeries = useMemo(() => seriesFor(filtered.map(r => r.start_at), win), [filtered, win]);
+  const latest = useMemo(() => [...allActions].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 5), [allActions]);
+  const submitted = filtered.filter(r => r.status === 'submitted').length;
+  // Activity trend (with time-axis labels) for the hero band — find the busiest bucket
+  const trend = useMemo(() => buildTrend(acts.map(a => a.created_at), win), [acts, win]);
+  const peak = trend.data.reduce((bi, v, i, arr) => v > arr[bi] ? i : bi, 0);
+  const peakVal = trend.data[peak] || 0;
   const hourly = win && win.s === win.e;
   const team = useMemo(() => {
     const m = {};
@@ -277,35 +303,37 @@ function Console() {
               ))}
             </div>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 10, opacity: .7, fontWeight: 700, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.12em' }}>Activity · {hourly ? 'hourly' : 'daily'}</div>
-            <Sparkline data={actsSeries.length ? actsSeries : [0, 0]} color="#FFFFFF" w={240} h={56} />
+          <div style={{ minWidth: 300 }}>
+            <div className="flex items-center justify-between" style={{ marginBottom: 6, gap: 12 }}>
+              <span style={{ fontSize: 10, opacity: .7, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.12em' }}>Activity · {hourly ? 'by hour' : 'by day'}</span>
+              {peakVal > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, background: 'rgba(255,255,255,.16)', padding: '3px 10px', borderRadius: 99, whiteSpace: 'nowrap' }}>Busiest {trend.full[peak]} · {peakVal}</span>}
+            </div>
+            <TrendChart data={trend.data} labels={trend.labels} peak={peak} color="#FFFFFF" w={320} h={80} />
           </div>
         </div>
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard label="Open now" value={online} sub="reports in progress" accent={C.mint} icon={Activity} />
-        <StatCard label="Reports" value={filtered.length} sub={label.toLowerCase()} accent={C.violet} icon={ClipboardList} series={repsSeries} />
-        <StatCard label="Actions logged" value={acts.length} sub="across reports" accent={C.glow} icon={BarChart3} series={actsSeries} />
+        <StatCard label="Submitted" value={submitted} sub={`reports · ${label.toLowerCase()}`} accent={C.violet} icon={ClipboardList} />
+        <StatCard label="Actions logged" value={acts.length} sub="across reports" accent={C.glow} icon={BarChart3} />
         <StatCard label="Needs attention" value={flags.length + idle.length} sub="flags + idle" accent={flags.length + idle.length ? C.coral : C.mint} icon={AlertTriangle} />
       </div>
 
       <div className="mb-6">
         <SectionHeader eyebrow="Pulse · live" title="Latest activity" color={C.mint}
           right={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 6, height: 6, borderRadius: 9, background: C.mint, boxShadow: `0 0 0 3px ${C.mintBg}` }} /> all shifts &amp; profiles</span>} />
-        <Card className="p-4">
-          {latest.length === 0 ? <div style={{ color: C.dim, fontSize: 13 }}>No activity logged yet.</div> : (
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+        <Card style={{ overflow: 'hidden' }}>
+          {latest.length === 0 ? <div style={{ color: C.dim, fontSize: 13, padding: 16 }}>No activity logged yet.</div> : (
+            <div className="marquee" style={{ padding: '14px 0' }}>
               {latest.map(a => { const r = repMap[a.report_id]; return (
-                <div key={a.id} onClick={() => r && setDrill(r.id)} className="glass-soft rounded-xl lift" style={{ display: 'flex', gap: 10, padding: '9px 12px', alignItems: 'center', cursor: r ? 'pointer' : 'default' }}>
+                <span key={a.id} onClick={() => r && setDrill(r.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '0 22px', borderRight: '1px solid rgba(124,41,255,.08)', cursor: r ? 'pointer' : 'default', verticalAlign: 'middle' }}>
                   <span style={{ width: 8, height: 8, borderRadius: 9, flex: '0 0 auto', background: groupColor(ACTION_BY_KEY[a.type]?.group) }} />
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 700, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ACTION_BY_KEY[a.type]?.label || a.type}{a.client ? <span style={{ color: C.muted, fontWeight: 500 }}> · {a.client}</span> : ''}</div>
-                    <div style={{ fontSize: 11, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r ? <><b style={{ color: C.violetDim, fontWeight: 700 }}>{r.csr_name}</b> · {r.profile} · {r.shift}</> : '—'}</div>
-                  </div>
-                  <span style={{ fontSize: 10.5, color: C.dim, whiteSpace: 'nowrap', flex: '0 0 auto' }}>{ago(a.created_at)}</span>
-                </div>); })}
+                  <span style={{ textAlign: 'left' }}>
+                    <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: C.ink }}>{ACTION_BY_KEY[a.type]?.label || a.type}{a.client ? <span style={{ color: C.muted, fontWeight: 500 }}> · {a.client}</span> : ''}</span>
+                    <span style={{ display: 'block', fontSize: 10.5, color: C.muted }}>{r ? <><b style={{ color: C.violetDim, fontWeight: 700 }}>{r.csr_name}</b> · {r.profile} · {r.shift}</> : '—'} · {ago(a.created_at)}</span>
+                  </span>
+                </span>); })}
             </div>
           )}
         </Card>
@@ -314,7 +342,7 @@ function Console() {
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <SectionHeader eyebrow="Live" title="Reports" right={`${filtered.length} · tap to open`} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className="scroll-y" style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 560, overflowY: 'auto', paddingRight: 6 }}>
             {ranked.length === 0 && <Card className="p-5"><span style={{ color: C.dim, fontSize: 13 }}>No reports for this filter.</span></Card>}
             {ranked.map(r => { const c = cnt(r.id); const n = byReport[r.id]?.length || 0; return (
               <Card key={r.id} className="lift p-4" style={{ cursor: 'pointer' }}>
