@@ -191,7 +191,7 @@ function Console() {
   const [fShift, setFShift] = useState('all'); const [fProfile, setFProfile] = useState('all'); const [fCSR, setFCSR] = useState('all'); const [range, setRange] = useState({ mode: 'today' });
   const [drill, setDrill] = useState(null);
   const load = useCallback(() => { db.listReports().then(setReports); db.allActions().then(setAllActions); }, []);
-  useEffect(() => { load(); db.getRoster().then(setRoster); const off = db.subscribe(load); return off; }, [load]);
+  useEffect(() => { load(); db.getRoster().then(setRoster); let t; const off = db.subscribe(() => { clearTimeout(t); t = setTimeout(load, 250); }); return () => { clearTimeout(t); off && off(); }; }, [load]);
 
   const win = useMemo(() => winFor(range), [range]);
   const filtered = useMemo(() => reports.filter(r => (fShift === 'all' || r.shift === fShift) && (fProfile === 'all' || r.profile === fProfile) && (fCSR === 'all' || r.csr_name === fCSR) && inWin(r.date, win)), [reports, fShift, fProfile, fCSR, win]);

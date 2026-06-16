@@ -186,3 +186,6 @@ const supaDb = {
 };
 
 export const db = BACKEND === 'supabase' ? supaDb : localDb;
+
+// Warm the Supabase client (dynamic import + connection) at startup so the first write is instant.
+if (BACKEND === 'supabase') { client().catch(() => {}); }

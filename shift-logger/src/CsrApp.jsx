@@ -39,7 +39,11 @@ export default function CsrApp() {
 
   useEffect(() => { db.getRoster().then(setRoster); }, []);
   const refresh = useCallback(() => { if (report) db.listActions(report.id).then(setActions); }, [report]);
-  useEffect(() => { refresh(); const off = db.subscribe(refresh); return off; }, [refresh]);
+  useEffect(() => {
+    refresh();
+    let t; const off = db.subscribe(() => { clearTimeout(t); t = setTimeout(refresh, 200); }); // debounce live refetches
+    return () => { clearTimeout(t); off && off(); };
+  }, [refresh]);
   // ⌘K / Ctrl-K opens the activity palette
   useEffect(() => {
     const onKey = e => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); if (report && report.status === 'open') setPicker(true); } };
@@ -52,27 +56,36 @@ export default function CsrApp() {
   async function startReport() {
     if (!name || !profile) return;
     const rep = await db.createReport({ csr_name: name, shift, profile, date: todayPKT() });
-    const note = await db.latestNoteForProfile(profile, rep.id);
-    setReport(rep); setActions([]); setHandoff(note); setView('dashboard');
+    setReport(rep); setActions([]); setHandoff(null); setView('dashboard'); // show the dashboard right away
+    db.latestNoteForProfile(profile, rep.id).then(setHandoff);                // fetch the hand-off note in the background
   }
-  async function ackHandoff() { if (handoff) await db.ackNote(handoff.id, name); setHandoff(null); }
+  function ackHandoff() { const h = handoff; setHandoff(null); if (h) db.ackNote(h.id, name); } // close instantly, ack in background
 
   function openForm(action, prefill, editId) { setPicker(false); setForm({ action, values: prefill || {}, editId }); }
-  async function saveForm() {
+  function saveForm() {
     const { action, values, editId } = form;
     const miss = action.fields.filter(f => f.required && (!f.showIf || f.showIf(values)) && !(Array.isArray(values[f.name]) ? values[f.name].length : values[f.name]));
     if (miss.length) return setForm({ ...form, error: 'Fill: ' + miss.map(m => m.label).join(', ') });
     const client = values.client || '';
     const details = { ...values }; delete details.client;
-    if (editId) await db.updateAction(editId, { client, details });
-    else await db.addAction(report.id, { type: action.key, client, details });
     bumpRecent(action.key); bumpUsage(action.key);
-    setForm(null); refresh();
+    setForm(null); // close the form instantly
+    if (editId) {
+      setActions(prev => prev.map(x => x.id === editId ? { ...x, client, details, updated_at: new Date().toISOString() } : x)); // optimistic
+      Promise.resolve(db.updateAction(editId, { client, details })).catch(refresh);                                            // persist in background
+    } else {
+      const now = new Date().toISOString();
+      const temp = { id: 'tmp_' + Math.random().toString(36).slice(2), report_id: report.id, type: action.key, client, details, created_at: now, updated_at: now };
+      setActions(prev => [temp, ...prev]);                                                                                     // show immediately
+      Promise.resolve(db.addAction(report.id, { type: action.key, client, details }))
+        .then(saved => { if (saved && saved.id) setActions(prev => prev.map(x => x.id === temp.id ? saved : x)); })           // swap in the saved row
+        .catch(refresh);
+    }
   }
   async function submit(checklist, note) {
+    setWrap(false);                               // close the modal instantly
     let rep = null;
     try { rep = await db.submitReport(report.id, { checklist, note_for_next: note }); } catch (e) { /* surfaced below */ }
-    setWrap(false);
     if (!rep) { setOops(true); return; }          // submit didn't persist — keep their work, let them retry
     setReport(null); setActions([]); setProfile(''); setName(''); setOops(false);
     setFlash(true); setView('login');             // back to the logger for the next person
@@ -404,7 +417,7 @@ function WrapUp({ onClose, onSubmit, profile }) {
 function TeamLog({ onBack, night }) {
   const [reports, setReports] = useState([]); const [all, setAll] = useState([]); const [open, setOpen] = useState(null);
   const load = useCallback(() => { db.listReports().then(setReports); db.allActions().then(setAll); }, []);
-  useEffect(() => { load(); const off = db.subscribe(load); return off; }, [load]);
+  useEffect(() => { load(); let t; const off = db.subscribe(() => { clearTimeout(t); t = setTimeout(load, 200); }); return () => { clearTimeout(t); off && off(); }; }, [load]);
   const cf = id => { const m = {}; all.filter(a => a.report_id === id).forEach(a => m[a.type] = (m[a.type] || 0) + 1); return m; };
   return (
     <Shell night={night}>

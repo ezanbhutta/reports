@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import CsrApp from './CsrApp.jsx';
-import CeoApp from './CeoApp.jsx';
 
-// CSR app is the default. The CEO console lives at #ceo (a separate, unlinked
-// route protected by its own password) — CSRs never see a link to it.
+// CSR app is the default and ships in the main bundle. The CEO console lives at
+// #ceo (a separate, unlinked, password-protected route) and is lazy-loaded, so
+// CSRs get the smallest, fastest initial download.
+const CeoApp = lazy(() => import('./CeoApp.jsx'));
+
 export default function App() {
   const [hash, setHash] = useState(window.location.hash);
   useEffect(() => {
@@ -11,5 +13,6 @@ export default function App() {
     window.addEventListener('hashchange', on);
     return () => window.removeEventListener('hashchange', on);
   }, []);
-  return hash.toLowerCase().startsWith('#ceo') ? <CeoApp /> : <CsrApp />;
+  if (hash.toLowerCase().startsWith('#ceo')) return <Suspense fallback={null}><CeoApp /></Suspense>;
+  return <CsrApp />;
 }
