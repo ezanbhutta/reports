@@ -73,6 +73,12 @@ select.gi {
   padding-right: 34px;
 }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+/* thin visible scrollbar for capped lists */
+.scroll-y { scrollbar-width: thin; scrollbar-color: rgba(124,41,255,.30) transparent; }
+.scroll-y::-webkit-scrollbar { width: 8px; }
+.scroll-y::-webkit-scrollbar-thumb { background: rgba(124,41,255,.28); border-radius: 8px; }
+.scroll-y::-webkit-scrollbar-thumb:hover { background: rgba(124,41,255,.45); }
+.scroll-y::-webkit-scrollbar-track { background: transparent; }
 @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
 .pop { animation: pop .18s ease both; }
 /* Single-pass ticker — each item shown once, scrolls right→left then loops */

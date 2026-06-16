@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Check, Clock, Sunrise, Sunset, Moon, Zap, ArrowRightLeft, ShieldCheck } from 'lucide-react';
+import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Check, Clock, Sunrise, Sunset, Moon, Zap, ArrowRightLeft, ShieldCheck, RotateCcw } from 'lucide-react';
 import { C, SHIFTS, PROFILES, ACTIONS, ACTION_BY_KEY, GROUPS, CHECKLIST, KPI_LABEL, isDesigner } from './config.js';
 import { db, todayPKT, timePKT } from './store.js';
 import { Btn, Card, Pill, Modal, Label, Field, actionSummary, Logo } from './ui.jsx';
@@ -10,6 +10,11 @@ const getRecent = () => { try { return JSON.parse(localStorage.getItem('sl_recen
 const bumpRecent = k => { const r = [k, ...getRecent().filter(x => x !== k)].slice(0, 8); localStorage.setItem('sl_recent_actions', JSON.stringify(r)); };
 const getUsage = () => { try { return JSON.parse(localStorage.getItem('sl_action_usage')) || {}; } catch { return {}; } };
 const bumpUsage = k => { const u = getUsage(); u[k] = (u[k] || 0) + 1; localStorage.setItem('sl_action_usage', JSON.stringify(u)); };
+// Active (unsubmitted) report cache — lets a report resume after tab close / reload / offline, until submitted.
+const ACTIVE = 'sl_active_report';
+const saveActive = (report, actions) => { try { localStorage.setItem(ACTIVE, JSON.stringify({ report, actions })); } catch {} };
+const readActive = () => { try { return JSON.parse(localStorage.getItem(ACTIVE)); } catch { return null; } };
+const clearActive = () => localStorage.removeItem(ACTIVE);
 
 // ── PKT time intelligence ──
 const pktHour = () => parseInt(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Karachi', hour: '2-digit', hour12: false }).format(new Date()), 10);
@@ -36,8 +41,30 @@ export default function CsrApp() {
   const [flash, setFlash] = useState(false);   // success banner on the login for the next person
   const [oops, setOops] = useState(false);     // submit failed — keep the report, let them retry
   const [name, setName] = useState(''); const [shift, setShift] = useState(currentShift()); const [profile, setProfile] = useState('');
+  const [resumable, setResumable] = useState(null); // an unsubmitted report for the picked name+profile
 
   useEffect(() => { db.getRoster().then(setRoster); }, []);
+  // Resume an unsubmitted report after reload / tab close / offline (restores from cache instantly, reconciles when online)
+  useEffect(() => {
+    const saved = readActive();
+    if (saved && saved.report && saved.report.status === 'open') {
+      const rep = saved.report;
+      setReport(rep); setActions(saved.actions || []);
+      setName(rep.csr_name); setShift(rep.shift); setProfile(rep.profile);
+      setView('dashboard');
+      db.listActions(rep.id).then(a => { if (Array.isArray(a)) setActions(a); }).catch(() => {});
+      db.getReport(rep.id).then(r => { if (r && r.status !== 'open') clearActive(); }).catch(() => {});
+    }
+  }, []);
+  // Keep the open report cached so nothing is lost
+  useEffect(() => { if (report && report.status === 'open') saveActive(report, actions); }, [report, actions]);
+  // At login, flag if the picked name+profile already has an unsubmitted report
+  useEffect(() => {
+    if (view !== 'login' || !name || !profile) { setResumable(null); return; }
+    let off = false;
+    db.openReportFor(name, profile).then(r => { if (!off) setResumable(r || null); }).catch(() => {});
+    return () => { off = true; };
+  }, [name, profile, view]);
   const refresh = useCallback(() => { if (report) db.listActions(report.id).then(setActions); }, [report]);
   useEffect(() => {
     refresh();
@@ -55,9 +82,11 @@ export default function CsrApp() {
 
   async function startReport() {
     if (!name || !profile) return;
-    const rep = await db.createReport({ csr_name: name, shift, profile, date: todayPKT() });
-    setReport(rep); setActions([]); setHandoff(null); setView('dashboard'); // show the dashboard right away
-    db.latestNoteForProfile(profile, rep.id).then(setHandoff);                // fetch the hand-off note in the background
+    const existing = resumable || await Promise.resolve(db.openReportFor(name, profile)).catch(() => null); // resume instead of duplicating
+    const rep = existing || await db.createReport({ csr_name: name, shift, profile, date: todayPKT() });
+    setReport(rep); setActions([]); setHandoff(null); setView('dashboard');   // show the dashboard right away
+    db.listActions(rep.id).then(a => { if (Array.isArray(a)) setActions(a); }); // load prior entries when resuming
+    db.latestNoteForProfile(profile, rep.id).then(setHandoff);                  // fetch the hand-off note in the background
   }
   function ackHandoff() { const h = handoff; setHandoff(null); if (h) db.ackNote(h.id, name); } // close instantly, ack in background
 
@@ -87,6 +116,7 @@ export default function CsrApp() {
     let rep = null;
     try { rep = await db.submitReport(report.id, { checklist, note_for_next: note }); } catch (e) { /* surfaced below */ }
     if (!rep) { setOops(true); return; }          // submit didn't persist — keep their work, let them retry
+    clearActive();                                // report is submitted — nothing left to resume
     setReport(null); setActions([]); setProfile(''); setName(''); setOops(false);
     setFlash(true); setView('login');             // back to the logger for the next person
   }
@@ -169,7 +199,10 @@ export default function CsrApp() {
                 <Label>Profile</Label>
                 <select value={profile} onChange={e => setProfile(e.target.value)} className="gi" style={{ padding: '13px 34px 13px 13px' }}><option value="">Select profile…</option>{PROFILES.map(p => <option key={p} value={p}>{p}</option>)}</select>
 
-                <Btn onClick={startReport} disabled={!name || !profile} className="lift" style={{ width: '100%', marginTop: 20, padding: 14, fontSize: 14.5 }}>Start my report →</Btn>
+                {resumable && <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 16, padding: '9px 12px', borderRadius: 12, background: C.mintBg, color: C.mint, fontSize: 12, fontWeight: 700 }}>
+                  <RotateCcw size={13} /> Unsubmitted report from {timePKT(resumable.start_at)} — you'll pick up where you left off.
+                </div>}
+                <Btn onClick={startReport} disabled={!name || !profile} className="lift" style={{ width: '100%', marginTop: resumable ? 10 : 20, padding: 14, fontSize: 14.5 }}>{resumable ? 'Resume report →' : 'Start my report →'}</Btn>
 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(124,41,255,.1)', fontSize: 11, color: C.dim }}>
                   <Clock size={11} /> {todayPKT()} · check-in {timePKT()} PKT · auto
@@ -205,7 +238,7 @@ export default function CsrApp() {
         <Brand small />
         <div style={{ display: 'flex', gap: 8 }}>
           <Btn variant="ghost" onClick={() => setView('teamlog')} style={{ padding: '8px 13px', fontSize: 12 }}><ClipboardList size={13} />Past reports</Btn>
-          <Btn variant="ghost" onClick={() => { setReport(null); setView('login'); }} style={{ padding: '8px 13px', fontSize: 12 }}><LogOut size={13} />Switch</Btn>
+          <Btn variant="ghost" onClick={() => { clearActive(); setReport(null); setActions([]); setName(''); setProfile(''); setView('login'); }} style={{ padding: '8px 13px', fontSize: 12 }}><LogOut size={13} />Switch</Btn>
         </div>
       </Header>
 
@@ -272,7 +305,7 @@ export default function CsrApp() {
               <div style={{ fontSize: 12, marginTop: 2 }}>Tap <b style={{ color: C.violetDim }}>Log an activity</b> to add your first one.</div>
             </div>
           )}
-          <div className="no-scrollbar" style={{ maxHeight: 540, overflow: 'auto', paddingRight: 2 }}>
+          <div className="scroll-y" style={{ maxHeight: 320, overflowY: 'auto', paddingRight: 6 }}>
             {tlGroups.map((g, gi) => (
               <div key={gi}>
                 <div className="flex items-center gap-2" style={{ margin: gi ? '14px 0 8px' : '2px 0 8px' }}>

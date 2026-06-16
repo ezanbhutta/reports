@@ -54,6 +54,11 @@ const localDb = {
     reports.push(rep); write(LS.reports, reports);
     return rep;
   },
+  async getReport(id) { return read(LS.reports, []).find(r => r.id === id) || null; },
+  async openReportFor(csr_name, profile) {
+    return read(LS.reports, []).filter(r => r.csr_name === csr_name && r.profile === profile && r.status === 'open')
+      .sort((a, b) => (b.start_at || '').localeCompare(a.start_at || ''))[0] || null;
+  },
   async listActions(reportId) {
     return read(LS.actions, []).filter(a => a.report_id === reportId).sort((a, b) => b.created_at.localeCompare(a.created_at));
   },
@@ -131,6 +136,16 @@ const supaDb = {
     const row = { ...r, start_at: new Date().toISOString(), checklist: {}, note_for_next: '', status: 'open' };
     const { data } = await c.from('reports').insert(row).select().single();
     return data;
+  },
+  async getReport(id) {
+    const c = await client();
+    const { data } = await c.from('reports').select('*').eq('id', id).maybeSingle();
+    return data || null;
+  },
+  async openReportFor(csr_name, profile) {
+    const c = await client();
+    const { data } = await c.from('reports').select('*').eq('csr_name', csr_name).eq('profile', profile).eq('status', 'open').order('start_at', { ascending: false }).limit(1);
+    return (data && data[0]) || null;
   },
   async listActions(reportId) {
     const c = await client();
