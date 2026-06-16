@@ -4,8 +4,7 @@
 
 // Brand theme (HaseebMadeIt violet · light)
 // HaseebMadeIt brand tokens — aligned with the CSR Pulse design system.
-// Neutrals + a couple of accents resolve from CSS variables so the CSR app can
-// flip to a dark "night-shift" theme via a .night class (see index.css).
+// Neutrals resolve from CSS variables defined in index.css (:root).
 export const C = {
   bg: 'var(--bg)', raised: 'var(--raised)', card: 'var(--card)', ink: 'var(--ink)',
   muted: 'var(--muted)', dim: 'var(--dim)', border: 'var(--border)', line: 'var(--line)',

@@ -94,10 +94,10 @@ export default function CsrApp() {
 
   // ════════════════════════════ LOGIN ════════════════════════════
   if (view === 'login') {
-    const names = roster.filter(r => r.active && !isDesigner(r));
+    const names = roster.filter(r => r.active && !isDesigner(r) && r.shift === shift); // CSRs available on the selected shift
     const nowShift = currentShift();
     return (
-      <Shell center night={shift === 'Night'}>
+      <Shell center>
         {flash && (
           <div className="pop" style={{ position: 'fixed', top: 18, left: '50%', transform: 'translateX(-50%)', zIndex: 80, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 99, background: `linear-gradient(180deg, #34D399, ${C.mint})`, color: '#fff', fontWeight: 700, fontSize: 13, boxShadow: '0 12px 28px rgba(16,185,129,.32)' }}>
             <Check size={16} /> Report submitted — ready for the next person
@@ -147,7 +147,6 @@ export default function CsrApp() {
                 </div>
 
                 <h1 className="disp" style={{ fontSize: 25, fontWeight: 700, color: C.ink, margin: 0 }}>Start your report</h1>
-                <p style={{ color: C.muted, fontSize: 13, margin: '6px 0 0' }}>No password — just tell us who's on.</p>
 
                 <Label>Your name</Label>
                 <select value={name} onChange={e => { setName(e.target.value); const r = names.find(x => x.name === e.target.value); if (r?.shift) setShift(r.shift); if (r?.profile) setProfile(r.profile); }}
@@ -159,7 +158,7 @@ export default function CsrApp() {
                 <Label>Shift · Pakistan time</Label>
                 <div className="grid grid-cols-3 gap-2.5">
                   {SHIFTS.map(s => { const on = shift === s.key; const now = s.key === nowShift; const Icon = SHIFT_ICON[s.key]; return (
-                    <button key={s.key} onClick={() => setShift(s.key)} className="rounded-2xl lift" style={{ position: 'relative', padding: '15px 6px', cursor: 'pointer', textAlign: 'center', border: on ? 'none' : `1px solid ${C.surfaceLine}`, background: on ? `linear-gradient(165deg, ${C.glow}, ${C.violet})` : C.surface, color: on ? '#fff' : C.muted, boxShadow: on ? '0 12px 24px rgba(114,41,255,.28)' : 'none' }}>
+                    <button key={s.key} onClick={() => { setShift(s.key); setName(prev => roster.some(r => r.active && !isDesigner(r) && r.shift === s.key && r.name === prev) ? prev : ''); }} className="rounded-2xl lift" style={{ position: 'relative', padding: '15px 6px', cursor: 'pointer', textAlign: 'center', border: on ? 'none' : `1px solid ${C.surfaceLine}`, background: on ? `linear-gradient(165deg, ${C.glow}, ${C.violet})` : C.surface, color: on ? '#fff' : C.muted, boxShadow: on ? '0 12px 24px rgba(114,41,255,.28)' : 'none' }}>
                       {now && <span style={{ position: 'absolute', top: 7, right: 7, fontSize: 7.5, fontWeight: 800, letterSpacing: '.06em', padding: '2px 5px', borderRadius: 6, background: on ? 'rgba(255,255,255,.25)' : C.mintBg, color: on ? '#fff' : C.mint }}>NOW</span>}
                       <Icon size={19} strokeWidth={2.2} style={{ display: 'block', margin: '0 auto 7px' }} />
                       <div style={{ fontWeight: 800, fontSize: 13 }}>{s.label}</div>
@@ -183,7 +182,7 @@ export default function CsrApp() {
       </Shell>
     );
   }
-  if (view === 'teamlog') return <TeamLog night={report ? report.shift === 'Night' : shift === 'Night'} onBack={() => setView(report ? 'dashboard' : 'login')} />;
+  if (view === 'teamlog') return <TeamLog profile={report?.profile} onBack={() => setView(report ? 'dashboard' : 'login')} />;
 
   // ════════════════════════════ DASHBOARD ════════════════════════════
   const locked = report.status !== 'open';
@@ -196,7 +195,7 @@ export default function CsrApp() {
   actions.forEach(a => { const hr = hourLabel(a.created_at); let g = tlGroups[tlGroups.length - 1]; if (!g || g.hr !== hr) { g = { hr, items: [] }; tlGroups.push(g); } g.items.push(a); });
 
   return (
-    <Shell night={report.shift === 'Night'}>
+    <Shell>
       {oops && (
         <div className="pop" onClick={() => setOops(false)} style={{ position: 'fixed', top: 18, left: '50%', transform: 'translateX(-50%)', zIndex: 80, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 99, background: C.coral, color: '#fff', fontWeight: 700, fontSize: 13, boxShadow: '0 12px 28px rgba(239,68,68,.32)', cursor: 'pointer' }}>
           Couldn't submit — your entries are safe. Tap to dismiss &amp; try again.
@@ -330,7 +329,7 @@ function CommandPalette({ onClose, onPick }) {
   useEffect(() => { inputRef.current?.focus(); }, []);
   useEffect(() => { setSel(0); }, [q]);
 
-  const recent = getRecent().filter(k => ACTION_BY_KEY[k]).map(k => ACTION_BY_KEY[k]);
+  const recent = getRecent().filter(k => ACTION_BY_KEY[k]).slice(0, 3).map(k => ACTION_BY_KEY[k]);
   const sections = [];
   if (q) { const ms = ACTIONS.filter(a => a.label.toLowerCase().includes(q.toLowerCase())); if (ms.length) sections.push({ label: 'Results', color: C.dim, items: ms }); }
   else { if (recent.length) sections.push({ label: 'Recent', color: C.violetDim, items: recent }); GROUPS.forEach(g => { const items = ACTIONS.filter(a => a.group === g.key); if (items.length) sections.push({ label: g.label, color: g.color, items }); }); }
@@ -414,18 +413,18 @@ function WrapUp({ onClose, onSubmit, profile }) {
 }
 
 // ── Team log ──
-function TeamLog({ onBack, night }) {
+function TeamLog({ onBack, profile }) {
   const [reports, setReports] = useState([]); const [all, setAll] = useState([]); const [open, setOpen] = useState(null);
-  const load = useCallback(() => { db.listReports().then(setReports); db.allActions().then(setAll); }, []);
+  const load = useCallback(() => { db.listReports().then(rs => setReports(profile ? rs.filter(r => r.profile === profile) : rs)); db.allActions().then(setAll); }, [profile]);
   useEffect(() => { load(); let t; const off = db.subscribe(() => { clearTimeout(t); t = setTimeout(load, 200); }); return () => { clearTimeout(t); off && off(); }; }, [load]);
   const cf = id => { const m = {}; all.filter(a => a.report_id === id).forEach(a => m[a.type] = (m[a.type] || 0) + 1); return m; };
   return (
-    <Shell night={night}>
+    <Shell>
       <Header><div className="flex items-center gap-3"><Brand small /><span style={{ fontWeight: 800, fontSize: 15, color: C.ink }} className="hidden sm:inline">· Past reports</span></div>
         <Btn variant="ghost" onClick={onBack} style={{ padding: '8px 12px', fontSize: 12 }}><ChevronLeft size={13} style={{ verticalAlign: -2 }} /> Back</Btn></Header>
       <div className="mx-auto" style={{ maxWidth: 820, padding: '22px 20px 60px' }}>
-        <h1 style={{ fontSize: 21, fontWeight: 800, color: C.ink, letterSpacing: '-.02em', margin: 0 }}>Past reports</h1>
-        <p style={{ color: C.muted, fontSize: 13, margin: '4px 0 16px' }}>Read-only — anyone can read; nothing changes after submit.</p>
+        <h1 style={{ fontSize: 21, fontWeight: 800, color: C.ink, letterSpacing: '-.02em', margin: 0 }}>Past reports{profile ? ` · ${profile}` : ''}</h1>
+        <p style={{ color: C.muted, fontSize: 13, margin: '4px 0 16px' }}>Read-only — {profile ? `past reports for ${profile}` : 'all profiles'}; nothing changes after submit.</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
           {reports.length === 0 && <Card className="p-5"><span style={{ color: C.dim, fontSize: 13 }}>No reports yet.</span></Card>}
           {reports.map(r => { const c = cf(r.id); const chips = Object.keys(c).slice(0, 5); return (
@@ -458,6 +457,6 @@ function Header({ children }) {
     <div className="mx-auto flex items-center justify-between" style={{ maxWidth: 760, padding: '12px 20px' }}>{children}</div>
   </div>;
 }
-function Shell({ children, center, night }) {
-  return <div className={night ? 'night' : ''} style={{ minHeight: '100vh', display: center ? 'flex' : 'block', alignItems: 'center', justifyContent: 'center', padding: center ? 16 : 0 }}>{children}</div>;
+function Shell({ children, center }) {
+  return <div style={{ minHeight: '100vh', display: center ? 'flex' : 'block', alignItems: 'center', justifyContent: 'center', padding: center ? 16 : 0 }}>{children}</div>;
 }
