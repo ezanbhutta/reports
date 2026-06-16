@@ -333,25 +333,6 @@ export default function CsrApp() {
           </div>
         </div>
 
-        {/* hand-off note for the next shift */}
-        <Card className="p-5" style={{ marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <StickyNote size={16} style={{ color: C.violet }} />
-            <div style={{ fontWeight: 800, fontSize: 15, color: C.ink }}>Note for the next shift</div>
-          </div>
-          <p style={{ fontSize: 11.5, color: C.muted, margin: '4px 0 10px' }}>Saved automatically as you type — pending tasks, client moods, follow-ups.</p>
-          {locked ? (
-            <div className="glass-soft rounded-xl" style={{ padding: '11px 13px', fontSize: 13, color: noteDraft ? C.ink : C.dim, whiteSpace: 'pre-wrap' }}>{noteDraft || 'No note left.'}</div>
-          ) : (<>
-            <textarea value={noteDraft} onChange={e => setNoteDraft(e.target.value)} rows={3} placeholder="Anything the next CSR should know…" className="gi" style={{ resize: 'vertical' }} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: C.dim }}>For which shift?</span>
-              {SHIFTS.filter(s => s.key !== report.shift).map(s => { const on = noteShifts.includes(s.key); return (
-                <button key={s.key} onClick={() => setNoteShifts(p => on ? p.filter(x => x !== s.key) : [...p, s.key])} className="rounded-lg" style={{ padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', border: on ? 'none' : `1px solid ${C.surfaceLine}`, background: on ? C.violet : C.surface, color: on ? '#fff' : C.muted }}>{on ? '✓ ' : ''}{s.label}</button>); })}
-            </div>
-          </>)}
-        </Card>
-
         {/* timeline */}
         <Card className="p-5">
           <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
@@ -385,6 +366,25 @@ export default function CsrApp() {
               </div>
             ))}
           </div>
+        </Card>
+
+        {/* hand-off note for the next shift */}
+        <Card className="p-5" style={{ marginTop: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <StickyNote size={16} style={{ color: C.violet }} />
+            <div style={{ fontWeight: 800, fontSize: 15, color: C.ink }}>Note for the next shift</div>
+          </div>
+          <p style={{ fontSize: 11.5, color: C.muted, margin: '4px 0 10px' }}>Saved automatically as you type — pending tasks, client moods, follow-ups.</p>
+          {locked ? (
+            <div className="glass-soft rounded-xl" style={{ padding: '11px 13px', fontSize: 13, color: noteDraft ? C.ink : C.dim, whiteSpace: 'pre-wrap' }}>{noteDraft || 'No note left.'}</div>
+          ) : (<>
+            <textarea value={noteDraft} onChange={e => setNoteDraft(e.target.value)} rows={3} placeholder="Anything the next CSR should know…" className="gi" style={{ resize: 'vertical' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: C.dim }}>For which shift?</span>
+              {SHIFTS.filter(s => s.key !== report.shift).map(s => { const on = noteShifts.includes(s.key); return (
+                <button key={s.key} onClick={() => setNoteShifts(p => on ? p.filter(x => x !== s.key) : [...p, s.key])} className="rounded-lg" style={{ padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', border: on ? 'none' : `1px solid ${C.surfaceLine}`, background: on ? C.violet : C.surface, color: on ? '#fff' : C.muted }}>{on ? '✓ ' : ''}{s.label}</button>); })}
+            </div>
+          </>)}
         </Card>
 
         {!locked && <Btn variant="ok" onClick={tryWrapUp} className="lift" style={{ width: '100%', marginTop: 14, padding: 13, fontSize: 14, textAlign: 'center' }}>Wrap up &amp; submit my report</Btn>}

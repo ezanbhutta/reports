@@ -49,8 +49,8 @@ export const TrendChart = ({ data = [], labels = [], peak = -1, color = '#fff', 
   if (!data.length) return <div style={{ width: w, height: h }} />;
   const max = Math.max(...data, 1);
   const padB = 16, chartH = h - padB, n = data.length;
-  const slot = w / n, bw = Math.max(2, Math.min(slot - 2, 13));
-  const step = Math.max(1, Math.ceil(n / 5));
+  const slot = w / n, bw = Math.max(2, Math.min(slot - 6, 22));
+  const step = n <= 12 ? 1 : Math.max(1, Math.ceil(n / 8)); // few buckets → label every one
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ display: 'block', overflow: 'visible' }}>
       <line x1="0" y1={chartH} x2={w} y2={chartH} stroke={color} strokeOpacity=".25" strokeWidth="1" />
@@ -69,8 +69,8 @@ export const TrendChart = ({ data = [], labels = [], peak = -1, color = '#fff', 
   );
 };
 
-export const StatCard = ({ label, value, sub, accent = C.violet, icon: Icon, series }) => (
-  <div className="glass lift rounded-2xl p-5">
+export const StatCard = ({ label, value, sub, accent = C.violet, icon: Icon, series, onClick }) => (
+  <div onClick={onClick} className="glass lift rounded-2xl p-5" style={onClick ? { cursor: 'pointer' } : undefined}>
     <div className="mb-3 flex items-center justify-between">
       <span className="text-[10px] font-bold uppercase tracking-[0.15em]" style={{ color: C.dim }}>{label}</span>
       {Icon && <div className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: `${accent}22` }}><Icon size={13} style={{ color: accent }} strokeWidth={2.5} /></div>}
@@ -80,7 +80,7 @@ export const StatCard = ({ label, value, sub, accent = C.violet, icon: Icon, ser
         <div className="mono text-3xl font-bold tracking-tight" style={{ color: C.ink }}>{value}</div>
         {sub && <div className="mt-1 text-xs" style={{ color: C.muted }}>{sub}</div>}
       </div>
-      {series && <Sparkline data={series} color={accent} />}
+      {series ? <Sparkline data={series} color={accent} /> : onClick ? <span aria-hidden style={{ fontSize: 20, lineHeight: 1, color: accent, opacity: .5, fontWeight: 800 }}>›</span> : null}
     </div>
   </div>
 );

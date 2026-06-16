@@ -74,9 +74,14 @@ const hourFull = h => { const hh = h % 12 || 12; return hh + (h < 12 ? ' AM' : '
 function buildTrend(times, win) {
   const single = win && win.s === win.e;
   if (single) {
-    const data = new Array(24).fill(0);
-    (times || []).forEach(t => { data[hourPKT(t)]++; });
-    return { data, labels: data.map((_, h) => hourShort(h)), full: data.map((_, h) => hourFull(h)) };
+    // Rolling 8-hour window: 7 previous hours on the left → current hour on the right (every hour shown).
+    const N = 8;
+    const endH = win.s === todayPKT() ? hourPKT(Date.now()) : 23;
+    const hrs = []; for (let i = N - 1; i >= 0; i--) hrs.push((endH - i + 24) % 24);
+    const slot = Object.fromEntries(hrs.map((h, i) => [h, i]));
+    const data = new Array(N).fill(0);
+    (times || []).forEach(t => { const h = hourPKT(t); if (h in slot) data[slot[h]]++; });
+    return { data, labels: hrs.map(hourShort), full: hrs.map(hourFull) };
   }
   const start = win ? win.s : ((times || []).map(dayPKT).sort()[0] || todayPKT());
   const end = win ? win.e : todayPKT();
@@ -209,7 +214,7 @@ function Calendar({ value, onApply, pos, popRef }) {
 function Console() {
   const [reports, setReports] = useState([]); const [allActions, setAllActions] = useState([]); const [roster, setRoster] = useState([]);
   const [fShift, setFShift] = useState('all'); const [fProfile, setFProfile] = useState('all'); const [fCSR, setFCSR] = useState('all'); const [range, setRange] = useState({ mode: 'today' });
-  const [drill, setDrill] = useState(null);
+  const [drill, setDrill] = useState(null); const [panel, setPanel] = useState(null); const [act, setAct] = useState(null);
   const load = useCallback(() => { db.listReports().then(setReports); db.allActions().then(setAllActions); }, []);
   useEffect(() => { load(); db.getRoster().then(setRoster); let t; const off = db.subscribe(() => { clearTimeout(t); t = setTimeout(load, 250); }); return () => { clearTimeout(t); off && off(); }; }, [load]);
 
@@ -233,7 +238,7 @@ function Console() {
   const byProfile = useMemo(() => { const m = {}; filtered.forEach(r => { m[r.profile] = (m[r.profile] || 0) + (byReport[r.id]?.length || 0); }); return Object.entries(m).sort((a, b) => b[1] - a[1]); }, [filtered, byReport]);
   // Live feed — newest actions across EVERY shift / profile / CSR (ignores filters on purpose)
   const repMap = useMemo(() => Object.fromEntries(reports.map(r => [r.id, r])), [reports]);
-  const latest = useMemo(() => [...allActions].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 5), [allActions]);
+  const latest = useMemo(() => [...allActions].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 6), [allActions]);
   const submitted = filtered.filter(r => r.status === 'submitted').length;
   // Activity trend (with time-axis labels) for the hero band — find the busiest bucket
   const trend = useMemo(() => buildTrend(acts.map(a => a.created_at), win), [acts, win]);
@@ -314,10 +319,10 @@ function Console() {
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard label="Open now" value={online} sub="reports in progress" accent={C.mint} icon={Activity} />
-        <StatCard label="Submitted" value={submitted} sub={`reports · ${label.toLowerCase()}`} accent={C.violet} icon={ClipboardList} />
-        <StatCard label="Actions logged" value={acts.length} sub="across reports" accent={C.glow} icon={BarChart3} />
-        <StatCard label="Needs attention" value={flags.length + idle.length} sub="flags + idle" accent={flags.length + idle.length ? C.coral : C.mint} icon={AlertTriangle} />
+        <StatCard label="Open now" value={online} sub="reports in progress" accent={C.mint} icon={Activity} onClick={() => setPanel('open')} />
+        <StatCard label="Submitted" value={submitted} sub={`reports · ${label.toLowerCase()}`} accent={C.violet} icon={ClipboardList} onClick={() => setPanel('submitted')} />
+        <StatCard label="Actions logged" value={acts.length} sub="across reports" accent={C.glow} icon={BarChart3} onClick={() => setPanel('actions')} />
+        <StatCard label="Needs attention" value={flags.length + idle.length} sub="flags + idle" accent={flags.length + idle.length ? C.coral : C.mint} icon={AlertTriangle} onClick={() => setPanel('attention')} />
       </div>
 
       <div className="mb-6">
@@ -325,13 +330,13 @@ function Console() {
           right={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 6, height: 6, borderRadius: 9, background: C.mint, boxShadow: `0 0 0 3px ${C.mintBg}` }} /> all shifts &amp; profiles</span>} />
         <Card style={{ overflow: 'hidden' }}>
           {latest.length === 0 ? <div style={{ color: C.dim, fontSize: 13, padding: 16 }}>No activity logged yet.</div> : (
-            <div className="marquee" style={{ padding: '14px 0' }}>
-              {latest.map(a => { const r = repMap[a.report_id]; return (
-                <span key={a.id} onClick={() => r && setDrill(r.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '0 22px', borderRight: '1px solid rgba(124,41,255,.08)', cursor: r ? 'pointer' : 'default', verticalAlign: 'middle' }}>
+            <div className="loopx" style={{ padding: '14px 0' }}>
+              {[...latest, ...latest].map((a, i) => { const r = repMap[a.report_id]; return (
+                <span key={i} onClick={() => setAct(a)} style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '0 22px', borderRight: '1px solid rgba(124,41,255,.08)', cursor: 'pointer', verticalAlign: 'middle' }}>
                   <span style={{ width: 8, height: 8, borderRadius: 9, flex: '0 0 auto', background: groupColor(ACTION_BY_KEY[a.type]?.group) }} />
                   <span style={{ textAlign: 'left' }}>
-                    <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: C.ink }}>{ACTION_BY_KEY[a.type]?.label || a.type}{a.client ? <span style={{ color: C.muted, fontWeight: 500 }}> · {a.client}</span> : ''}</span>
-                    <span style={{ display: 'block', fontSize: 10.5, color: C.muted }}>{r ? <><b style={{ color: C.violetDim, fontWeight: 700 }}>{r.csr_name}</b> · {r.profile} · {r.shift}</> : '—'} · {ago(a.created_at)}</span>
+                    <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: C.ink, whiteSpace: 'nowrap' }}>{ACTION_BY_KEY[a.type]?.label || a.type}{a.client ? <span style={{ color: C.muted, fontWeight: 500 }}> · {a.client}</span> : ''}</span>
+                    <span style={{ display: 'block', fontSize: 10.5, color: C.muted, whiteSpace: 'nowrap' }}>{r ? <><b style={{ color: C.violetDim, fontWeight: 700 }}>{r.csr_name}</b> · {r.profile} · {r.shift}</> : '—'} · {ago(a.created_at)}</span>
                   </span>
                 </span>); })}
             </div>
@@ -365,25 +370,34 @@ function Console() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div>
-            <SectionHeader eyebrow="Watch" title="Needs attention" color={C.coral} right={`${flags.length + idle.length}`} />
+            <SectionHeader eyebrow="Watch" title="Needs attention" color={C.coral} right={`${flags.length}`} />
             <Card className="p-4">
-              {flags.length + idle.length === 0 && <div style={{ color: C.mint, fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}><Activity size={14} /> All clear — nothing flagged.</div>}
-              {flags.length > 0 && <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.1em', color: C.coral, marginBottom: 7 }}>Flagged clients</div>}
-              {flags.map(a => { const r = repById(a.report_id); return (
-                <div key={a.id} onClick={() => r && setDrill(r.id)} className="glass-soft rounded-xl" style={{ padding: '10px 12px', marginBottom: 8, borderLeft: `3px solid ${C.coral}`, cursor: r ? 'pointer' : 'default' }}>
-                  <div className="flex items-center gap-2" style={{ flexWrap: 'wrap' }}>
-                    <Pill color={C.coral}>{a.type === 'disputed' ? 'Disputed' : 'Frustrated'}</Pill>
-                    <span style={{ fontWeight: 800, fontSize: 13, color: C.ink }}>{a.client || '—'}</span>
-                  </div>
-                  {actionSummary(a) && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 5, lineHeight: 1.35 }}>{actionSummary(a)}</div>}
-                  {r && <div style={{ fontSize: 10.5, color: C.dim, marginTop: 5 }}>Logged by <b style={{ color: C.violetDim, fontWeight: 700 }}>{r.csr_name}</b> · {r.profile} · {r.shift}</div>}
-                </div>); })}
-              {idle.length > 0 && <div style={{ marginTop: flags.length ? 6 : 0, paddingTop: flags.length ? 10 : 0, borderTop: flags.length ? '1px dashed rgba(124,41,255,.15)' : 'none' }}>
-                <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.1em', color: C.amber, marginBottom: 7 }}>Idle now · nothing logged</div>
-                {idle.map(r => <div key={r.id} onClick={() => setDrill(r.id)} className="flex items-center justify-between" style={{ padding: '6px 0', cursor: 'pointer' }}>
-                  <span style={{ fontSize: 12.5, color: C.ink }}><b style={{ fontWeight: 700 }}>{r.csr_name}</b> <span style={{ color: C.dim, fontWeight: 500 }}>· {r.profile}</span></span>
-                  <Pill color={C.amber}>idle</Pill>
-                </div>)}</div>}
+              {flags.length === 0
+                ? <div style={{ color: C.mint, fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}><Activity size={14} /> All clear — nothing flagged.</div>
+                : <div className="scroll-y" style={{ maxHeight: 300, overflowY: 'auto', paddingRight: 6 }}>
+                    {flags.map(a => { const r = repById(a.report_id); return (
+                      <div key={a.id} onClick={() => setAct(a)} className="glass-soft rounded-xl" style={{ padding: '10px 12px', marginBottom: 8, borderLeft: `3px solid ${C.coral}`, cursor: 'pointer' }}>
+                        <div className="flex items-center gap-2" style={{ flexWrap: 'wrap' }}>
+                          <Pill color={C.coral}>{a.type === 'disputed' ? 'Disputed' : 'Frustrated'}</Pill>
+                          <span style={{ fontWeight: 800, fontSize: 13, color: C.ink }}>{a.client || '—'}</span>
+                        </div>
+                        {actionSummary(a) && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 5, lineHeight: 1.35 }}>{actionSummary(a)}</div>}
+                        {r && <div style={{ fontSize: 10.5, color: C.dim, marginTop: 5 }}>Logged by <b style={{ color: C.violetDim, fontWeight: 700 }}>{r.csr_name}</b> · {r.profile} · {r.shift}</div>}
+                      </div>); })}
+                  </div>}
+            </Card>
+          </div>
+          <div>
+            <SectionHeader eyebrow="Watch" title="Idle now" color={C.amber} right={`${idle.length}`} />
+            <Card className="p-4">
+              {idle.length === 0
+                ? <div style={{ color: C.mint, fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}><Activity size={14} /> Everyone's logging — none idle.</div>
+                : <div className="scroll-y" style={{ maxHeight: 240, overflowY: 'auto', paddingRight: 6 }}>
+                    {idle.map(r => <div key={r.id} onClick={() => setDrill(r.id)} className="flex items-center justify-between" style={{ padding: '8px 2px', cursor: 'pointer', borderBottom: '1px solid rgba(124,41,255,.06)' }}>
+                      <span style={{ fontSize: 12.5, color: C.ink }}><b style={{ fontWeight: 700 }}>{r.csr_name}</b> <span style={{ color: C.dim, fontWeight: 500 }}>· {r.profile} · {r.shift}</span></span>
+                      <Pill color={C.amber}>idle</Pill>
+                    </div>)}
+                  </div>}
             </Card>
           </div>
           <div>
@@ -420,9 +434,8 @@ function Console() {
                     <div style={{ fontSize: 10.5, color: C.dim }}>{t.shifts.join(', ')} · {t.profiles.length} profile{t.profiles.length > 1 ? 's' : ''}</div>
                   </div>
                 </div>
-                <div className="mt-3 flex items-end justify-between">
-                  <div><div className="mono" style={{ fontSize: 22, fontWeight: 800, color: C.ink, lineHeight: 1 }}>{t.actions}</div><div style={{ fontSize: 9.5, color: C.dim, textTransform: 'uppercase', letterSpacing: '.08em', marginTop: 3 }}>actions</div></div>
-                  {t.top && <span style={{ background: 'rgba(124,41,255,.08)', borderRadius: 7, padding: '3px 9px', fontSize: 10.5, fontWeight: 700, color: C.violetDim }}>{KPI_LABEL[t.top] || t.top}</span>}
+                <div className="mt-3">
+                  <div className="mono" style={{ fontSize: 22, fontWeight: 800, color: C.ink, lineHeight: 1 }}>{t.actions}</div><div style={{ fontSize: 9.5, color: C.dim, textTransform: 'uppercase', letterSpacing: '.08em', marginTop: 3 }}>actions</div>
                 </div>
               </div>
             ))}
@@ -430,8 +443,107 @@ function Console() {
         </div>
       )}
 
+      {panel && <StatPanel kind={panel} label={label} reports={filtered} actions={acts} flags={flags} idle={idle} repMap={repMap} byReport={byReport}
+        onOpen={id => { setPanel(null); setDrill(id); }} onOpenAction={a => { setPanel(null); setAct(a); }} onClose={() => setPanel(null)} />}
+      {act && <ActionDetail action={act} report={repMap[act.report_id]} onClose={go => { const rid = act.report_id; setAct(null); if (go === 'report') setDrill(rid); }} />}
       {drill && <DrillDrawer report={repById(drill)} actions={byReport[drill] || []} onClose={() => setDrill(null)} />}
     </>
+  );
+}
+
+// Drill-down list behind each KPI card — open / submitted / actions / needs-attention.
+function StatPanel({ kind, label, reports, actions, flags, idle, repMap, byReport, onOpen, onOpenAction, onClose }) {
+  const meta = {
+    open: { title: 'Open now', sub: 'Reports in progress' },
+    submitted: { title: 'Submitted reports', sub: label },
+    actions: { title: 'Actions logged', sub: `${actions.length} across ${reports.length} ${reports.length === 1 ? 'report' : 'reports'} · ${label}` },
+    attention: { title: 'Needs attention', sub: `${flags.length} flagged · ${idle.length} idle` },
+  }[kind];
+  const empty = t => <div style={{ color: C.dim, fontSize: 13, padding: '22px 4px', textAlign: 'center' }}>{t}</div>;
+  const Row = ({ r }) => (
+    <div onClick={() => onOpen(r.id)} className="glass-soft lift rounded-xl" style={{ padding: '11px 13px', marginBottom: 8, cursor: 'pointer' }}>
+      <div className="flex items-center justify-between gap-2" style={{ flexWrap: 'wrap' }}>
+        <div className="flex items-center gap-2" style={{ minWidth: 0 }}>
+          {r.status === 'open' && <span style={{ width: 8, height: 8, borderRadius: 9, background: C.mint, boxShadow: `0 0 0 3px ${C.mintBg}`, flex: '0 0 auto' }} />}
+          <span style={{ fontWeight: 800, fontSize: 13.5, color: C.ink }}>{r.csr_name}</span>
+          <Pill color={C.violet}>{r.profile}</Pill><Pill color={SHIFT_COLOR[r.shift]}>{r.shift}</Pill>
+        </div>
+        <div className="flex items-center gap-1.5"><span className="mono" style={{ fontSize: 14, fontWeight: 700, color: C.ink }}>{byReport[r.id]?.length || 0}</span><span style={{ fontSize: 9, color: C.dim, textTransform: 'uppercase', letterSpacing: '.06em' }}>actions</span></div>
+      </div>
+      <div style={{ fontSize: 10.5, color: C.dim, marginTop: 5 }}>{r.date} · {timePKT(r.start_at)}{r.finish_at ? '–' + timePKT(r.finish_at) : ''}</div>
+    </div>
+  );
+
+  let body;
+  if (kind === 'open' || kind === 'submitted') {
+    const st = kind === 'open' ? 'open' : 'submitted';
+    const list = reports.filter(r => r.status === st).sort((a, b) => (b.start_at || '').localeCompare(a.start_at || ''));
+    body = list.length ? list.map(r => <Row key={r.id} r={r} />) : empty(kind === 'open' ? 'No open reports right now.' : 'No submitted reports for this filter.');
+  } else if (kind === 'actions') {
+    const list = [...actions].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+    body = list.length ? list.map(a => { const r = repMap[a.report_id]; return (
+      <div key={a.id} onClick={() => onOpenAction(a)} className="glass-soft lift rounded-xl" style={{ padding: '10px 12px', marginBottom: 8, cursor: 'pointer' }}>
+        <div className="flex items-center gap-2" style={{ minWidth: 0 }}>
+          <span style={{ width: 8, height: 8, borderRadius: 9, flex: '0 0 auto', background: groupColor(ACTION_BY_KEY[a.type]?.group) }} />
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: C.ink }}>{ACTION_BY_KEY[a.type]?.label || a.type}</span>
+          {a.client && <span style={{ fontSize: 12, color: C.muted }}>· {a.client}</span>}
+          <span style={{ marginLeft: 'auto', fontSize: 10.5, color: C.dim, whiteSpace: 'nowrap' }}>{ago(a.created_at)}</span>
+        </div>
+        {r && <div style={{ fontSize: 10.5, color: C.dim, marginTop: 4 }}><b style={{ color: C.violetDim, fontWeight: 700 }}>{r.csr_name}</b> · {r.profile} · {r.shift}</div>}
+      </div>); }) : empty('Nothing logged for this filter.');
+  } else {
+    body = (flags.length + idle.length) ? <>
+      {flags.length > 0 && <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.1em', color: C.coral, marginBottom: 7 }}>Flagged clients</div>}
+      {flags.map(a => { const r = repMap[a.report_id]; return (
+        <div key={a.id} onClick={() => onOpenAction(a)} className="glass-soft lift rounded-xl" style={{ padding: '10px 12px', marginBottom: 8, borderLeft: `3px solid ${C.coral}`, cursor: 'pointer' }}>
+          <div className="flex items-center gap-2" style={{ flexWrap: 'wrap' }}>
+            <Pill color={C.coral}>{a.type === 'disputed' ? 'Disputed' : 'Frustrated'}</Pill>
+            <span style={{ fontWeight: 800, fontSize: 13, color: C.ink }}>{a.client || '—'}</span>
+          </div>
+          {actionSummary(a) && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 5 }}>{actionSummary(a)}</div>}
+          {r && <div style={{ fontSize: 10.5, color: C.dim, marginTop: 5 }}>Logged by <b style={{ color: C.violetDim, fontWeight: 700 }}>{r.csr_name}</b> · {r.profile} · {r.shift}</div>}
+        </div>); })}
+      {idle.length > 0 && <div style={{ marginTop: flags.length ? 8 : 0, paddingTop: flags.length ? 10 : 0, borderTop: flags.length ? '1px dashed rgba(124,41,255,.15)' : 'none' }}>
+        <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.1em', color: C.amber, marginBottom: 7 }}>Idle now · nothing logged</div>
+        {idle.map(r => <div key={r.id} onClick={() => onOpen(r.id)} className="flex items-center justify-between" style={{ padding: '8px 2px', cursor: 'pointer', borderBottom: '1px solid rgba(124,41,255,.06)' }}>
+          <span style={{ fontSize: 12.5, color: C.ink }}><b style={{ fontWeight: 700 }}>{r.csr_name}</b> <span style={{ color: C.dim, fontWeight: 500 }}>· {r.profile} · {r.shift}</span></span>
+          <Pill color={C.amber}>idle</Pill>
+        </div>)}
+      </div>}
+    </> : empty('All clear — nothing flagged or idle.');
+  }
+
+  return (
+    <Modal title={meta.title} subtitle={meta.sub} onClose={onClose} width={520}>
+      <div className="scroll-y" style={{ maxHeight: '64vh', overflowY: 'auto', paddingRight: 6 }}>{body}</div>
+    </Modal>
+  );
+}
+
+// Single-action detail — shows ONLY the clicked action (not the whole report's timeline).
+function ActionDetail({ action, report, onClose }) {
+  if (!action) return null;
+  const def = ACTION_BY_KEY[action.type];
+  const det = actionDetails(action);
+  return (
+    <Modal title={def?.label || action.type} subtitle={action.client || undefined} onClose={() => onClose()} width={460}>
+      <div className="flex items-center gap-3" style={{ fontSize: 12, color: C.muted, marginBottom: 14, flexWrap: 'wrap' }}>
+        <span className="flex items-center gap-1"><Clock size={13} /> {timePKT(action.created_at)}</span>
+        {report && <span><b style={{ color: C.violetDim, fontWeight: 700 }}>{report.csr_name}</b> · {report.profile} · {report.shift}</span>}
+      </div>
+      {det.length === 0 ? <div style={{ color: C.dim, fontSize: 13 }}>No extra details were recorded for this action.</div> : (
+        <div style={{ display: 'grid', gap: 8 }}>
+          {det.map(([l, v], i) => (
+            <div key={i} className="glass-soft rounded-xl" style={{ padding: '9px 12px', display: 'flex', gap: 10 }}>
+              <span style={{ color: C.dim, fontWeight: 800, fontSize: 10.5, minWidth: 92, flex: '0 0 auto', textTransform: 'uppercase', letterSpacing: '.05em', paddingTop: 1 }}>{l}</span>
+              <span style={{ color: C.ink, fontSize: 12.5, wordBreak: 'break-word', lineHeight: 1.4 }}>{v}</span>
+            </div>))}
+        </div>
+      )}
+      {report && <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+        <button onClick={() => onClose('report')} className="rounded-lg" style={{ border: '1px solid rgba(124,41,255,.18)', background: 'rgba(124,41,255,.06)', color: C.violetDim, fontWeight: 700, fontSize: 12, padding: '8px 14px', cursor: 'pointer' }}>View full report →</button>
+      </div>}
+    </Modal>
   );
 }
 

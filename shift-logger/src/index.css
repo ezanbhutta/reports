@@ -85,3 +85,7 @@ select.gi {
 @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-100%); } }
 .marquee { display: inline-block; white-space: nowrap; padding-left: 100%; animation: marquee 20s linear infinite; will-change: transform; }
 .marquee:hover { animation-play-state: paused; }
+/* Seamless looping ticker — content is duplicated; scroll exactly one copy (-50%) so it wraps with no gap */
+@keyframes loopx { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.loopx { display: inline-flex; flex-wrap: nowrap; white-space: nowrap; animation: loopx 26s linear infinite; will-change: transform; }
+.loopx:hover { animation-play-state: paused; }
