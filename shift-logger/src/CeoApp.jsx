@@ -368,12 +368,22 @@ function Console() {
             <SectionHeader eyebrow="Watch" title="Needs attention" color={C.coral} right={`${flags.length + idle.length}`} />
             <Card className="p-4">
               {flags.length + idle.length === 0 && <div style={{ color: C.mint, fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}><Activity size={14} /> All clear — nothing flagged.</div>}
+              {flags.length > 0 && <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.1em', color: C.coral, marginBottom: 7 }}>Flagged clients</div>}
               {flags.map(a => { const r = repById(a.report_id); return (
-                <div key={a.id} className="mb-2 flex items-start gap-2.5"><span style={{ width: 7, height: 7, borderRadius: 9, marginTop: 5, background: C.coral, flex: '0 0 auto' }} />
-                  <div style={{ fontSize: 12, color: C.ink }}><b>{ACTION_BY_KEY[a.type]?.label}</b> · {a.client}<div style={{ fontSize: 11, color: C.muted }}>{actionSummary(a)}{r ? ` — ${r.csr_name}/${r.profile}` : ''}</div></div></div>); })}
-              {idle.length > 0 && <div style={{ marginTop: flags.length ? 10 : 0, paddingTop: flags.length ? 10 : 0, borderTop: flags.length ? '1px dashed rgba(124,41,255,.15)' : 'none' }}>
-                <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.1em', color: C.amber, marginBottom: 5 }}>Idle now</div>
-                {idle.map(r => <div key={r.id} style={{ fontSize: 12, color: C.muted, marginBottom: 3 }}><b style={{ color: C.ink }}>{r.csr_name}</b> · {r.profile} — open, 0 logged</div>)}</div>}
+                <div key={a.id} onClick={() => r && setDrill(r.id)} className="glass-soft rounded-xl" style={{ padding: '10px 12px', marginBottom: 8, borderLeft: `3px solid ${C.coral}`, cursor: r ? 'pointer' : 'default' }}>
+                  <div className="flex items-center gap-2" style={{ flexWrap: 'wrap' }}>
+                    <Pill color={C.coral}>{a.type === 'disputed' ? 'Disputed' : 'Frustrated'}</Pill>
+                    <span style={{ fontWeight: 800, fontSize: 13, color: C.ink }}>{a.client || '—'}</span>
+                  </div>
+                  {actionSummary(a) && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 5, lineHeight: 1.35 }}>{actionSummary(a)}</div>}
+                  {r && <div style={{ fontSize: 10.5, color: C.dim, marginTop: 5 }}>Logged by <b style={{ color: C.violetDim, fontWeight: 700 }}>{r.csr_name}</b> · {r.profile} · {r.shift}</div>}
+                </div>); })}
+              {idle.length > 0 && <div style={{ marginTop: flags.length ? 6 : 0, paddingTop: flags.length ? 10 : 0, borderTop: flags.length ? '1px dashed rgba(124,41,255,.15)' : 'none' }}>
+                <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.1em', color: C.amber, marginBottom: 7 }}>Idle now · nothing logged</div>
+                {idle.map(r => <div key={r.id} onClick={() => setDrill(r.id)} className="flex items-center justify-between" style={{ padding: '6px 0', cursor: 'pointer' }}>
+                  <span style={{ fontSize: 12.5, color: C.ink }}><b style={{ fontWeight: 700 }}>{r.csr_name}</b> <span style={{ color: C.dim, fontWeight: 500 }}>· {r.profile}</span></span>
+                  <Pill color={C.amber}>idle</Pill>
+                </div>)}</div>}
             </Card>
           </div>
           <div>
