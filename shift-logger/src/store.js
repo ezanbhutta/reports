@@ -82,9 +82,16 @@ const localDb = {
       finish_at: new Date().toISOString(), status: 'submitted' }; write(LS.reports, reports); }
     return reports[i];
   },
-  async latestNoteForProfile(profile, beforeReportId) {
+  async updateReportNote(reportId, note_for_next, shifts) {
+    const reports = read(LS.reports, []);
+    const i = reports.findIndex(r => r.id === reportId);
+    if (i >= 0 && reports[i].status === 'open') { reports[i] = { ...reports[i], note_for_next: note_for_next || '', checklist: { ...(reports[i].checklist || {}), __shifts: shifts || [] } }; write(LS.reports, reports); }
+    return reports[i];
+  },
+  async latestNoteForProfile(profile, beforeReportId, shift) {
     const reports = read(LS.reports, [])
       .filter(r => r.profile === profile && r.status === 'submitted' && (r.note_for_next || '').trim() && r.id !== beforeReportId)
+      .filter(r => { const t = r.checklist && r.checklist.__shifts; return !t || !t.length || (shift && t.includes(shift)); })
       .sort((a, b) => (b.finish_at || '').localeCompare(a.finish_at || ''));
     return reports[0] || null;
   },
@@ -167,12 +174,23 @@ const supaDb = {
     const { data } = await c.from('reports').update({ checklist, note_for_next, finish_at: new Date().toISOString(), status: 'submitted' }).eq('id', id).select().single();
     return data;
   },
-  async latestNoteForProfile(profile, beforeReportId) {
+  async updateReportNote(reportId, note_for_next, shifts) {
+    const c = await client();
+    const cur = await c.from('reports').select('checklist').eq('id', reportId).maybeSingle();
+    const checklist = { ...((cur.data && cur.data.checklist) || {}), __shifts: shifts || [] };
+    const { data } = await c.from('reports').update({ note_for_next: note_for_next || '', checklist }).eq('id', reportId).eq('status', 'open').select().maybeSingle();
+    return data;
+  },
+  async latestNoteForProfile(profile, beforeReportId, shift) {
     const c = await client();
     const { data } = await c.from('reports').select('*').eq('profile', profile).eq('status', 'submitted')
       .neq('id', beforeReportId || '00000000-0000-0000-0000-000000000000')
-      .not('note_for_next', 'is', null).order('finish_at', { ascending: false }).limit(5);
-    return (data || []).find(r => (r.note_for_next || '').trim()) || null;
+      .not('note_for_next', 'is', null).order('finish_at', { ascending: false }).limit(10);
+    return (data || []).find(r => {
+      if (!(r.note_for_next || '').trim()) return false;
+      const t = r.checklist && r.checklist.__shifts;
+      return !t || !t.length || (shift && t.includes(shift));
+    }) || null;
   },
   async ackNote(id, by) {
     const c = await client();

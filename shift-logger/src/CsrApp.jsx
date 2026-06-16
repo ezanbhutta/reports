@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Check, Clock, Sunrise, Sunset, Moon, Zap, ArrowRightLeft, ShieldCheck, RotateCcw } from 'lucide-react';
+import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Check, Clock, Sunrise, Sunset, Moon, Zap, ArrowRightLeft, ShieldCheck, RotateCcw, StickyNote } from 'lucide-react';
 import { C, SHIFTS, PROFILES, ACTIONS, ACTION_BY_KEY, GROUPS, CHECKLIST, KPI_LABEL, isDesigner } from './config.js';
 import { db, todayPKT, timePKT } from './store.js';
 import { Btn, Card, Pill, Modal, Label, Field, actionSummary, Logo } from './ui.jsx';
@@ -42,6 +42,10 @@ export default function CsrApp() {
   const [oops, setOops] = useState(false);     // submit failed — keep the report, let them retry
   const [name, setName] = useState(''); const [shift, setShift] = useState(currentShift()); const [profile, setProfile] = useState('');
   const [resumable, setResumable] = useState(null); // an unsubmitted report for the picked name+profile
+  const [handoffSeen, setHandoffSeen] = useState(false); // has the incoming note been acknowledged?
+  const [showHandoff, setShowHandoff] = useState(false); // incoming-note modal open
+  const [noteDraft, setNoteDraft] = useState('');        // outgoing note for the next shift
+  const [noteShifts, setNoteShifts] = useState([]);      // which shifts the outgoing note targets
 
   useEffect(() => { db.getRoster().then(setRoster); }, []);
   // Resume an unsubmitted report after reload / tab close / offline (restores from cache instantly, reconciles when online)
@@ -54,10 +58,29 @@ export default function CsrApp() {
       setView('dashboard');
       db.listActions(rep.id).then(a => { if (Array.isArray(a)) setActions(a); }).catch(() => {});
       db.getReport(rep.id).then(r => { if (r && r.status !== 'open') clearActive(); }).catch(() => {});
+      db.latestNoteForProfile(rep.profile, rep.id, rep.shift).then(h => { setHandoff(h); setHandoffSeen(!!(h && h.note_seen_by)); setShowHandoff(!!h && !h.note_seen_by); }).catch(() => {});
     }
   }, []);
   // Keep the open report cached so nothing is lost
   useEffect(() => { if (report && report.status === 'open') saveActive(report, actions); }, [report, actions]);
+  // Outgoing note: seed from the report; default target = the other two shifts
+  useEffect(() => {
+    if (!report) return;
+    setNoteDraft(report.note_for_next || '');
+    const t = report.checklist && report.checklist.__shifts;
+    setNoteShifts(t && t.length ? t : SHIFTS.map(s => s.key).filter(k => k !== report.shift));
+  }, [report?.id]);
+  // Auto-save the outgoing note (and its target shifts) while the report is open
+  useEffect(() => {
+    if (!report || report.status !== 'open') return;
+    const cur = report.checklist?.__shifts || [];
+    if (noteDraft === (report.note_for_next || '') && JSON.stringify(noteShifts) === JSON.stringify(cur)) return;
+    const id = setTimeout(() => {
+      db.updateReportNote(report.id, noteDraft, noteShifts);
+      setReport(r => r ? { ...r, note_for_next: noteDraft, checklist: { ...(r.checklist || {}), __shifts: noteShifts } } : r);
+    }, 600);
+    return () => clearTimeout(id);
+  }, [noteDraft, noteShifts, report]);
   // At login, flag if the picked name+profile already has an unsubmitted report
   useEffect(() => {
     if (view !== 'login' || !name || !profile) { setResumable(null); return; }
@@ -84,11 +107,12 @@ export default function CsrApp() {
     if (!name || !profile) return;
     const existing = resumable || await Promise.resolve(db.openReportFor(name, profile)).catch(() => null); // resume instead of duplicating
     const rep = existing || await db.createReport({ csr_name: name, shift, profile, date: todayPKT() });
-    setReport(rep); setActions([]); setHandoff(null); setView('dashboard');   // show the dashboard right away
+    setReport(rep); setActions([]); setHandoff(null); setHandoffSeen(false); setShowHandoff(false); setView('dashboard');
     db.listActions(rep.id).then(a => { if (Array.isArray(a)) setActions(a); }); // load prior entries when resuming
-    db.latestNoteForProfile(profile, rep.id).then(setHandoff);                  // fetch the hand-off note in the background
+    // incoming note for THIS shift — pop it and require acknowledgement
+    db.latestNoteForProfile(profile, rep.id, rep.shift).then(h => { setHandoff(h); setHandoffSeen(!!(h && h.note_seen_by)); setShowHandoff(!!h && !h.note_seen_by); });
   }
-  function ackHandoff() { const h = handoff; setHandoff(null); if (h) db.ackNote(h.id, name); } // close instantly, ack in background
+  function ackHandoff() { setHandoffSeen(true); setShowHandoff(false); if (handoff) db.ackNote(handoff.id, name); } // mark read; note stays for reference
 
   function openForm(action, prefill, editId) { setPicker(false); setForm({ action, values: prefill || {}, editId }); }
   function saveForm() {
@@ -111,13 +135,18 @@ export default function CsrApp() {
         .catch(refresh);
     }
   }
-  async function submit(checklist, note) {
+  function tryWrapUp() {
+    if (handoff && !handoffSeen) { setShowHandoff(true); return; } // must read the previous note first
+    setWrap(true);
+  }
+  async function submit(checklist) {
     setWrap(false);                               // close the modal instantly
+    const finalChecklist = { ...checklist, __shifts: noteShifts };
     let rep = null;
-    try { rep = await db.submitReport(report.id, { checklist, note_for_next: note }); } catch (e) { /* surfaced below */ }
+    try { rep = await db.submitReport(report.id, { checklist: finalChecklist, note_for_next: noteDraft }); } catch (e) { /* surfaced below */ }
     if (!rep) { setOops(true); return; }          // submit didn't persist — keep their work, let them retry
     clearActive();                                // report is submitted — nothing left to resume
-    setReport(null); setActions([]); setProfile(''); setName(''); setOops(false);
+    setReport(null); setActions([]); setProfile(''); setName(''); setNoteDraft(''); setNoteShifts([]); setOops(false);
     setFlash(true); setView('login');             // back to the logger for the next person
   }
   useEffect(() => { if (!flash) return; const t = setTimeout(() => setFlash(false), 4500); return () => clearTimeout(t); }, [flash]);
@@ -249,6 +278,17 @@ export default function CsrApp() {
           <p style={{ fontSize: 13, color: C.muted, marginTop: 3 }}>Logging for <b style={{ color: C.violetDim }}>{report.profile}</b> · {report.shift} shift · in since {timePKT(report.start_at)} PKT</p>
         </div>
 
+        {handoff && !handoffSeen && (
+          <div onClick={() => setShowHandoff(true)} className="lift" style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 16, padding: '12px 14px', borderRadius: 14, cursor: 'pointer', background: C.amberBg, border: `1px solid ${C.amber}55` }}>
+            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 9, background: C.amber, color: '#fff', flex: '0 0 auto' }}><StickyNote size={16} /></span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 800, fontSize: 13, color: C.ink }}>Unread note from the last shift</div>
+              <div style={{ fontSize: 11.5, color: C.muted }}>From {handoff.csr_name} · tap to read &amp; acknowledge</div>
+            </div>
+            <span style={{ fontSize: 11, fontWeight: 800, color: C.amber, whiteSpace: 'nowrap' }}>READ →</span>
+          </div>
+        )}
+
         {/* primary action */}
         {!locked ? (
           <Card strong className="p-5" style={{ marginBottom: 16 }}>
@@ -293,6 +333,25 @@ export default function CsrApp() {
           </div>
         </div>
 
+        {/* hand-off note for the next shift */}
+        <Card className="p-5" style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <StickyNote size={16} style={{ color: C.violet }} />
+            <div style={{ fontWeight: 800, fontSize: 15, color: C.ink }}>Note for the next shift</div>
+          </div>
+          <p style={{ fontSize: 11.5, color: C.muted, margin: '4px 0 10px' }}>Saved automatically as you type — pending tasks, client moods, follow-ups.</p>
+          {locked ? (
+            <div className="glass-soft rounded-xl" style={{ padding: '11px 13px', fontSize: 13, color: noteDraft ? C.ink : C.dim, whiteSpace: 'pre-wrap' }}>{noteDraft || 'No note left.'}</div>
+          ) : (<>
+            <textarea value={noteDraft} onChange={e => setNoteDraft(e.target.value)} rows={3} placeholder="Anything the next CSR should know…" className="gi" style={{ resize: 'vertical' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: C.dim }}>For which shift?</span>
+              {SHIFTS.filter(s => s.key !== report.shift).map(s => { const on = noteShifts.includes(s.key); return (
+                <button key={s.key} onClick={() => setNoteShifts(p => on ? p.filter(x => x !== s.key) : [...p, s.key])} className="rounded-lg" style={{ padding: '6px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', border: on ? 'none' : `1px solid ${C.surfaceLine}`, background: on ? C.violet : C.surface, color: on ? '#fff' : C.muted }}>{on ? '✓ ' : ''}{s.label}</button>); })}
+            </div>
+          </>)}
+        </Card>
+
         {/* timeline */}
         <Card className="p-5">
           <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
@@ -328,12 +387,13 @@ export default function CsrApp() {
           </div>
         </Card>
 
-        {!locked && <Btn variant="ok" onClick={() => setWrap(true)} className="lift" style={{ width: '100%', marginTop: 14, padding: 13, fontSize: 14, textAlign: 'center' }}>Wrap up &amp; submit my report</Btn>}
+        {!locked && <Btn variant="ok" onClick={tryWrapUp} className="lift" style={{ width: '100%', marginTop: 14, padding: 13, fontSize: 14, textAlign: 'center' }}>Wrap up &amp; submit my report</Btn>}
       </div>
 
-      {handoff && <Modal title="Note from the last shift" subtitle={`for ${report.profile} · left by ${handoff.csr_name}`} onClose={ackHandoff} width={380}>
-        <div className="glass-soft rounded-xl" style={{ padding: 13, fontSize: 13.5, color: C.ink, lineHeight: 1.5 }}>{handoff.note_for_next}</div>
+      {showHandoff && handoff && <Modal title="Note from the last shift" subtitle={`for ${report.profile} · left by ${handoff.csr_name}`} onClose={() => setShowHandoff(false)} width={400}>
+        <div className="glass-soft rounded-xl" style={{ padding: 13, fontSize: 13.5, color: C.ink, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{handoff.note_for_next}</div>
         <Btn variant="ok" onClick={ackHandoff} className="lift" style={{ width: '100%', marginTop: 14 }}>Noted ✓</Btn>
+        <div style={{ fontSize: 11, color: C.dim, textAlign: 'center', marginTop: 8 }}>Closing without “Noted” keeps it flagged unread.</div>
       </Modal>}
 
       {picker && <CommandPalette onClose={() => setPicker(false)} onPick={openForm} />}
@@ -349,7 +409,7 @@ export default function CsrApp() {
         </div>
       </Modal>}
 
-      {wrap && <WrapUp profile={report.profile} onClose={() => setWrap(false)} onSubmit={submit} />}
+      {wrap && <WrapUp note={noteDraft} shifts={noteShifts} onClose={() => setWrap(false)} onSubmit={submit} />}
     </Shell>
   );
 }
@@ -414,12 +474,12 @@ const GroupLabel = ({ children, color = C.dim }) => <div style={{ fontSize: 9.5,
 
 // ── Wrap up ──
 const COUNT_ITEMS = ['CRM updated', 'Portfolio updated']; // these ask for a number once ticked
-function WrapUp({ onClose, onSubmit, profile }) {
-  const [done, setDone] = useState({}); const [nums, setNums] = useState({}); const [note, setNote] = useState('');
+function WrapUp({ onClose, onSubmit, note, shifts }) {
+  const [done, setDone] = useState({}); const [nums, setNums] = useState({});
   const submit = () => {
     const checklist = { ...done };
     COUNT_ITEMS.forEach(it => { if (done[it] && nums[it]) checklist[it + ' — count'] = nums[it]; });
-    onSubmit(checklist, note);
+    onSubmit(checklist);
   };
   return (
     <Modal title="Wrap up & submit" subtitle="Submitting checks you out and locks the report" onClose={onClose} width={440}>
@@ -435,8 +495,9 @@ function WrapUp({ onClose, onSubmit, profile }) {
             )}
           </div>); })}
       </div>
-      <Label>Note for the next CSR on {profile}</Label>
-      <textarea value={note} onChange={e => setNote(e.target.value)} rows={3} placeholder="Anything they should know…" className="gi" style={{ resize: 'vertical' }} />
+      <Label>Note for the next shift</Label>
+      <div className="glass-soft rounded-xl" style={{ padding: '11px 13px', fontSize: 12.5, color: note ? C.ink : C.dim, whiteSpace: 'pre-wrap' }}>{note || 'No note added (write one on the dashboard).'}</div>
+      {note && shifts && shifts.length > 0 && <div style={{ fontSize: 11, color: C.dim, marginTop: 6 }}>Goes to: <b style={{ color: C.violetDim }}>{shifts.join(' · ')}</b></div>}
       <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
         <Btn variant="ghost" onClick={onClose} style={{ flex: 1 }}>Back</Btn>
         <Btn variant="ok" onClick={submit} className="lift" style={{ flex: 1 }}>Submit &amp; check out</Btn>
