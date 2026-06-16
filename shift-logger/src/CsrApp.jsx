@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Check, Clock, Sunrise, Sunset, Moon, Zap, ArrowRightLeft, ShieldCheck, RotateCcw, StickyNote } from 'lucide-react';
+import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Check, Clock, Sunrise, Sunset, Moon, Zap, ArrowRightLeft, ShieldCheck, RotateCcw, StickyNote, X } from 'lucide-react';
 import { C, SHIFTS, PROFILES, ACTIONS, ACTION_BY_KEY, GROUPS, CHECKLIST, KPI_LABEL, isDesigner } from './config.js';
 import { db, todayPKT, timePKT } from './store.js';
 import { Btn, Card, Pill, Modal, Label, Field, actionSummary, Logo } from './ui.jsx';
@@ -444,7 +444,7 @@ function CommandPalette({ onClose, onPick }) {
         <Search size={18} style={{ color: C.violet }} />
         <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)} onKeyDown={onKey} placeholder="Search activities…"
           style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 16, color: C.ink }} />
-        <span style={{ fontSize: 18, color: C.dim, cursor: 'pointer' }} onClick={onClose}>×</span>
+        <span style={{ color: C.dim, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}><X size={18} /></span>
       </div>
       <div ref={listRef} className="no-scrollbar" style={{ maxHeight: '56vh', overflow: 'auto', borderTop: '1px solid rgba(124,41,255,.1)', paddingTop: 6 }}>
         {flat.length === 0 && <div style={{ color: C.dim, fontSize: 13, padding: 14 }}>No match for “{q}”.</div>}

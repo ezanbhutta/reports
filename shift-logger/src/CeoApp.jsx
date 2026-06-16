@@ -258,8 +258,8 @@ function DateRangePicker({ value, onChange }) {
   return (
     <div className="flex items-center gap-1.5 flex-wrap" style={{ position: 'relative' }}>
       {presets.map(([v, l]) => <Chip key={v} active={value.mode === v} onClick={() => { setOpen(false); onChange({ mode: v }); }}>{l}</Chip>)}
-      <button ref={btnRef} onClick={toggle} className="rounded-lg px-3 py-2 text-xs font-semibold transition-all"
-        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap', ...(isCustom || open ? { background: C.violet, color: '#fff', border: '1px solid transparent', boxShadow: '0 4px 12px rgba(114,41,255,.25)' } : { background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }) }}>
+      <button ref={btnRef} onClick={toggle} className="rounded-xl px-3 text-xs font-semibold transition-all"
+        style={{ height: 36, display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap', ...(isCustom || open ? { background: C.violet, color: '#fff', border: '1px solid transparent', boxShadow: '0 4px 12px rgba(114,41,255,.25)' } : { background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }) }}>
         <CalendarDays size={12} />{isCustom ? `${fmtShort(value.start)} – ${fmtShort(value.end || value.start)}` : 'Custom'}
       </button>
       {open && <Calendar popRef={popRef} pos={pos} value={value} onApply={(s, e) => { onChange({ mode: 'custom', start: s, end: e }); setOpen(false); }} />}

@@ -1,4 +1,5 @@
 import React from 'react';
+import { X } from 'lucide-react';
 import { C } from './config.js';
 
 // Official HaseebMadeIt mark (served from /public/favicon.svg). Never substitute another logo.
@@ -90,12 +91,12 @@ export const Pill = ({ children, color = C.violet }) => (
 );
 
 export const Select = ({ value, onChange, children, color }) => (
-  <select value={value} onChange={onChange} className="gi" style={{ padding: '8px 32px 8px 11px', width: 'auto', color: color || C.ink, fontWeight: color ? 700 : 500, fontSize: 12.5 }}>{children}</select>
+  <select value={value} onChange={onChange} className="gi" style={{ height: 36, padding: '0 34px 0 12px', width: 'auto', color: color || C.ink, fontWeight: color ? 700 : 500, fontSize: 12 }}>{children}</select>
 );
 
 export const Chip = ({ active, onClick, children }) => (
-  <button onClick={onClick} className="rounded-lg px-3 py-2 text-xs font-semibold transition-all"
-    style={active ? { background: C.violet, color: '#fff', border: '1px solid transparent', boxShadow: '0 4px 12px rgba(114,41,255,.25)' } : { background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }}>{children}</button>
+  <button onClick={onClick} className="rounded-xl px-3 text-xs font-semibold transition-all"
+    style={{ height: 36, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', ...(active ? { background: C.violet, color: '#fff', border: '1px solid transparent', boxShadow: '0 4px 12px rgba(114,41,255,.25)' } : { background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }) }}>{children}</button>
 );
 
 export const SectionHeader = ({ eyebrow, title, right, color = C.violet }) => (
@@ -117,7 +118,7 @@ export const Modal = ({ title, subtitle, onClose, children, width = 420 }) => (
             <div style={{ fontWeight: 800, fontSize: 16, color: C.ink }}>{title}</div>
             {subtitle && <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>{subtitle}</div>}
           </div>
-          <button onClick={onClose} className="rounded-lg" style={{ border: 'none', background: 'rgba(124,41,255,.08)', width: 28, height: 28, fontSize: 18, color: C.muted, cursor: 'pointer', lineHeight: 1 }}>×</button>
+          <button onClick={onClose} className="rounded-lg" style={{ border: 'none', background: 'rgba(124,41,255,.08)', width: 30, height: 30, color: C.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} /></button>
         </div>
       )}
       <div style={{ padding: 18 }}>{children}</div>
