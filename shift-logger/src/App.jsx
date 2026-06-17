@@ -15,11 +15,8 @@ export default function App() {
     return () => window.removeEventListener('hashchange', on);
   }, []);
   const isCeo = hash.toLowerCase().startsWith('#ceo');
-  // The work-area lock wraps both apps, so it's checked once per page load
-  // regardless of which route renders.
-  return (
-    <GeoGate>
-      {isCeo ? <Suspense fallback={null}><CeoApp /></Suspense> : <CsrApp />}
-    </GeoGate>
-  );
+  // The CEO console is reachable from anywhere; only the CSR (staff) app is
+  // wrapped in the work-area lock.
+  if (isCeo) return <Suspense fallback={null}><CeoApp /></Suspense>;
+  return <GeoGate><CsrApp /></GeoGate>;
 }

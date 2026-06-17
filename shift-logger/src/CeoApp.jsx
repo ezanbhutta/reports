@@ -234,7 +234,7 @@ function GeoLockCard() {
         <div className="flex items-center gap-2.5" style={{ minWidth: 0 }}>
           <div style={{ width: 38, height: 38, borderRadius: 12, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', background: g.enabled ? C.mintBg : 'rgba(124,41,255,.07)', color: g.enabled ? C.mint : C.dim }}><MapPin size={18} /></div>
           <div>
-            <div style={{ fontSize: 13.5, fontWeight: 800, color: C.ink }}>{g.enabled ? 'On — app locked to your area' : 'Off — app works anywhere'}</div>
+            <div style={{ fontSize: 13.5, fontWeight: 800, color: C.ink }}>{g.enabled ? 'On — staff app locked to your area' : 'Off — staff app works anywhere'}</div>
             <div style={{ fontSize: 11.5, color: C.muted }}>{hasCenter ? `Centre set · within ${fmtDist(draft.radiusM)}${draft.label ? ` of ${draft.label}` : ''}` : 'No location set yet'}</div>
           </div>
         </div>
@@ -264,7 +264,7 @@ function GeoLockCard() {
 
       <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 12, background: C.amberBg, color: '#92660C', fontSize: 11.5, display: 'flex', gap: 8, lineHeight: 1.5 }}>
         <AlertTriangle size={15} style={{ flex: '0 0 auto', marginTop: 1 }} />
-        <span>Locking applies to <b>both apps</b>. If you’re ever off-site, use <b>Manager override</b> on the block screen (your manager password) to get back in. This is a deterrent — a VPN or browser dev-tools can still fake location.</span>
+        <span>Locks the <b>CSR (staff) app</b> only — your CEO console stays reachable anywhere. If a staff member is legitimately off-site, <b>Manager override</b> on the block screen (your manager password) lets them in for that session. This is a deterrent — a VPN or browser dev-tools can still fake location.</span>
       </div>
     </Card>
   );
