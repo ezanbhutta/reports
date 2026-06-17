@@ -223,8 +223,13 @@ function GeoLockCard() {
   const save = async () => {
     setBusy(true);
     const v = { ...draft, enabled: draft.enabled && hasCenter };
-    await db.setGeofence(v); setG(v); setDraft(v);
-    setMsg('Saved — enforced on every device.'); setBusy(false);
+    try {
+      await db.setGeofence(v); setG(v); setDraft(v);
+      setMsg('Saved — enforced on every device.');
+    } catch {
+      setMsg("Couldn't save — the 'settings' table isn't set up in Supabase yet (run schema.sql).");
+    }
+    setBusy(false);
   };
 
   const isErr = /denied|Couldn/.test(msg);

@@ -240,7 +240,9 @@ const supaDb = {
     try { const c = await client(); const { data } = await c.from('settings').select('value').eq('key', 'geofence').maybeSingle(); return (data && data.value) || null; } catch { return null; }
   },
   async setGeofence(obj) {
-    try { const c = await client(); await c.from('settings').upsert({ key: 'geofence', value: obj, updated_at: new Date().toISOString() }); } catch {}
+    const c = await client();
+    const { error } = await c.from('settings').upsert({ key: 'geofence', value: obj, updated_at: new Date().toISOString() });
+    if (error) throw error;
     return obj;
   },
   subscribe(cb) {
