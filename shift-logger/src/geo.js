@@ -42,6 +42,7 @@ export const RADIUS_PRESETS = [
   { m: 200, label: '200 m' },
   { m: 500, label: '500 m' },
   { m: 1000, label: '1 km' },
+  { m: 1500, label: '1.5 km' },
   { m: 5000, label: '5 km' },
   { m: 25000, label: 'City (25 km)' },
 ];
