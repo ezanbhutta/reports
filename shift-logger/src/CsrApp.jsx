@@ -5,7 +5,7 @@ import { db, todayPKT, timePKT } from './store.js';
 import { Btn, Card, Pill, Modal, Label, Field, actionSummary, Logo, ConfirmDelete } from './ui.jsx';
 
 const groupColor = k => (GROUPS.find(g => g.key === k) || {}).color || C.violet;
-const QUICK = ['inquiry', 'followup_client', 'shared', 'revision_assigned', 'meeting', 'new_order'];
+const QUICK = ['inquiry', 'client_conversation', 'followup_client', 'shared', 'revision_assigned', 'meeting', 'new_order'];
 const getRecent = () => { try { return JSON.parse(localStorage.getItem('sl_recent_actions')) || []; } catch { return []; } };
 const bumpRecent = k => { const r = [k, ...getRecent().filter(x => x !== k)].slice(0, 8); localStorage.setItem('sl_recent_actions', JSON.stringify(r)); };
 const getUsage = () => { try { return JSON.parse(localStorage.getItem('sl_action_usage')) || {}; } catch { return {}; } };

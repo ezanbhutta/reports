@@ -95,6 +95,10 @@ export const ACTIONS = [
   { key: 'lead_followup', label: 'Lead follow-up', group: 'inquiries',
     fields: [ { name: 'client', label: 'Name', type: 'text', required: true },
               { name: 'attempt', label: 'Which follow-up?', type: 'segment', options: ['1st', '2nd', '3rd', '4th+'], required: true } ] },
+  { key: 'client_conversation', label: 'Client conversation', group: 'inquiries',
+    fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
+              { name: 'kind', label: 'New or existing client', type: 'segment', options: ['New', 'Existing'], required: true },
+              { name: 'note', label: 'What was discussed / how you guided them', type: 'text' } ] },
 
   { key: 'new_order', label: 'New order', group: 'orders',
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
@@ -185,7 +189,7 @@ export const CHECKLIST = [
 
 // Short labels for KPI tiles / summaries
 export const KPI_LABEL = {
-  inquiry: 'Inquiries', lead_followup: 'Lead F/U', new_order: 'New orders',
+  inquiry: 'Inquiries', lead_followup: 'Lead F/U', client_conversation: 'Conversations', new_order: 'New orders',
   order_assigned: 'Orders assigned', order_completed: 'Completed',
   revision_assigned: 'Rev. assigned', project_delivered: 'Delivered', shared: 'Shared',
   followup_client: 'Follow-ups', followup_designer: 'Designer F/U', upsell: 'Upsells', offer: 'Offers',
