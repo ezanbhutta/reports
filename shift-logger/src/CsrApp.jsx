@@ -5,6 +5,8 @@ import { db, todayPKT, timePKT } from './store.js';
 import { Btn, Card, Pill, Modal, Label, Field, actionSummary, Logo, ConfirmDelete } from './ui.jsx';
 
 const groupColor = k => (GROUPS.find(g => g.key === k) || {}).color || C.violet;
+// The project name for an action (order_assigned stores it in the client field).
+const projectOf = a => (a.type === 'order_assigned' ? a.client : (a.details && a.details.project)) || '';
 const QUICK = ['inquiry', 'client_conversation', 'followup_client', 'shared', 'revision_assigned', 'meeting', 'new_order'];
 const getRecent = () => { try { return JSON.parse(localStorage.getItem('sl_recent_actions')) || []; } catch { return []; } };
 const bumpRecent = k => { const r = [k, ...getRecent().filter(x => x !== k)].slice(0, 8); localStorage.setItem('sl_recent_actions', JSON.stringify(r)); };
@@ -361,12 +363,12 @@ export default function CsrApp({ boundProfile }) {
                   <span style={{ flex: 1, height: 1, background: 'rgba(124,41,255,.10)' }} />
                   <span style={{ fontSize: 10, color: C.dim }}>{g.items.length}</span>
                 </div>
-                {g.items.map(a => { const col = groupColor(ACTION_BY_KEY[a.type]?.group); return (
+                {g.items.map(a => { const col = groupColor(ACTION_BY_KEY[a.type]?.group); const labelTxt = ACTION_BY_KEY[a.type]?.label || a.type; const proj = projectOf(a); const sub = [proj ? labelTxt : null, a.client, actionSummary(a)].filter(Boolean).join(' · '); return (
                   <div key={a.id} onClick={() => !locked && openForm(ACTION_BY_KEY[a.type], { ...a.details, client: a.client }, a.id)}
                     className="glass-soft rounded-xl lift" style={{ display: 'flex', gap: 11, padding: '11px 13px', marginBottom: 8, cursor: locked ? 'default' : 'pointer', borderLeft: `3px solid ${col}` }}>
                     <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{ACTION_BY_KEY[a.type]?.label || a.type}</div>
-                      <div className="truncate" style={{ fontSize: 11.5, color: C.muted }}>{a.client}{actionSummary(a) ? ' · ' + actionSummary(a) : ''}</div>
+                      <div className="truncate" style={{ fontSize: 13.5, fontWeight: 800, color: C.ink }}>{proj || labelTxt}</div>
+                      <div className="truncate" style={{ fontSize: 11.5, color: C.muted }}>{sub || '—'}</div>
                     </div>
                     <span style={{ fontSize: 10.5, color: C.dim, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3 }}>{timePKT(a.created_at)}{!locked && <Pencil size={10} style={{ color: C.violetLine }} />}</span>
                   </div>
@@ -408,7 +410,10 @@ export default function CsrApp({ boundProfile }) {
       {picker && <CommandPalette onClose={() => setPicker(false)} onPick={openForm} />}
 
       {form && <Modal title={form.action.label} subtitle={form.editId ? 'Edit entry' : 'New entry'} onClose={() => setForm(null)} width={400}>
-        {form.action.fields.filter(f => !f.showIf || f.showIf(form.values)).map(f => { const ff = f.type === 'designer' ? { ...f, type: 'select', options: [...new Set([...designerNames, form.values[f.name]].filter(Boolean))] } : f;
+        {form.action.fields.filter(f => !f.showIf || f.showIf(form.values))
+          .slice().sort((a, b) => (b.name === 'project') - (a.name === 'project')) // Project Name first, everywhere
+          .map(f0 => { const f = f0.name === 'project' ? { ...f0, label: 'Project Name' } : f0;
+            const ff = f.type === 'designer' ? { ...f, type: 'select', options: [...new Set([...designerNames, form.values[f.name]].filter(Boolean))] } : f;
           return <Field key={f.name} field={ff} value={form.values[f.name]}
             onChange={v => setForm(m => ({ ...m, values: { ...m.values, [f.name]: v }, error: null }))} />; })}
         {form.error && <div style={{ color: C.coral, fontSize: 12, marginTop: 10 }}>{form.error}</div>}
