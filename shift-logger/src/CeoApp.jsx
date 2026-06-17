@@ -688,8 +688,8 @@ function Console() {
           <div className="scroll-y" style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 560, overflowY: 'auto', paddingRight: 6 }}>
             {ranked.length === 0 && <Card className="p-5"><span style={{ color: C.dim, fontSize: 13 }}>No reports for this filter.</span></Card>}
             {ranked.map(r => { const c = cnt(r.id); const n = byReport[r.id]?.length || 0; return (
-              <Card key={r.id} className="lift p-4" style={{ cursor: 'pointer' }}>
-                <div onClick={() => setDrill(r.id)} className="flex items-center justify-between gap-3 flex-wrap">
+              <Card key={r.id} onClick={() => setDrill(r.id)} className="lift p-4" style={{ cursor: 'pointer' }}>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-2.5 min-w-0">
                     {r.status === 'open' && <span style={{ width: 8, height: 8, borderRadius: 9, background: C.mint, boxShadow: `0 0 0 3px ${C.mintBg}`, flex: '0 0 auto' }} />}
                     <span style={{ fontWeight: 800, fontSize: 14, color: C.ink }}>{r.csr_name}</span>

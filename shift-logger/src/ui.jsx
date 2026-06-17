@@ -21,8 +21,8 @@ export const Btn = ({ children, onClick, variant = 'solid', disabled, style, cla
     style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, whiteSpace: 'nowrap', fontSize: 13, padding: '10px 16px', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1, border: 'none', ...v, ...style }} {...p}>{children}</button>;
 };
 
-export const Card = ({ children, className = '', strong, style }) => (
-  <div className={`${strong ? 'glass-2' : 'glass'} rounded-2xl ${className}`} style={style}>{children}</div>
+export const Card = ({ children, className = '', strong, style, onClick }) => (
+  <div onClick={onClick} className={`${strong ? 'glass-2' : 'glass'} rounded-2xl ${className}`} style={style}>{children}</div>
 );
 
 // Tiny inline trend chart (area + line + end dot)
