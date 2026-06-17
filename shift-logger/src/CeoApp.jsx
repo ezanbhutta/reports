@@ -523,53 +523,74 @@ function Console() {
       y = TOP_M + 12; hairline(y); y += 16;
 
       // ── Hero
+      const profilesActive = new Set(filtered.map(r => r.profile)).size;
       eyebrow('Actions logged', M, y);
-      setText(INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(42); doc.text(String(acts.length), M, y + 16);
+      setText(INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(40); doc.text(String(acts.length), M, y + 15);
       setText(MUTED); doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
-      doc.text(`${filtered.length} report${filtered.length === 1 ? '' : 's'}  ·  ${uniqCsr} CSR${uniqCsr === 1 ? '' : 's'}  ·  ${online} open now`, M, y + 23);
-      y += 33;
+      doc.text(`across ${filtered.length} report${filtered.length === 1 ? '' : 's'}  ·  ${profilesActive} profile${profilesActive === 1 ? '' : 's'} active  ·  ${uniqCsr} CSR${uniqCsr === 1 ? '' : 's'} on`, M, y + 22);
+      y += 31;
 
-      // ── KPI cards
+      // ── KPI cards (mirror the dashboard's four)
       const cards = [
-        ['Reports', String(filtered.length), 'in range'],
-        ['Open now', String(online), 'live'],
-        ['Flagged', String(flags.length), 'frustrated / disputed'],
-        ['Idle', String(idle.length), 'open · no activity'],
+        ['Open now', String(online), 'reports in progress'],
+        ['Submitted', String(submitted), 'reports'],
+        ['Actions logged', String(acts.length), 'across reports'],
+        ['Needs attention', String(flags.length + idle.length), 'flags + idle'],
       ];
       const gap = 4, cw = (W - 2 * M - gap * 3) / 4, chh = 22;
       cards.forEach((c, i) => {
         const x = M + i * (cw + gap);
         setFill([248, 247, 252]); setDraw(HAIRLINE); doc.setLineWidth(0.2); doc.roundedRect(x, y, cw, chh, 2.2, 2.2, 'FD');
         eyebrow(c[0], x + 4, y + 6);
-        setText(INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(17); doc.text(c[1], x + 4, y + 14);
-        setText(DIM); doc.setFont('helvetica', 'normal'); doc.setFontSize(6.3); doc.text(c[2], x + 4, y + 18.5);
+        setText(INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text(c[1], x + 4, y + 14);
+        setText(DIM); doc.setFont('helvetica', 'normal'); doc.setFontSize(6.1); doc.text(c[2], x + 4, y + 18.5);
       });
       y += chh + 16;
 
-      // ── Reports table
-      sectionHeader('Activity', 'Reports', `${ranked.length} total`);
-      const cCSR = M, cProf = M + 46, cShift = M + 96, cTime = M + 120, cAct = W - M;
+      // ── Activity by hour / day
+      sectionHeader('Pulse', `Activity · by ${hourly ? 'hour' : 'day'}`, peakVal > 0 ? `busiest ${trend.full[peak]} · ${peakVal}` : 'no activity yet');
+      {
+        const n = trend.data.length || 1, cmax = Math.max(...trend.data, 1);
+        const chartW = W - 2 * M, slotW = chartW / n, barW = Math.min(slotW * 0.62, 11), chartH = 24, baseY = y + chartH;
+        trend.data.forEach((v, i) => {
+          const bx = M + i * slotW + (slotW - barW) / 2, bh = v > 0 ? Math.max(1, (v / cmax) * chartH) : 0.6;
+          setFill(i === peak && v > 0 ? VIOLET : TRACK); doc.roundedRect(bx, baseY - bh, barW, bh, 0.8, 0.8, 'F');
+          if (v > 0 && n <= 12) { setText(MUTED); doc.setFont('helvetica', 'bold'); doc.setFontSize(6); doc.text(String(v), bx + barW / 2, baseY - bh - 1.4, { align: 'center' }); }
+        });
+        setDraw(HAIRLINE); doc.setLineWidth(0.2); doc.line(M, baseY, W - M, baseY);
+        setText(DIM); doc.setFont('helvetica', 'normal'); doc.setFontSize(6);
+        const every = n <= 12 ? 1 : Math.ceil(n / 10);
+        trend.labels.forEach((lab, i) => { if (i % every === 0) doc.text(String(lab), M + i * slotW + slotW / 2, baseY + 4, { align: 'center' }); });
+        y = baseY + 12;
+      }
+
+      // ── Reports (detailed, with per-type breakdown)
+      sectionHeader('Live', 'Reports', `${ranked.length} total`);
+      const cProf = M + 50, cShift = M + 98, cTime = M + 124, cAct = W - M;
       setText(MUTED); doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setCharSpace(0.4);
-      doc.text('CSR', cCSR + 4, y); doc.text('PROFILE', cProf, y); doc.text('SHIFT', cShift, y); doc.text('TIME (PKT)', cTime, y);
+      doc.text('CSR', M + 4, y); doc.text('PROFILE', cProf, y); doc.text('SHIFT', cShift, y); doc.text('TIME (PKT)', cTime, y);
       { const t = 'ACTIONS'; const w = doc.getTextWidth(t) + (t.length - 1) * 0.4; doc.text(t, cAct - w, y); }
       doc.setCharSpace(0); y += 2.5; hairline(y); y += 5;
       ranked.forEach(r => {
-        ensureSpace(7);
-        const n = byReport[r.id]?.length || 0, open = r.status === 'open';
-        setFill(open ? MINT : DIM); doc.circle(cCSR + 1, y - 1.4, 0.9, 'F');
-        setText(INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text(truncate(r.csr_name, 20), cCSR + 4, y);
+        ensureSpace(10);
+        const cc = cnt(r.id), n = byReport[r.id]?.length || 0, open = r.status === 'open';
+        setFill(open ? MINT : DIM); doc.circle(M + 1, y - 1.4, 0.9, 'F');
+        setText(INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text(truncate(r.csr_name, 22), M + 4, y);
         setText(BODY); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
         doc.text(truncate(r.profile || '—', 22), cProf, y);
-        doc.text(truncate(r.shift || '—', 12), cShift, y);
+        doc.text(truncate(r.shift || '—', 10), cShift, y);
         doc.text(timePKT(r.start_at) + (r.finish_at ? '–' + timePKT(r.finish_at) : ''), cTime, y);
         setText(INK); doc.setFont('helvetica', 'bold'); doc.text(String(n), cAct, y, { align: 'right' });
-        y += 5; setDraw([240, 238, 248]); doc.setLineWidth(0.15); doc.line(M, y - 1.7, W - M, y - 1.7); y += 1.6;
+        y += 4.4;
+        if (n === 0) { setText(AMBER); doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.text('idle · nothing logged yet', M + 4, y); }
+        else { setText(MUTED); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.text(truncate(Object.keys(cc).map(t => `${KPI_LABEL[t] || t} ${cc[t]}`).join('    '), 98), M + 4, y); }
+        y += 3; setDraw([240, 238, 248]); doc.setLineWidth(0.15); doc.line(M, y - 1.4, W - M, y - 1.4); y += 1.6;
       });
       y += 8;
 
       // ── By activity (proportional bars)
       if (sortedTypes.length) {
-        sectionHeader('Breakdown', 'By activity', `${acts.length} action${acts.length === 1 ? '' : 's'}`);
+        sectionHeader('Totals', 'By activity', `${acts.length} action${acts.length === 1 ? '' : 's'}`);
         const max = totals[sortedTypes[0]] || 1, barX = M + 66, barW = (W - M) - barX - 12;
         sortedTypes.forEach(t => {
           ensureSpace(7);
@@ -583,20 +604,73 @@ function Console() {
         y += 6;
       }
 
+      // ── By profile
+      if (byProfile.length) {
+        sectionHeader('Split', 'By profile', `${byProfile.length} profile${byProfile.length === 1 ? '' : 's'}`);
+        const pmax = byProfile[0][1] || 1, barX = M + 66, barW = (W - M) - barX - 12;
+        byProfile.forEach(([p, v]) => {
+          ensureSpace(7);
+          setText(INK); doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(truncate(p || '—', 32), M, y);
+          const bw = Math.max(1.5, (v / pmax) * barW);
+          setFill(TRACK); doc.roundedRect(barX, y - 2.9, barW, 3.2, 1, 1, 'F');
+          setFill([94, 31, 216]); doc.roundedRect(barX, y - 2.9, bw, 3.2, 1, 1, 'F');
+          setText(INK); doc.setFont('helvetica', 'bold'); doc.text(String(v), W - M, y, { align: 'right' });
+          y += 7;
+        });
+        y += 6;
+      }
+
+      // ── Who's on (per CSR)
+      if (team.length) {
+        sectionHeader('Team', "Who's on", `${team.length} ${team.length === 1 ? 'person' : 'people'}`);
+        setText(MUTED); doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setCharSpace(0.4);
+        doc.text('CSR', M + 4, y); doc.text('SHIFTS · PROFILES', M + 50, y); doc.text('TOP ACTION', M + 116, y);
+        { const t = 'ACTIONS'; const w = doc.getTextWidth(t) + (t.length - 1) * 0.4; doc.text(t, W - M - w, y); }
+        doc.setCharSpace(0); y += 2.5; hairline(y); y += 5;
+        team.forEach(t => {
+          ensureSpace(7);
+          setFill(t.open ? MINT : DIM); doc.circle(M + 1, y - 1.4, 0.9, 'F');
+          setText(INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text(truncate(t.name, 22), M + 4, y);
+          setText(BODY); doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+          doc.text(truncate(`${t.shifts.join('/')} · ${t.profiles.length} prof`, 34), M + 50, y);
+          doc.text(truncate(t.top ? (KPI_LABEL[t.top] || t.top) : '—', 22), M + 116, y);
+          setText(INK); doc.setFont('helvetica', 'bold'); doc.text(String(t.actions), W - M, y, { align: 'right' });
+          y += 5; setDraw([240, 238, 248]); doc.setLineWidth(0.15); doc.line(M, y - 1.7, W - M, y - 1.7); y += 1.6;
+        });
+        y += 8;
+      }
+
       // ── Needs attention (flagged actions)
       if (flags.length) {
         sectionHeader('Watch', 'Needs attention', `${flags.length} flagged`);
         flags.forEach(a => {
-          ensureSpace(6.5);
+          ensureSpace(11);
           const r = repById[a.report_id];
           setFill(a.type === 'disputed' ? AMBER : CORAL); doc.circle(M + 1, y - 1.4, 0.9, 'F');
-          setText(INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text(truncate(ACTION_BY_KEY[a.type]?.label || a.type, 16), M + 4, y);
-          setText(BODY); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
-          const who = (r ? `${r.csr_name} · ${r.profile || '—'}` : '—') + (a.client ? ` · ${a.client}` : '');
-          doc.text(truncate(who, 58), M + 42, y);
-          setText(MUTED); doc.text(timePKT(a.created_at), W - M, y, { align: 'right' });
-          y += 6;
+          setText(INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+          doc.text(truncate(`${ACTION_BY_KEY[a.type]?.label || a.type}${a.client ? ' · ' + a.client : ''}`, 64), M + 4, y);
+          setText(MUTED); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(timePKT(a.created_at), W - M, y, { align: 'right' });
+          y += 4.4;
+          const sum = actionSummary(a);
+          if (sum) { setText(BODY); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(truncate(sum, 96), M + 4, y); y += 4; }
+          if (r) { setText(DIM); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.text(truncate(`logged by ${r.csr_name} · ${r.profile || '—'} · ${r.shift || '—'}`, 96), M + 4, y); y += 4; }
+          y += 1.4; setDraw([244, 242, 250]); doc.setLineWidth(0.15); doc.line(M, y - 1.4, W - M, y - 1.4); y += 1.4;
         });
+        y += 6;
+      }
+
+      // ── Idle now
+      if (idle.length) {
+        sectionHeader('Watch', 'Idle now', `${idle.length}`);
+        idle.forEach(r => {
+          ensureSpace(6);
+          setFill(AMBER); doc.circle(M + 1, y - 1.4, 0.9, 'F');
+          setText(INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text(truncate(r.csr_name, 24), M + 4, y);
+          setText(MUTED); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.text(truncate(`${r.profile || '—'} · ${r.shift || '—'}`, 44), M + 52, y);
+          setText(AMBER); doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.text('IDLE', W - M, y, { align: 'right' });
+          y += 5.5; setDraw([240, 238, 248]); doc.setLineWidth(0.15); doc.line(M, y - 1.7, W - M, y - 1.7); y += 1.4;
+        });
+        y += 6;
       }
 
       // ── Footers (page numbers, after all pages exist)
