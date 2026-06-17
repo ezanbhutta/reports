@@ -403,6 +403,7 @@ function Console() {
   const [reports, setReports] = useState([]); const [allActions, setAllActions] = useState([]); const [roster, setRoster] = useState([]);
   const [fShift, setFShift] = useState('all'); const [fProfile, setFProfile] = useState('all'); const [fCSR, setFCSR] = useState('all'); const [range, setRange] = useState({ mode: 'today' });
   const [drill, setDrill] = useState(null); const [panel, setPanel] = useState(null); const [act, setAct] = useState(null);
+  const [exporting, setExporting] = useState(false);
   const load = useCallback(() => { db.listReports().then(setReports); db.allActions().then(setAllActions); }, []);
   useEffect(() => { load(); db.getRoster().then(setRoster); let t; const off = db.subscribe(() => { clearTimeout(t); t = setTimeout(load, 250); }); return () => { clearTimeout(t); off && off(); }; }, [load]);
 
@@ -444,27 +445,176 @@ function Console() {
     return Object.values(m).map(t => ({ ...t, shifts: [...t.shifts], profiles: [...t.profiles], top: Object.keys(t.types).sort((a, b) => t.types[b] - t.types[a])[0] })).sort((a, b) => b.actions - a.actions);
   }, [filtered, byReport]);
 
+  // Programmatically drawn, branded PDF (vector text — crisp at any zoom),
+  // matching the CSR Pulse report style. Filename is named after the selected
+  // window (DD-MM-YYYY), e.g. csr-shift-logger-17-06-2026.pdf.
   async function exportPdf() {
-    const { jsPDF } = await import('jspdf');
-    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-    const W = 210, M = 14; let y = 18;
-    const V = [114, 41, 255], INK = [21, 8, 47], MUT = [110, 100, 140];
-    doc.setFillColor(21, 8, 47); doc.rect(0, 0, W, 26, 'F');
-    doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.text('CSR Console Report', M, 13);
-    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(200, 190, 240);
-    doc.text(`${label}  ·  generated ${todayPKT()} ${timePKT()} PKT`, M, 20);
-    y = 36;
-    const kpis = [['Reports', filtered.length], ['Actions', acts.length], ['Open now', online], ['Needs attn.', flags.length + idle.length]];
-    const bw = (W - 2 * M - 9) / 4;
-    kpis.forEach(([l, v], i) => { const x = M + i * (bw + 3); doc.setFillColor(243, 240, 251); doc.roundedRect(x, y, bw, 18, 2, 2, 'F'); doc.setTextColor(...MUT); doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.text(String(l).toUpperCase(), x + 4, y + 6); doc.setTextColor(...INK); doc.setFontSize(15); doc.text(String(v), x + 4, y + 14); });
-    y += 28;
-    doc.setTextColor(...V); doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.text('REPORTS', M, y); y += 2; doc.setDrawColor(228, 224, 240); doc.line(M, y, W - M, y); y += 6;
-    doc.setFontSize(7); doc.setTextColor(...MUT); doc.text('CSR', M, y); doc.text('PROFILE', M + 40, y); doc.text('SHIFT', M + 90, y); doc.text('TIME', M + 120, y); doc.text('ACTIONS', W - M, y, { align: 'right' }); y += 2; doc.line(M, y, W - M, y); y += 5;
-    ranked.forEach(r => { if (y > 270) { doc.addPage(); y = 20; } const n = byReport[r.id]?.length || 0; doc.setTextColor(...INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text(r.csr_name, M, y); doc.setFont('helvetica', 'normal'); doc.setTextColor(...MUT); doc.setFontSize(8.5); doc.text(r.profile || '—', M + 40, y); doc.text(r.shift || '—', M + 90, y); doc.text(timePKT(r.start_at) + (r.finish_at ? '-' + timePKT(r.finish_at) : ''), M + 120, y); doc.setTextColor(...INK); doc.setFont('helvetica', 'bold'); doc.text(String(n), W - M, y, { align: 'right' }); y += 6; doc.setDrawColor(240, 237, 248); doc.line(M, y - 2, W - M, y - 2); });
-    y += 6; if (y > 250) { doc.addPage(); y = 20; }
-    doc.setTextColor(...V); doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.text('BY ACTIVITY', M, y); y += 2; doc.setDrawColor(228, 224, 240); doc.line(M, y, W - M, y); y += 6;
-    sortedTypes.forEach(t => { doc.setTextColor(...INK); doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(KPI_LABEL[t] || t, M, y); doc.setFont('helvetica', 'bold'); doc.text(String(totals[t]), M + 60, y, { align: 'right' }); y += 6; });
-    doc.save(`CSR-Console-${todayPKT()}.pdf`);
+    if (exporting || !filtered.length) return;
+    setExporting(true);
+    try {
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
+
+      const VIOLET = [114, 41, 255], INK = [22, 10, 51], BODY = [60, 50, 100],
+        MUTED = [120, 110, 155], DIM = [170, 162, 200], HAIRLINE = [228, 224, 240],
+        MINT = [16, 185, 129], AMBER = [245, 158, 11], CORAL = [239, 68, 68], TRACK = [237, 231, 255];
+      const W = 210, H = 297, M = 18, TOP_M = 22, PAGE_BOTTOM = H - 22;
+      let y = TOP_M;
+
+      const setFill = c => doc.setFillColor(c[0], c[1], c[2]);
+      const setText = c => doc.setTextColor(c[0], c[1], c[2]);
+      const setDraw = c => doc.setDrawColor(c[0], c[1], c[2]);
+      const hairline = yPos => { setDraw(HAIRLINE); doc.setLineWidth(0.2); doc.line(M, yPos, W - M, yPos); };
+      const truncate = (s, max) => { s = String(s ?? ''); return s.length <= max ? s : s.slice(0, max - 1) + '…'; };
+      const eyebrow = (text, x, yPos, align) => {
+        setText(MUTED); doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5);
+        const cs = 0.6; doc.setCharSpace(cs); const up = String(text).toUpperCase();
+        if (align === 'right' || align === 'center') {
+          const w = doc.getTextWidth(up) + (up.length - 1) * cs;
+          doc.text(up, align === 'right' ? x - w : x - w / 2, yPos);
+        } else doc.text(up, x, yPos);
+        doc.setCharSpace(0);
+      };
+
+      // The HaseebMadeIt mark → PNG (no network needed).
+      const logoPng = await new Promise((resolve) => {
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 392.35 392.35"><rect width="392.35" height="392.35" rx="70" fill="#7229FF"/><path fill="#fff" d="M187.32,115.24h17.71c2.46,0,4.46,1.99,4.46,4.46v61.29c0,1.98-1.31,3.73-3.21,4.28l-17.71,5.16c-2.86.83-5.7-1.31-5.7-4.28v-66.45c0-2.46,1.99-4.46,4.46-4.46ZM167.44,142.55v50.69c0,1.98-1.31,3.73-3.21,4.28l-17.71,5.16c-2.86.83-5.7-1.31-5.7-4.28v-55.85c0-2.46,1.99-4.46,4.46-4.46h17.71c2.46,0,4.46,1.99,4.46,4.46ZM144.03,219.52l17.71-5.16c2.86-.83,5.7,1.31,5.7,4.28v31.16c0,2.46-1.99,4.46-4.46,4.46h-17.71c-2.46,0-4.46-1.99-4.46-4.46v-26c0-1.98,1.31-3.73,3.21-4.28ZM186.07,207.27l17.71-5.16c2.86-.83,5.7,1.31,5.7,4.28v66.26c0,2.46-1.99,4.46-4.46,4.46h-17.71c-2.46,0-4.46-1.99-4.46-4.46v-61.1c0-1.99,1.31-3.73,3.21-4.28ZM224.9,249.8v-50.5c0-1.98,1.31-3.73,3.21-4.28l17.71-5.16c2.86-.83,5.7,1.31,5.7,4.28v55.66c0,2.46-1.99,4.46-4.46,4.46h-17.71c-2.46,0-4.46-1.99-4.46-4.46ZM251.52,142.55v26.19c0,1.99-1.31,3.73-3.21,4.28l-17.71,5.16c-2.86.83-5.7-1.31-5.7-4.28v-31.35c0-2.46,1.99-4.46,4.46-4.46h17.71c2.46,0,4.46,1.99,4.46,4.46h0Z"/></svg>`;
+        const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
+        const img = new Image();
+        img.onload = () => { const cv = document.createElement('canvas'); cv.width = cv.height = 256; cv.getContext('2d').drawImage(img, 0, 0, 256, 256); URL.revokeObjectURL(url); resolve(cv.toDataURL('image/png')); };
+        img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+        img.src = url;
+      });
+
+      const toDMY = iso => { const [yy, mm, dd] = String(iso).split('-'); return `${dd}-${mm}-${yy}`; };
+      const periodLabel = win ? (win.s === win.e ? toDMY(win.s) : `${toDMY(win.s)} to ${toDMY(win.e)}`) : 'All time';
+      const rangeKind = { today: 'TODAY', yesterday: 'YESTERDAY', '7d': 'LAST 7 DAYS', '30d': 'LAST 30 DAYS', all: 'ALL TIME', custom: 'CUSTOM RANGE' }[range.mode] || 'REPORT';
+
+      const runningHeader = () => {
+        if (logoPng) doc.addImage(logoPng, 'PNG', M, 12, 6, 6);
+        setText(INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setCharSpace(0.5);
+        doc.text('CSR SHIFT LOGGER', M + 8.5, 16.4); doc.setCharSpace(0);
+        setText(MUTED); doc.setFont('helvetica', 'normal'); doc.setFontSize(7);
+        doc.text(`${rangeKind.toLowerCase()} · ${periodLabel}`, W - M, 16.4, { align: 'right' });
+        hairline(20);
+      };
+      const newPage = () => { doc.addPage(); runningHeader(); y = 28; };
+      const ensureSpace = need => { if (y + need > PAGE_BOTTOM) newPage(); };
+      const sectionHeader = (eb, title, right) => {
+        ensureSpace(20); eyebrow(eb, M, y);
+        if (right) { setText(MUTED); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(right, W - M, y, { align: 'right' }); }
+        setText(INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.text(title, M, y + 7); y += 13;
+      };
+
+      const repById = {}; filtered.forEach(r => { repById[r.id] = r; });
+      const uniqCsr = new Set(filtered.map(r => r.csr_name)).size;
+
+      // ── Identity strip
+      if (logoPng) doc.addImage(logoPng, 'PNG', M, TOP_M - 8, 11, 11);
+      setText(INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text('CSR Shift Logger', M + 14, TOP_M - 3);
+      setText(MUTED); doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.text('HASEEBMADEIT · Operations report', M + 14, TOP_M + 1);
+      eyebrow(rangeKind, W - M, TOP_M - 3, 'right');
+      setText(INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(periodLabel, W - M, TOP_M + 1, { align: 'right' });
+      y = TOP_M + 12; hairline(y); y += 16;
+
+      // ── Hero
+      eyebrow('Actions logged', M, y);
+      setText(INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(42); doc.text(String(acts.length), M, y + 16);
+      setText(MUTED); doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+      doc.text(`${filtered.length} report${filtered.length === 1 ? '' : 's'}  ·  ${uniqCsr} CSR${uniqCsr === 1 ? '' : 's'}  ·  ${online} open now`, M, y + 23);
+      y += 33;
+
+      // ── KPI cards
+      const cards = [
+        ['Reports', String(filtered.length), 'in range'],
+        ['Open now', String(online), 'live'],
+        ['Flagged', String(flags.length), 'frustrated / disputed'],
+        ['Idle', String(idle.length), 'open · no activity'],
+      ];
+      const gap = 4, cw = (W - 2 * M - gap * 3) / 4, chh = 22;
+      cards.forEach((c, i) => {
+        const x = M + i * (cw + gap);
+        setFill([248, 247, 252]); setDraw(HAIRLINE); doc.setLineWidth(0.2); doc.roundedRect(x, y, cw, chh, 2.2, 2.2, 'FD');
+        eyebrow(c[0], x + 4, y + 6);
+        setText(INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(17); doc.text(c[1], x + 4, y + 14);
+        setText(DIM); doc.setFont('helvetica', 'normal'); doc.setFontSize(6.3); doc.text(c[2], x + 4, y + 18.5);
+      });
+      y += chh + 16;
+
+      // ── Reports table
+      sectionHeader('Activity', 'Reports', `${ranked.length} total`);
+      const cCSR = M, cProf = M + 46, cShift = M + 96, cTime = M + 120, cAct = W - M;
+      setText(MUTED); doc.setFont('helvetica', 'bold'); doc.setFontSize(6.5); doc.setCharSpace(0.4);
+      doc.text('CSR', cCSR + 4, y); doc.text('PROFILE', cProf, y); doc.text('SHIFT', cShift, y); doc.text('TIME (PKT)', cTime, y);
+      { const t = 'ACTIONS'; const w = doc.getTextWidth(t) + (t.length - 1) * 0.4; doc.text(t, cAct - w, y); }
+      doc.setCharSpace(0); y += 2.5; hairline(y); y += 5;
+      ranked.forEach(r => {
+        ensureSpace(7);
+        const n = byReport[r.id]?.length || 0, open = r.status === 'open';
+        setFill(open ? MINT : DIM); doc.circle(cCSR + 1, y - 1.4, 0.9, 'F');
+        setText(INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text(truncate(r.csr_name, 20), cCSR + 4, y);
+        setText(BODY); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+        doc.text(truncate(r.profile || '—', 22), cProf, y);
+        doc.text(truncate(r.shift || '—', 12), cShift, y);
+        doc.text(timePKT(r.start_at) + (r.finish_at ? '–' + timePKT(r.finish_at) : ''), cTime, y);
+        setText(INK); doc.setFont('helvetica', 'bold'); doc.text(String(n), cAct, y, { align: 'right' });
+        y += 5; setDraw([240, 238, 248]); doc.setLineWidth(0.15); doc.line(M, y - 1.7, W - M, y - 1.7); y += 1.6;
+      });
+      y += 8;
+
+      // ── By activity (proportional bars)
+      if (sortedTypes.length) {
+        sectionHeader('Breakdown', 'By activity', `${acts.length} action${acts.length === 1 ? '' : 's'}`);
+        const max = totals[sortedTypes[0]] || 1, barX = M + 66, barW = (W - M) - barX - 12;
+        sortedTypes.forEach(t => {
+          ensureSpace(7);
+          setText(INK); doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(truncate(KPI_LABEL[t] || t, 32), M, y);
+          const v = totals[t], bw = Math.max(1.5, (v / max) * barW);
+          setFill(TRACK); doc.roundedRect(barX, y - 2.9, barW, 3.2, 1, 1, 'F');
+          setFill(VIOLET); doc.roundedRect(barX, y - 2.9, bw, 3.2, 1, 1, 'F');
+          setText(INK); doc.setFont('helvetica', 'bold'); doc.text(String(v), W - M, y, { align: 'right' });
+          y += 7;
+        });
+        y += 6;
+      }
+
+      // ── Needs attention (flagged actions)
+      if (flags.length) {
+        sectionHeader('Watch', 'Needs attention', `${flags.length} flagged`);
+        flags.forEach(a => {
+          ensureSpace(6.5);
+          const r = repById[a.report_id];
+          setFill(a.type === 'disputed' ? AMBER : CORAL); doc.circle(M + 1, y - 1.4, 0.9, 'F');
+          setText(INK); doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text(truncate(ACTION_BY_KEY[a.type]?.label || a.type, 16), M + 4, y);
+          setText(BODY); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+          const who = (r ? `${r.csr_name} · ${r.profile || '—'}` : '—') + (a.client ? ` · ${a.client}` : '');
+          doc.text(truncate(who, 58), M + 42, y);
+          setText(MUTED); doc.text(timePKT(a.created_at), W - M, y, { align: 'right' });
+          y += 6;
+        });
+      }
+
+      // ── Footers (page numbers, after all pages exist)
+      const totalPages = doc.getNumberOfPages();
+      const fd = [
+        fCSR !== 'all' ? `CSR=${fCSR}` : null,
+        fShift !== 'all' ? `Shift=${fShift}` : null,
+        fProfile !== 'all' ? `Profile=${fProfile}` : null,
+      ].filter(Boolean).join(' · ');
+      const gen = `Generated ${toDMY(todayPKT())} ${timePKT()} PKT`;
+      for (let p = 1; p <= totalPages; p++) {
+        doc.setPage(p); const fy = H - 12; hairline(fy - 4);
+        setText(DIM); doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5);
+        doc.text('CSR Shift Logger · HASEEBMADEIT · Confidential', M, fy);
+        doc.text(fd || gen, W / 2, fy, { align: 'center' });
+        doc.text(`Page ${p} of ${totalPages}`, W - M, fy, { align: 'right' });
+      }
+
+      const datePart = win ? (win.s === win.e ? toDMY(win.s) : `${toDMY(win.s)}_to_${toDMY(win.e)}`) : 'all-time';
+      doc.save(`csr-shift-logger-${datePart}.pdf`);
+    } finally {
+      setExporting(false);
+    }
   }
 
   return (
@@ -478,7 +628,7 @@ function Console() {
           <Select value={fProfile} onChange={e => setFProfile(e.target.value)}><option value="all">All profiles</option>{PROFILES.map(p => <option key={p} value={p}>{p}</option>)}</Select>
           <div className="ml-auto flex items-center gap-3">
             <span className="text-[10px] uppercase tracking-wider" style={{ color: C.dim }}>{filtered.length} · {label}</span>
-            <Btn onClick={exportPdf} disabled={!filtered.length} className="lift" style={{ padding: '8px 14px', fontSize: 12, border: '1px solid transparent' }}><Download size={13} />Export PDF</Btn>
+            <Btn onClick={exportPdf} disabled={!filtered.length || exporting} className="lift" style={{ padding: '8px 14px', fontSize: 12, border: '1px solid transparent' }}>{exporting ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}{exporting ? 'Preparing…' : 'Export PDF'}</Btn>
           </div>
         </div>
       </Card>
