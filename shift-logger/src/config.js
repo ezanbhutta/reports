@@ -132,6 +132,7 @@ export const ACTIONS = [
 
   { key: 'followup_client', label: 'Follow-up with client', group: 'followups',
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
+              { name: 'kind', label: 'Client type', type: 'segment', options: ['Ongoing order', 'Past client'], required: true },
               { name: 'project', label: 'Project name', type: 'text' },
               { name: 'reason', label: 'Reason to follow up', type: 'text' },
               { name: 'attempt', label: 'Which follow-up?', type: 'segment', options: ['1st', '2nd', '3rd', '4th+'] } ] },
