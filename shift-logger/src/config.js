@@ -150,6 +150,10 @@ export const ACTIONS = [
               { name: 'kind', label: 'New or existing client', type: 'segment', options: ['New', 'Existing'] },
               { name: 'scope', label: 'Scope of work', type: 'text' },
               { name: 'value', label: 'Offer value', type: 'text', required: true } ] },
+  { key: 'review_request', label: 'Review request', group: 'followups',
+    fields: [ { name: 'client', label: 'Client name', type: 'text', required: true },
+              { name: 'project', label: 'Project name', type: 'text' },
+              { name: 'review_type', label: 'Review type', type: 'segment', options: ['Public review', 'Private review'], required: true } ] },
 
   { key: 'meeting', label: 'Meeting', group: 'meetings',
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
@@ -185,6 +189,7 @@ export const KPI_LABEL = {
   order_assigned: 'Orders assigned', order_completed: 'Completed',
   revision_assigned: 'Rev. assigned', project_delivered: 'Delivered', shared: 'Shared',
   followup_client: 'Follow-ups', followup_designer: 'Designer F/U', upsell: 'Upsells', offer: 'Offers',
+  review_request: 'Reviews',
   meeting: 'Meetings', frustrated: 'Frustrated', disputed: 'Disputed', extension: 'Extensions', spam: 'Spam',
 };
 
