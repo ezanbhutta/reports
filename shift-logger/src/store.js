@@ -204,7 +204,11 @@ const supaDb = {
   },
   async ackNote(id, by) {
     const c = await client();
-    await c.from('reports').update({ note_seen_by: by, note_seen_at: new Date().toISOString() }).eq('id', id);
+    // note_seen_* live on a SUBMITTED report, which the row-level "update while
+    // open" policy blocks — so a direct update silently fails and the handoff
+    // re-pops on reload. A SECURITY DEFINER function records just the ack.
+    const { error } = await c.rpc('ack_note', { p_id: id, p_by: by });
+    if (error) { try { await c.from('reports').update({ note_seen_by: by, note_seen_at: new Date().toISOString() }).eq('id', id); } catch {} }
   },
   async listReports() {
     const c = await client();

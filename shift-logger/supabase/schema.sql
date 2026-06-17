@@ -80,6 +80,21 @@ create policy "actions update while report open" on actions for update using (
   exists (select 1 from reports r where r.id = actions.report_id and r.status = 'open')
 );
 
+-- ── Handoff-note acknowledgement ──
+-- note_seen_by / note_seen_at sit on a SUBMITTED report, which the "update while
+-- open" policy blocks. This SECURITY DEFINER function records ONLY those two
+-- columns so a CSR's "Noted ✓" sticks across reloads (one ack per profile+shift
+-- note) instead of the handoff popping up again every time.
+create or replace function ack_note(p_id uuid, p_by text)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update reports set note_seen_by = p_by, note_seen_at = now() where id = p_id;
+$$;
+grant execute on function ack_note(uuid, text) to anon, authenticated;
+
 -- ── Access security log ──
 -- Every wrong-password attempt on the CEO console is recorded here so the CEO
 -- can review intrusion attempts. Only failed attempts store the typed password
