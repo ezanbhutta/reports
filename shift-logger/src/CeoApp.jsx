@@ -151,7 +151,7 @@ function Authed() {
       {badge > 0 && <span className="mono" style={{ marginLeft: 1, minWidth: 16, height: 16, padding: '0 4px', borderRadius: 9, fontSize: 10, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: on ? 'rgba(255,255,255,.25)' : C.coral, color: '#fff' }}>{badge}</span>}</button>); };
   return (
     <div style={{ minHeight: '100vh' }}>
-      <div className="glass" style={{ position: 'sticky', top: 0, zIndex: 30, borderRadius: 0, borderLeft: 'none', borderRight: 'none', borderTop: 'none' }}>
+      <div className="glass" style={{ position: 'sticky', top: 0, zIndex: 30, borderRadius: 0, borderLeft: 'none', borderRight: 'none', borderTop: 'none', backdropFilter: 'none', WebkitBackdropFilter: 'none', background: 'rgba(255,255,255,.92)' }}>
         <div className="mx-auto flex max-w-[1500px] items-center justify-between px-6 py-3.5">
           <div className="flex items-center gap-3">
             <Logo size={32} />
@@ -1011,7 +1011,7 @@ function DrillDrawer({ report, actions, onClose, onDelete }) {
   return (
     <>
     <div onClick={onClose} className="scrim" style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', justifyContent: 'flex-end' }}>
-      <div onClick={e => e.stopPropagation()} className="glass-2 no-scrollbar" style={{ width: 440, maxWidth: '100%', height: '100%', overflow: 'auto', animation: 'pop .2s ease' }}>
+      <div onClick={e => e.stopPropagation()} className="no-scrollbar" style={{ width: 440, maxWidth: '100%', height: '100%', overflow: 'auto', animation: 'pop .2s ease', background: '#fff', borderLeft: '1px solid var(--border)', boxShadow: '-24px 0 60px rgba(22,10,51,.18)' }}>
         <div style={{ position: 'sticky', top: 0, padding: '16px 18px', borderBottom: '1px solid rgba(124,41,255,.12)', background: 'rgba(255,255,255,.5)' }} className="flex items-center justify-between">
           <div><div style={{ fontWeight: 800, fontSize: 16, color: C.ink }}>{report.csr_name}</div><div style={{ fontSize: 11.5, color: C.muted, marginTop: 1 }}>{report.profile} · {report.shift} · {report.date}</div></div>
           <button onClick={onClose} className="rounded-lg" style={{ border: 'none', background: 'rgba(124,41,255,.08)', width: 30, height: 30, color: C.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} /></button>

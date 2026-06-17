@@ -562,7 +562,7 @@ function Brand({ small }) {
   </div>;
 }
 function Header({ children }) {
-  return <div className="glass" style={{ position: 'sticky', top: 0, zIndex: 20, borderLeft: 'none', borderRight: 'none', borderTop: 'none', borderRadius: 0 }}>
+  return <div className="glass" style={{ position: 'sticky', top: 0, zIndex: 20, borderLeft: 'none', borderRight: 'none', borderTop: 'none', borderRadius: 0, backdropFilter: 'none', WebkitBackdropFilter: 'none', background: 'rgba(255,255,255,.92)' }}>
     <div className="mx-auto flex items-center justify-between" style={{ maxWidth: 760, padding: '12px 20px' }}>{children}</div>
   </div>;
 }
