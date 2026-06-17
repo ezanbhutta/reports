@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock, Download, ChevronLeft, ChevronRight, CalendarDays, ShieldAlert, ShieldCheck, Monitor } from 'lucide-react';
+import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock, Download, ChevronLeft, ChevronRight, CalendarDays, ShieldAlert, ShieldCheck, Monitor, MapPin, Crosshair, Loader2 } from 'lucide-react';
 import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, CEO_PASSWORD, GROUPS, isDesigner } from './config.js';
 import { db, todayPKT, timePKT, addDays, BACKEND } from './store.js';
+import { getPosition, fmtDist, RADIUS_PRESETS } from './geo.js';
 import { Btn, Card, StatCard, Pill, Select, Chip, SectionHeader, Modal, Label, actionSummary, Logo, TrendChart } from './ui.jsx';
 
 const AUTH_KEY = 'sl_ceo_ok';
@@ -177,6 +178,98 @@ function Authed() {
   );
 }
 
+function Toggle({ on, onClick, disabled }) {
+  return (
+    <button onClick={onClick} disabled={disabled} title={disabled ? 'Set a location first' : ''}
+      style={{ width: 46, height: 26, borderRadius: 14, border: 'none', flex: '0 0 auto', cursor: disabled ? 'not-allowed' : 'pointer', position: 'relative', opacity: disabled ? 0.5 : 1, background: on ? C.mint : 'rgba(124,41,255,.18)', transition: 'background .15s' }}>
+      <span style={{ position: 'absolute', top: 3, left: on ? 23 : 3, width: 20, height: 20, borderRadius: 10, background: '#fff', boxShadow: '0 2px 5px rgba(0,0,0,.22)', transition: 'left .15s' }} />
+    </button>
+  );
+}
+
+// Geofence setup — the CEO captures a centre point + radius; the gate (GeoGate)
+// enforces it on every device. Stored via db.setGeofence (DB-backed when on Supabase).
+function GeoLockCard() {
+  const [g, setG] = useState(null);          // saved config
+  const [draft, setDraft] = useState(null);  // editable copy
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [acc, setAcc] = useState(null);      // accuracy of last capture
+
+  useEffect(() => {
+    db.getGeofence().then(x => {
+      const v = x || { enabled: false, lat: null, lng: null, radiusM: 1000, label: '' };
+      setG(v); setDraft(v);
+    });
+  }, []);
+  if (!draft) return null;
+
+  const hasCenter = draft.lat != null && draft.lng != null;
+  const dirty = JSON.stringify(g) !== JSON.stringify(draft);
+  const set = patch => { setDraft(d => ({ ...d, ...patch })); setMsg(''); };
+
+  const capture = async () => {
+    setBusy(true); setMsg('Getting your location…'); setAcc(null);
+    try {
+      const p = await getPosition();
+      setDraft(d => ({ ...d, lat: +p.lat.toFixed(6), lng: +p.lng.toFixed(6) }));
+      setAcc(p.accuracy); setMsg('Location captured.');
+    } catch (e) {
+      setMsg(e && e.code === 1 ? 'Location permission denied — allow it and retry.' : 'Couldn’t read your location.');
+    }
+    setBusy(false);
+  };
+
+  const save = async () => {
+    setBusy(true);
+    const v = { ...draft, enabled: draft.enabled && hasCenter };
+    await db.setGeofence(v); setG(v); setDraft(v);
+    setMsg('Saved — enforced on every device.'); setBusy(false);
+  };
+
+  const isErr = /denied|Couldn/.test(msg);
+  return (
+    <Card className="p-4">
+      <div className="flex items-center justify-between gap-3" style={{ flexWrap: 'wrap' }}>
+        <div className="flex items-center gap-2.5" style={{ minWidth: 0 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 12, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', background: g.enabled ? C.mintBg : 'rgba(124,41,255,.07)', color: g.enabled ? C.mint : C.dim }}><MapPin size={18} /></div>
+          <div>
+            <div style={{ fontSize: 13.5, fontWeight: 800, color: C.ink }}>{g.enabled ? 'On — app locked to your area' : 'Off — app works anywhere'}</div>
+            <div style={{ fontSize: 11.5, color: C.muted }}>{hasCenter ? `Centre set · within ${fmtDist(draft.radiusM)}${draft.label ? ` of ${draft.label}` : ''}` : 'No location set yet'}</div>
+          </div>
+        </div>
+        <Toggle on={draft.enabled} disabled={!hasCenter} onClick={() => set({ enabled: !draft.enabled })} />
+      </div>
+
+      <div style={{ height: 1, background: 'rgba(124,41,255,.08)', margin: '14px 0' }} />
+
+      <Label>1 · Centre point</Label>
+      <div className="flex items-center gap-2" style={{ flexWrap: 'wrap' }}>
+        <Btn onClick={capture} disabled={busy} variant="ghost" className="lift">{busy ? <Loader2 size={15} className="animate-spin" /> : <Crosshair size={15} />} Use my current location</Btn>
+        {hasCenter && <span className="mono" style={{ fontSize: 11.5, color: C.muted }}>{draft.lat}, {draft.lng}{acc != null ? ` · ±${fmtDist(acc)}` : ''}</span>}
+      </div>
+
+      <Label>2 · Allowed radius</Label>
+      <div className="flex items-center gap-1.5" style={{ flexWrap: 'wrap' }}>
+        {RADIUS_PRESETS.map(r => <Chip key={r.m} active={draft.radiusM === r.m} onClick={() => set({ radiusM: r.m })}>{r.label}</Chip>)}
+      </div>
+
+      <Label>3 · Area name (optional)</Label>
+      <input className="gi" value={draft.label || ''} onChange={e => set({ label: e.target.value })} placeholder="e.g. Head office" />
+
+      <div className="flex items-center justify-between gap-3" style={{ marginTop: 14, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11.5, fontWeight: 600, color: isErr ? C.coral : C.muted }}>{msg}</span>
+        <Btn onClick={save} disabled={busy || !dirty} className="lift">Save</Btn>
+      </div>
+
+      <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 12, background: C.amberBg, color: '#92660C', fontSize: 11.5, display: 'flex', gap: 8, lineHeight: 1.5 }}>
+        <AlertTriangle size={15} style={{ flex: '0 0 auto', marginTop: 1 }} />
+        <span>Locking applies to <b>both apps</b>. If you’re ever off-site, use <b>Manager override</b> on the block screen (your manager password) to get back in. This is a deterrent — a VPN or browser dev-tools can still fake location.</span>
+      </div>
+    </Card>
+  );
+}
+
 function SecurityPanel({ log, seenAt, onSeen }) {
   const [hiSince] = useState(seenAt); // snapshot so "new" highlight survives marking-seen
   useEffect(() => { onSeen(); }, [onSeen]);
@@ -190,7 +283,10 @@ function SecurityPanel({ log, seenAt, onSeen }) {
         <p className="mt-1 text-xs" style={{ color: C.muted }}>Every wrong-password attempt on the CEO console is recorded here. The real password is never stored — only what an intruder typed.</p>
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3">
+      <SectionHeader eyebrow="Access" title="Work-area lock" right="geofence" />
+      <GeoLockCard />
+
+      <div className="mt-6 mb-6 grid grid-cols-2 gap-3 md:grid-cols-3">
         <StatCard label="Failed attempts" value={failed.length} sub={failed[0] ? `last ${ago(failed[0].created_at)}` : 'none yet'} accent={failed.length ? C.coral : C.mint} icon={ShieldAlert} />
         <StatCard label="Successful unlocks" value={success.length} sub={success[0] ? `last ${ago(success[0].created_at)}` : 'none yet'} accent={C.mint} icon={ShieldCheck} />
         <StatCard label="Distinct devices" value={new Set(log.map(e => deviceLabel(e.ua))).size} sub="seen on this console" accent={C.violet} icon={Monitor} />

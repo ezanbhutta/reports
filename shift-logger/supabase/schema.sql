@@ -100,3 +100,18 @@ drop policy if exists "security read"  on security_log;
 drop policy if exists "security write" on security_log;
 create policy "security read"  on security_log for select using (true);
 create policy "security write" on security_log for insert with check (true);
+
+-- ── App settings (key/value) ──
+-- Holds the work-area geofence ({enabled, lat, lng, radiusM, label}) under the
+-- key 'geofence', set from the CEO console and enforced on every device.
+create table if not exists settings (
+  key        text primary key,
+  value      jsonb not null default '{}'::jsonb,
+  updated_at timestamptz default now()
+);
+do $$ begin alter publication supabase_realtime add table settings; exception when duplicate_object then null; end $$;
+alter table settings enable row level security;
+drop policy if exists "settings read"  on settings;
+drop policy if exists "settings write" on settings;
+create policy "settings read"  on settings for select using (true);
+create policy "settings write" on settings for all    using (true) with check (true);

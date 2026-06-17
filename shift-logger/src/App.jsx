@@ -1,5 +1,6 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import CsrApp from './CsrApp.jsx';
+import GeoGate from './GeoGate.jsx';
 
 // CSR app is the default and ships in the main bundle. The CEO console lives at
 // #ceo (a separate, unlinked, password-protected route) and is lazy-loaded, so
@@ -13,6 +14,12 @@ export default function App() {
     window.addEventListener('hashchange', on);
     return () => window.removeEventListener('hashchange', on);
   }, []);
-  if (hash.toLowerCase().startsWith('#ceo')) return <Suspense fallback={null}><CeoApp /></Suspense>;
-  return <CsrApp />;
+  const isCeo = hash.toLowerCase().startsWith('#ceo');
+  // The work-area lock wraps both apps, so it's checked once per page load
+  // regardless of which route renders.
+  return (
+    <GeoGate>
+      {isCeo ? <Suspense fallback={null}><CeoApp /></Suspense> : <CsrApp />}
+    </GeoGate>
+  );
 }

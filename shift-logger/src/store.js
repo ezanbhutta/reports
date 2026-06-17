@@ -30,7 +30,7 @@ export function addDays(ymd, n) {
 // localStorage backend
 // ════════════════════════════════════════════════════════════════
 const LS = {
-  reports: 'sl_reports_v1', actions: 'sl_actions_v1', roster: 'sl_roster_v1', security: 'sl_security_v1',
+  reports: 'sl_reports_v1', actions: 'sl_actions_v1', roster: 'sl_roster_v1', security: 'sl_security_v1', geofence: 'sl_geofence_v1',
 };
 const read = (k, fallback) => { try { return JSON.parse(localStorage.getItem(k)) ?? fallback; } catch { return fallback; } };
 const write = (k, v) => { localStorage.setItem(k, JSON.stringify(v)); ping(); };
@@ -113,6 +113,8 @@ const localDb = {
   async listAccessLog() {
     return read(LS.security, []).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
   },
+  async getGeofence() { return read(LS.geofence, null); },
+  async setGeofence(obj) { write(LS.geofence, obj); return obj; },
   subscribe(cb) {
     const bc = (() => { try { return new BroadcastChannel('sl'); } catch { return null; } })();
     const onMsg = () => cb();
@@ -220,6 +222,13 @@ const supaDb = {
   async listAccessLog() {
     try { const c = await client(); const { data } = await c.from('security_log').select('*').order('created_at', { ascending: false }).limit(200); return data || []; } catch { return []; }
   },
+  async getGeofence() {
+    try { const c = await client(); const { data } = await c.from('settings').select('value').eq('key', 'geofence').maybeSingle(); return (data && data.value) || null; } catch { return null; }
+  },
+  async setGeofence(obj) {
+    try { const c = await client(); await c.from('settings').upsert({ key: 'geofence', value: obj, updated_at: new Date().toISOString() }); } catch {}
+    return obj;
+  },
   subscribe(cb) {
     let ch;
     client().then(c => {
@@ -227,6 +236,7 @@ const supaDb = {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' }, cb)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'actions' }, cb)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'security_log' }, cb)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, cb)
         .subscribe();
     });
     return () => { if (ch && sb) sb.removeChannel(ch); };
