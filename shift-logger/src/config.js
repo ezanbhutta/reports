@@ -22,7 +22,7 @@ export const SHIFTS = [
 ];
 
 export const PROFILES = [
-  'Abdul Haseeb', 'Tariq Mahmood', 'Eikon Designs', 'Alee Studioz', 'Carpicon',
+  'Abdul Haseeb', 'Brand Identity Co', 'Eikon Designs', 'Alee Studioz', 'Carpicon',
   'Dygram Designs', 'Storm Design', 'WeDesignz', 'Grid Designs', 'X Studioz',
 ];
 
@@ -101,8 +101,9 @@ export const ACTIONS = [
               { name: 'project', label: 'Project name', type: 'text' },
               { name: 'service', label: 'Service', type: 'text' },
               { name: 'value', label: 'Price', type: 'text' } ] },
-  { key: 'order_assigned', label: 'Order given to designer', group: 'orders',
+  { key: 'order_assigned', label: 'Order Assigned to Designer', group: 'orders',
     fields: [ { name: 'client', label: 'Project name', type: 'text', required: true },
+              { name: 'order_type', label: 'Order type', type: 'segment', options: ['Organic', 'Inorganic'], required: true },
               { name: 'designer', label: 'Designer', type: 'designer', required: true },
               { name: 'due', label: 'Due date', type: 'date' } ] },
   { key: 'order_completed', label: 'Order completed', group: 'orders',
@@ -132,6 +133,7 @@ export const ACTIONS = [
   { key: 'followup_client', label: 'Follow-up with client', group: 'followups',
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
               { name: 'project', label: 'Project name', type: 'text' },
+              { name: 'reason', label: 'Reason to follow up', type: 'text' },
               { name: 'attempt', label: 'Which follow-up?', type: 'segment', options: ['1st', '2nd', '3rd', '4th+'] } ] },
   { key: 'followup_designer', label: 'Follow-up with designer', group: 'followups',
     fields: [ { name: 'project', label: 'Project name', type: 'text', required: true },
@@ -173,7 +175,7 @@ export const ACTION_BY_KEY = Object.fromEntries(ACTIONS.map(a => [a.key, a]));
 
 // End-of-shift checklist
 export const CHECKLIST = [
-  'CRM updated', 'ClickUp cleared', 'Portfolio updated', 'Analytics checked', 'Checked orders one by one',
+  'CRM updated', 'ClickUp cleared', 'Portfolio updated', 'Briefs Created', 'Analytics checked', 'Checked orders one by one',
 ];
 
 // Short labels for KPI tiles / summaries

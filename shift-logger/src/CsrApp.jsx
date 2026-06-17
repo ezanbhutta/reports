@@ -473,7 +473,7 @@ function CommandPalette({ onClose, onPick }) {
 const GroupLabel = ({ children, color = C.dim }) => <div style={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.12em', color, margin: '10px 6px 4px' }}>{children}</div>;
 
 // ── Wrap up ──
-const COUNT_ITEMS = ['CRM updated', 'Portfolio updated']; // these ask for a number once ticked
+const COUNT_ITEMS = ['CRM updated', 'Portfolio updated', 'Briefs Created']; // these ask for a number once ticked
 function WrapUp({ onClose, onSubmit, note, shifts }) {
   const [done, setDone] = useState({}); const [nums, setNums] = useState({});
   const submit = () => {
