@@ -293,14 +293,15 @@ function DevicesCard() {
         ? <div style={{ color: C.dim, fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}><Laptop size={15} /> No laptops yet — open the staff app on one to register it.</div>
         : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {devices.map(d => (
-              <div key={d.id} className="glass-soft rounded-xl" style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', borderLeft: `3px solid ${d.profile ? C.mint : C.amber}` }}>
+              <div key={d.id} className="glass-soft rounded-xl" style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', borderLeft: `3px solid ${d.profile === '*' ? C.violet : d.profile ? C.mint : C.amber}` }}>
                 <div style={{ minWidth: 90 }}>
                   <div className="mono" style={{ fontSize: 14, fontWeight: 800, color: C.ink, letterSpacing: '.06em' }}>{d.code || String(d.id).slice(0, 6)}</div>
-                  <div style={{ fontSize: 9.5, color: d.profile ? C.mint : C.amber, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em' }}>{d.profile ? 'bound' : 'pending'}</div>
+                  <div style={{ fontSize: 9.5, color: d.profile === '*' ? C.violet : d.profile ? C.mint : C.amber, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em' }}>{d.profile === '*' ? 'admin · all' : d.profile ? 'bound' : 'pending'}</div>
                 </div>
                 <input defaultValue={d.label} onBlur={e => { if (e.target.value !== (d.label || '')) assign(d, { label: e.target.value }); }} placeholder="Laptop name (e.g. Desk 1)" className="gi" style={{ flex: 1, minWidth: 130, padding: '8px 10px', fontSize: 12.5 }} />
                 <Select value={d.profile || ''} onChange={e => assign(d, { profile: e.target.value })}>
                   <option value="">— unassigned —</option>
+                  <option value="*">All profiles (admin)</option>
                   {PROFILES.map(p => <option key={p} value={p}>{p}</option>)}
                 </Select>
                 <button onClick={() => remove(d)} title="Remove device" style={{ border: 'none', background: 'rgba(124,41,255,.08)', width: 30, height: 30, borderRadius: 9, color: C.coral, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}><Trash2 size={14} /></button>
@@ -1112,6 +1113,9 @@ function RosterManager() {
           </Card>
         ))}
       </div>
+
+      <div className="mt-8"><SectionHeader eyebrow="Access" title="Registered devices" right="laptop → profile · admin = all" /></div>
+      <DevicesCard />
 
       {edit && <Modal title={(editing ? 'Edit ' : 'Add ') + (editDesigner ? 'designer' : 'person')} onClose={() => setEdit(null)}>
         <Label>Name</Label><input value={edit.name} onChange={e => setEdit({ ...edit, name: e.target.value })} placeholder="Full name" className="gi" />

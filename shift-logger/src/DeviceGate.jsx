@@ -23,7 +23,8 @@ export default function DeviceGate({ children }) {
     const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
     try { dev = await db.registerDevice({ id, code, ua }); } catch {}
     if (!dev) { try { dev = await db.getDevice(id); } catch {} }
-    if (dev && dev.profile) { setBound(dev.profile); setPhase('ok'); }
+    // profile === '*' = admin device (access to ALL profiles → no lock).
+    if (dev && dev.profile) { setBound(dev.profile === '*' ? null : dev.profile); setPhase('ok'); }
     else setPhase('pending');
   }, [id, code]);
 
