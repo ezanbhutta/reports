@@ -30,7 +30,7 @@ export function addDays(ymd, n) {
 // localStorage backend
 // ════════════════════════════════════════════════════════════════
 const LS = {
-  reports: 'sl_reports_v1', actions: 'sl_actions_v1', roster: 'sl_roster_v1', security: 'sl_security_v1', geofence: 'sl_geofence_v1',
+  reports: 'sl_reports_v1', actions: 'sl_actions_v1', roster: 'sl_roster_v1', security: 'sl_security_v1', geofence: 'sl_geofence_v1', devices: 'sl_devices_v1',
 };
 const read = (k, fallback) => { try { return JSON.parse(localStorage.getItem(k)) ?? fallback; } catch { return fallback; } };
 const write = (k, v) => { localStorage.setItem(k, JSON.stringify(v)); ping(); };
@@ -120,6 +120,24 @@ const localDb = {
   },
   async getGeofence() { return read(LS.geofence, null); },
   async setGeofence(obj) { write(LS.geofence, obj); return obj; },
+  async listDevices() { return read(LS.devices, []); },
+  async getDevice(id) { return read(LS.devices, []).find(d => d.id === id) || null; },
+  async registerDevice({ id, code, ua }) {
+    const list = read(LS.devices, []);
+    if (!list.some(d => d.id === id)) {
+      list.push({ id, code: code || '', label: '', profile: '', ua: ua || '', created_at: new Date().toISOString(), last_seen: new Date().toISOString() });
+      write(LS.devices, list);
+    }
+    return read(LS.devices, []).find(d => d.id === id) || null;
+  },
+  async saveDevice(dev) {
+    const list = read(LS.devices, []);
+    const i = list.findIndex(d => d.id === dev.id);
+    if (i >= 0) list[i] = { ...list[i], ...dev }; else list.push(dev);
+    write(LS.devices, list);
+    return dev;
+  },
+  async removeDevice(id) { write(LS.devices, read(LS.devices, []).filter(d => d.id !== id)); return true; },
   subscribe(cb) {
     const bc = (() => { try { return new BroadcastChannel('sl'); } catch { return null; } })();
     const onMsg = () => cb();
@@ -245,6 +263,29 @@ const supaDb = {
     if (error) throw error;
     return obj;
   },
+  async listDevices() {
+    try { const c = await client(); const { data } = await c.from('devices').select('*').order('created_at'); return data || []; } catch { return []; }
+  },
+  async getDevice(id) {
+    try { const c = await client(); const { data } = await c.from('devices').select('*').eq('id', id).maybeSingle(); return data || null; } catch { return null; }
+  },
+  async registerDevice({ id, code, ua }) {
+    try {
+      const c = await client();
+      await c.from('devices').upsert({ id, code: code || '', ua: ua || '', last_seen: new Date().toISOString() }, { onConflict: 'id', ignoreDuplicates: true });
+      await c.from('devices').update({ last_seen: new Date().toISOString() }).eq('id', id);
+      const { data } = await c.from('devices').select('*').eq('id', id).maybeSingle();
+      return data || null;
+    } catch { return null; }
+  },
+  async saveDevice(dev) {
+    try { const c = await client(); await c.from('devices').upsert(dev, { onConflict: 'id' }); } catch {}
+    return dev;
+  },
+  async removeDevice(id) {
+    try { const c = await client(); await c.from('devices').delete().eq('id', id); } catch {}
+    return true;
+  },
   subscribe(cb) {
     let ch;
     client().then(c => {
@@ -253,6 +294,7 @@ const supaDb = {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'actions' }, cb)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'security_log' }, cb)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, cb)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'devices' }, cb)
         .subscribe();
     });
     return () => { if (ch && sb) sb.removeChannel(ch); };

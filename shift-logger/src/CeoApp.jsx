@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock, Download, ChevronLeft, ChevronRight, CalendarDays, ShieldAlert, ShieldCheck, Monitor, MapPin, Crosshair, Loader2 } from 'lucide-react';
+import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock, Download, ChevronLeft, ChevronRight, CalendarDays, ShieldAlert, ShieldCheck, Monitor, MapPin, Crosshair, Loader2, Laptop } from 'lucide-react';
 import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, CEO_PASSWORD, GROUPS, isDesigner } from './config.js';
 import { db, todayPKT, timePKT, addDays, BACKEND } from './store.js';
 import { getPosition, fmtDist, RADIUS_PRESETS } from './geo.js';
@@ -275,6 +275,42 @@ function GeoLockCard() {
   );
 }
 
+// Per-laptop device registry — assign each laptop a profile (it locks to it).
+function DevicesCard() {
+  const [devices, setDevices] = useState([]);
+  const reload = useCallback(() => db.listDevices().then(setDevices), []);
+  useEffect(() => { reload(); let t; const off = db.subscribe(() => { clearTimeout(t); t = setTimeout(reload, 300); }); return () => { clearTimeout(t); off && off(); }; }, [reload]);
+  const assign = async (d, patch) => { setDevices(ds => ds.map(x => x.id === d.id ? { ...x, ...patch } : x)); await db.saveDevice({ ...d, ...patch }); reload(); };
+  const remove = async (d) => { if (!window.confirm(`Remove device ${d.code || ''}? It will be blocked until re-registered.`)) return; await db.removeDevice(d.id); reload(); };
+  const pending = devices.filter(d => !d.profile).length;
+  return (
+    <Card className="p-4">
+      <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 12, lineHeight: 1.5 }}>
+        Each laptop locks to the profile you assign here. Open the staff app on a laptop once and it appears below by its code — pick a profile and it unlocks on that laptop automatically.
+        {pending > 0 && <b style={{ color: C.amber }}> · {pending} waiting to assign</b>}
+      </div>
+      {devices.length === 0
+        ? <div style={{ color: C.dim, fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}><Laptop size={15} /> No laptops yet — open the staff app on one to register it.</div>
+        : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {devices.map(d => (
+              <div key={d.id} className="glass-soft rounded-xl" style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', borderLeft: `3px solid ${d.profile ? C.mint : C.amber}` }}>
+                <div style={{ minWidth: 90 }}>
+                  <div className="mono" style={{ fontSize: 14, fontWeight: 800, color: C.ink, letterSpacing: '.06em' }}>{d.code || String(d.id).slice(0, 6)}</div>
+                  <div style={{ fontSize: 9.5, color: d.profile ? C.mint : C.amber, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em' }}>{d.profile ? 'bound' : 'pending'}</div>
+                </div>
+                <input defaultValue={d.label} onBlur={e => { if (e.target.value !== (d.label || '')) assign(d, { label: e.target.value }); }} placeholder="Laptop name (e.g. Desk 1)" className="gi" style={{ flex: 1, minWidth: 130, padding: '8px 10px', fontSize: 12.5 }} />
+                <Select value={d.profile || ''} onChange={e => assign(d, { profile: e.target.value })}>
+                  <option value="">— unassigned —</option>
+                  {PROFILES.map(p => <option key={p} value={p}>{p}</option>)}
+                </Select>
+                <button onClick={() => remove(d)} title="Remove device" style={{ border: 'none', background: 'rgba(124,41,255,.08)', width: 30, height: 30, borderRadius: 9, color: C.coral, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}><Trash2 size={14} /></button>
+              </div>
+            ))}
+          </div>}
+    </Card>
+  );
+}
+
 function SecurityPanel({ log, seenAt, onSeen }) {
   const [hiSince] = useState(seenAt); // snapshot so "new" highlight survives marking-seen
   useEffect(() => { onSeen(); }, [onSeen]);
@@ -290,6 +326,9 @@ function SecurityPanel({ log, seenAt, onSeen }) {
 
       <SectionHeader eyebrow="Access" title="Work-area lock" right="geofence" />
       <GeoLockCard />
+
+      <div className="mt-6"><SectionHeader eyebrow="Access" title="Registered devices" right="laptop → profile" /></div>
+      <DevicesCard />
 
       <div className="mt-6 mb-6 grid grid-cols-2 gap-3 md:grid-cols-3">
         <StatCard label="Failed attempts" value={failed.length} sub={failed[0] ? `last ${ago(failed[0].created_at)}` : 'none yet'} accent={failed.length ? C.coral : C.mint} icon={ShieldAlert} />

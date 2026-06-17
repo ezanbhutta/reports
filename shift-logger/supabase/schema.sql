@@ -121,6 +121,26 @@ drop policy if exists "security write" on security_log;
 create policy "security read"  on security_log for select using (true);
 create policy "security write" on security_log for insert with check (true);
 
+-- ── Registered devices (per-laptop binding) ──
+-- Each laptop gets a stable, client-generated id. The CEO assigns it a profile;
+-- a device with a profile is "bound" (the CSR app locks to that profile), and
+-- profile = '' means pending (blocked until the CEO assigns one).
+create table if not exists devices (
+  id         text primary key,
+  code       text default '',
+  label      text default '',
+  profile    text default '',
+  ua         text default '',
+  created_at timestamptz default now(),
+  last_seen  timestamptz default now()
+);
+do $$ begin alter publication supabase_realtime add table devices; exception when duplicate_object then null; end $$;
+alter table devices enable row level security;
+drop policy if exists "devices read"  on devices;
+drop policy if exists "devices write" on devices;
+create policy "devices read"  on devices for select using (true);
+create policy "devices write" on devices for all    using (true) with check (true);
+
 -- ── App settings (key/value) ──
 -- Holds the work-area geofence ({enabled, lat, lng, radiusM, label}) under the
 -- key 'geofence', set from the CEO console and enforced on every device.

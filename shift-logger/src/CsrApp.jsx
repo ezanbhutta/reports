@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Check, Clock, Sunrise, Sunset, Moon, Zap, ArrowRightLeft, ShieldCheck, RotateCcw, StickyNote, X, Trash2 } from 'lucide-react';
+import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Check, Clock, Sunrise, Sunset, Moon, Zap, ArrowRightLeft, ShieldCheck, RotateCcw, StickyNote, X, Trash2, Laptop } from 'lucide-react';
 import { C, SHIFTS, PROFILES, ACTIONS, ACTION_BY_KEY, GROUPS, CHECKLIST, KPI_LABEL, isDesigner } from './config.js';
 import { db, todayPKT, timePKT } from './store.js';
 import { Btn, Card, Pill, Modal, Label, Field, actionSummary, Logo, ConfirmDelete } from './ui.jsx';
@@ -29,7 +29,7 @@ function LiveClock() {
   return <>{t}</>;
 }
 
-export default function CsrApp() {
+export default function CsrApp({ boundProfile }) {
   const [roster, setRoster] = useState([]);
   const [view, setView] = useState('login');
   const [report, setReport] = useState(null);
@@ -49,6 +49,8 @@ export default function CsrApp() {
   const [noteShifts, setNoteShifts] = useState([]);      // which shifts the outgoing note targets
 
   useEffect(() => { db.getRoster().then(setRoster); }, []);
+  // This laptop is registered to a profile — force it and keep it locked.
+  useEffect(() => { if (boundProfile) setProfile(boundProfile); }, [boundProfile]);
   // Resume an unsubmitted report after reload / tab close / offline (restores from cache instantly, reconciles when online)
   useEffect(() => {
     const saved = readActive();
@@ -227,7 +229,12 @@ export default function CsrApp() {
                 </div>
 
                 <Label>Profile</Label>
-                <select value={profile} onChange={e => setProfile(e.target.value)} className="gi" style={{ padding: '13px 34px 13px 13px' }}><option value="">Select profile…</option>{PROFILES.map(p => <option key={p} value={p}>{p}</option>)}</select>
+                {boundProfile
+                  ? <div className="gi" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '13px', background: C.violetBg, borderColor: C.violetLine, fontWeight: 700, color: C.violetDim }}>
+                      <Laptop size={14} /> {boundProfile}
+                      <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 800, color: C.dim, textTransform: 'uppercase', letterSpacing: '.08em' }}>This device</span>
+                    </div>
+                  : <select value={profile} onChange={e => setProfile(e.target.value)} className="gi" style={{ padding: '13px 34px 13px 13px' }}><option value="">Select profile…</option>{PROFILES.map(p => <option key={p} value={p}>{p}</option>)}</select>}
 
                 {resumable && <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 16, padding: '9px 12px', borderRadius: 12, background: C.mintBg, color: C.mint, fontSize: 12, fontWeight: 700 }}>
                   <RotateCcw size={13} /> Unsubmitted report from {timePKT(resumable.start_at)} — you'll pick up where you left off.
