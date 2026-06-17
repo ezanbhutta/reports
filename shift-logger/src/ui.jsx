@@ -1,5 +1,5 @@
-import React from 'react';
-import { X } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, AlertTriangle } from 'lucide-react';
 import { C } from './config.js';
 
 // Official HaseebMadeIt mark (served from /public/favicon.svg). Never substitute another logo.
@@ -125,6 +125,36 @@ export const Modal = ({ title, subtitle, onClose, children, width = 420 }) => (
     </div>
   </div>
 );
+
+// Two-step delete confirmation — used to remove a whole report (asks twice).
+export function ConfirmDelete({ what = 'this report', onConfirm, onClose }) {
+  const [step, setStep] = useState(1);
+  const [busy, setBusy] = useState(false);
+  const next = async () => {
+    if (step === 1) { setStep(2); return; }
+    setBusy(true);
+    try { await onConfirm(); } catch { /* caller surfaces errors */ }
+    setBusy(false); onClose();
+  };
+  return (
+    <Modal title={step === 1 ? `Delete ${what}?` : 'Are you absolutely sure?'} onClose={busy ? () => {} : onClose} width={400}>
+      <div style={{ display: 'flex', gap: 12 }}>
+        <div style={{ width: 40, height: 40, borderRadius: 12, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.coralBg, color: C.coral }}><AlertTriangle size={20} /></div>
+        <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.5, margin: 0 }}>
+          {step === 1
+            ? 'This removes the whole report and everything logged in it — usually only needed for one opened by mistake.'
+            : 'This cannot be undone. The report and all of its activity will be permanently deleted.'}
+        </p>
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
+        <Btn variant="ghost" onClick={onClose} disabled={busy} style={{ flex: 1 }}>Cancel</Btn>
+        <Btn onClick={next} disabled={busy} className="lift" style={{ flex: 1, background: C.coral, color: '#fff', boxShadow: '0 8px 20px rgba(239,68,68,.28)' }}>
+          {busy ? 'Deleting…' : step === 1 ? 'Delete' : 'Delete permanently'}
+        </Btn>
+      </div>
+    </Modal>
+  );
+}
 
 export const Label = ({ children }) => (
   <div style={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.12em', color: C.dim, margin: '13px 0 5px' }}>{children}</div>

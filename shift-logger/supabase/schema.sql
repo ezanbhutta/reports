@@ -70,6 +70,11 @@ create policy "reports insert" on reports for insert with check (true);
 -- lets an open report transition to 'submitted'. Without it, Postgres reuses
 -- USING as the check and rejects the submit (new status='submitted' fails).
 create policy "reports update while open" on reports for update using (status = 'open') with check (true);
+-- Deleting a whole report is allowed (for mistaken / wrong-profile reports); the
+-- app gates it behind a two-step confirm. A report's actions cascade-delete via
+-- the FK (which bypasses the actions policies, so no actions delete policy is needed).
+drop policy if exists "reports delete" on reports;
+create policy "reports delete" on reports for delete using (true);
 
 drop policy if exists "actions read"                  on actions;
 drop policy if exists "actions insert"                on actions;

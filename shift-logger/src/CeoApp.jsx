@@ -4,7 +4,7 @@ import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, 
 import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, CEO_PASSWORD, GROUPS, isDesigner } from './config.js';
 import { db, todayPKT, timePKT, addDays, BACKEND } from './store.js';
 import { getPosition, fmtDist, RADIUS_PRESETS } from './geo.js';
-import { Btn, Card, StatCard, Pill, Select, Chip, SectionHeader, Modal, Label, actionSummary, Logo, TrendChart } from './ui.jsx';
+import { Btn, Card, StatCard, Pill, Select, Chip, SectionHeader, Modal, Label, actionSummary, Logo, TrendChart, ConfirmDelete } from './ui.jsx';
 
 const AUTH_KEY = 'sl_ceo_ok';
 const uid = () => (crypto?.randomUUID ? crypto.randomUUID() : 'r_' + Math.random().toString(36).slice(2));
@@ -784,7 +784,7 @@ function Console() {
       {panel && <StatPanel kind={panel} label={label} reports={filtered} actions={acts} flags={flags} idle={idle} repMap={repMap} byReport={byReport}
         onOpen={id => { setPanel(null); setDrill(id); }} onOpenAction={a => { setPanel(null); setAct(a); }} onClose={() => setPanel(null)} />}
       {act && <ActionDetail action={act} report={repMap[act.report_id]} onClose={go => { const rid = act.report_id; setAct(null); if (go === 'report') setDrill(rid); }} />}
-      {drill && <DrillDrawer report={repById(drill)} actions={byReport[drill] || []} onClose={() => setDrill(null)} />}
+      {drill && <DrillDrawer report={repById(drill)} actions={byReport[drill] || []} onClose={() => setDrill(null)} onDelete={async (id) => { await db.deleteReport(id); setDrill(null); load(); }} />}
     </>
   );
 }
@@ -885,10 +885,12 @@ function ActionDetail({ action, report, onClose }) {
   );
 }
 
-function DrillDrawer({ report, actions, onClose }) {
+function DrillDrawer({ report, actions, onClose, onDelete }) {
+  const [del, setDel] = useState(false);
   if (!report) return null;
   const c = {}; actions.forEach(a => c[a.type] = (c[a.type] || 0) + 1);
   return (
+    <>
     <div onClick={onClose} className="scrim" style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', justifyContent: 'flex-end' }}>
       <div onClick={e => e.stopPropagation()} className="glass-2 no-scrollbar" style={{ width: 440, maxWidth: '100%', height: '100%', overflow: 'auto', animation: 'pop .2s ease' }}>
         <div style={{ position: 'sticky', top: 0, padding: '16px 18px', borderBottom: '1px solid rgba(124,41,255,.12)', background: 'rgba(255,255,255,.5)' }} className="flex items-center justify-between">
@@ -918,9 +920,15 @@ function DrillDrawer({ report, actions, onClose }) {
               </div>}
             </div>); })}
           {report.note_for_next && <div className="mt-3 glass-soft rounded-xl" style={{ padding: 12 }}><div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', color: C.violetDim, marginBottom: 4 }}>Note for next shift</div><div style={{ fontSize: 12.5, color: C.ink }}>{report.note_for_next}</div></div>}
+          {onDelete && <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid rgba(124,41,255,.1)' }}>
+            <button onClick={() => setDel(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%', padding: 10, borderRadius: 12, border: `1px solid ${C.coral}`, background: C.coralBg, color: C.coral, fontSize: 13, fontWeight: 800, cursor: 'pointer' }}><Trash2 size={14} /> Delete report</button>
+            <div style={{ fontSize: 10.5, color: C.dim, textAlign: 'center', marginTop: 6 }}>Removes this report and its activity from the console (e.g. a wrong-profile report).</div>
+          </div>}
         </div>
       </div>
     </div>
+    {del && <ConfirmDelete what="this report" onConfirm={() => onDelete(report.id)} onClose={() => setDel(false)} />}
+    </>
   );
 }
 

@@ -55,6 +55,11 @@ const localDb = {
     return rep;
   },
   async getReport(id) { return read(LS.reports, []).find(r => r.id === id) || null; },
+  async deleteReport(id) {
+    write(LS.reports, read(LS.reports, []).filter(r => r.id !== id));
+    write(LS.actions, read(LS.actions, []).filter(a => a.report_id !== id));
+    return true;
+  },
   async openReportFor(csr_name, profile) {
     return read(LS.reports, []).filter(r => r.csr_name === csr_name && r.profile === profile && r.status === 'open')
       .sort((a, b) => (b.start_at || '').localeCompare(a.start_at || ''))[0] || null;
@@ -158,6 +163,11 @@ const supaDb = {
     const c = await client();
     const { data } = await c.from('reports').select('*').eq('id', id).maybeSingle();
     return data || null;
+  },
+  async deleteReport(id) {
+    const c = await client();
+    await c.from('reports').delete().eq('id', id); // its actions cascade via the FK
+    return true;
   },
   async openReportFor(csr_name, profile) {
     const c = await client();

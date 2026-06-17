@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Check, Clock, Sunrise, Sunset, Moon, Zap, ArrowRightLeft, ShieldCheck, RotateCcw, StickyNote, X } from 'lucide-react';
+import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Check, Clock, Sunrise, Sunset, Moon, Zap, ArrowRightLeft, ShieldCheck, RotateCcw, StickyNote, X, Trash2 } from 'lucide-react';
 import { C, SHIFTS, PROFILES, ACTIONS, ACTION_BY_KEY, GROUPS, CHECKLIST, KPI_LABEL, isDesigner } from './config.js';
 import { db, todayPKT, timePKT } from './store.js';
-import { Btn, Card, Pill, Modal, Label, Field, actionSummary, Logo } from './ui.jsx';
+import { Btn, Card, Pill, Modal, Label, Field, actionSummary, Logo, ConfirmDelete } from './ui.jsx';
 
 const groupColor = k => (GROUPS.find(g => g.key === k) || {}).color || C.violet;
 const QUICK = ['inquiry', 'followup_client', 'shared', 'revision_assigned', 'meeting', 'new_order'];
@@ -38,6 +38,7 @@ export default function CsrApp() {
   const [picker, setPicker] = useState(false);
   const [form, setForm] = useState(null);   // { action, values, editId, error }
   const [wrap, setWrap] = useState(false);
+  const [del, setDel] = useState(false);
   const [flash, setFlash] = useState(false);   // success banner on the login for the next person
   const [oops, setOops] = useState(false);     // submit failed — keep the report, let them retry
   const [name, setName] = useState(''); const [shift, setShift] = useState(currentShift()); const [profile, setProfile] = useState('');
@@ -388,6 +389,7 @@ export default function CsrApp() {
         </Card>
 
         {!locked && <Btn variant="ok" onClick={tryWrapUp} className="lift" style={{ width: '100%', marginTop: 14, padding: 13, fontSize: 14, textAlign: 'center' }}>Wrap up &amp; submit my report</Btn>}
+        {!locked && <button onClick={() => setDel(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, margin: '12px auto 0', background: 'none', border: 'none', cursor: 'pointer', color: C.coral, fontSize: 12, fontWeight: 700 }}><Trash2 size={13} /> Wrong report? Delete it</button>}
       </div>
 
       {showHandoff && handoff && <Modal title="Note from the last shift" subtitle={`for ${report.profile} · left by ${handoff.csr_name}`} onClose={() => setShowHandoff(false)} width={400}>
@@ -410,6 +412,7 @@ export default function CsrApp() {
       </Modal>}
 
       {wrap && <WrapUp note={noteDraft} shifts={noteShifts} onClose={() => setWrap(false)} onSubmit={submit} />}
+      {del && report && <ConfirmDelete what="this report" onConfirm={async () => { await db.deleteReport(report.id); clearActive(); setReport(null); setActions([]); setHandoff(null); setShowHandoff(false); setName(''); setProfile(''); setView('login'); }} onClose={() => setDel(false)} />}
     </Shell>
   );
 }
