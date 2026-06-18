@@ -249,10 +249,19 @@ const supaDb = {
     return data || [];
   },
   async logAccess(event, detail) {
-    try { const c = await client(); await c.from('security_log').insert({ event, pw_tried: (detail && detail.pw) || '', ua: (detail && detail.ua) || '' }); } catch {}
+    // Security events must never be silently lost. If the cloud insert fails
+    // (e.g. the security_log table/migration is missing), keep a local copy so
+    // the console still records and shows the attempt.
+    try { const c = await client(); const { error } = await c.from('security_log').insert({ event, pw_tried: (detail && detail.pw) || '', ua: (detail && detail.ua) || '' }); if (error) throw error; }
+    catch { try { await localDb.logAccess(event, detail); } catch {} }
   },
   async listAccessLog() {
-    try { const c = await client(); const { data } = await c.from('security_log').select('*').order('created_at', { ascending: false }).limit(200); return data || []; } catch { return []; }
+    let cloud = [];
+    try { const c = await client(); const { data, error } = await c.from('security_log').select('*').order('created_at', { ascending: false }).limit(200); if (error) throw error; cloud = data || []; } catch {}
+    // Merge in any locally-buffered events (written when a cloud insert failed).
+    const local = await localDb.listAccessLog();
+    const seen = new Set(cloud.map(e => e.id));
+    return [...cloud, ...local.filter(e => !seen.has(e.id))].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
   },
   async getGeofence() {
     try { const c = await client(); const { data } = await c.from('settings').select('value').eq('key', 'geofence').maybeSingle(); return (data && data.value) || null; } catch { return null; }
