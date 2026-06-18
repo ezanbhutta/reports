@@ -193,5 +193,5 @@ export function Field({ field, value, onChange }) {
 export function actionSummary(action) {
   const d = action.details || {};
   if (Array.isArray(d.elements)) return d.elements.join(', ');
-  return d.agenda || d.what || d.reason || d.stage || d.designer || d.service || d.scope || d.project || d.kind || d.note || (d.attempt ? d.attempt + ' follow-up' : '') || d.value || '';
+  return d.agenda || d.what || d.reason || d.stage || d.update_type || d.designer || d.service || d.scope || d.project || d.kind || d.note || (d.attempt ? d.attempt + ' follow-up' : '') || d.value || '';
 }
