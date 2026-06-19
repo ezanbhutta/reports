@@ -280,16 +280,36 @@ const supaDb = {
     return [...cloud, ...local.filter(e => !seen.has(e.id))].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
   },
   async listMistakes() {
-    try { const c = await client(); const { data, error } = await c.from('mistakes').select('*').order('created_at', { ascending: false }).limit(500); if (error) throw error; return data || []; } catch { return []; }
+    let cloud = null;
+    try { const c = await client(); const { data, error } = await c.from('mistakes').select('*').order('created_at', { ascending: false }).limit(500); if (error) throw error; cloud = data || []; } catch { cloud = null; }
+    const local = await localDb.listMistakes();
+    if (cloud === null) return local;                       // DB unreachable — show entries buffered on this device
+    if (local.length) {                                     // best-effort: flush the buffer up to the cloud
+      try {
+        const c = await client();
+        for (const row of local) { const { error } = await c.from('mistakes').insert(row); if (!error || error.code === '23505') await localDb.deleteMistake(row.id); }
+        const { data } = await c.from('mistakes').select('*').order('created_at', { ascending: false }).limit(500);
+        if (data) return data;
+      } catch {}
+      const seen = new Set(cloud.map(e => e.id));
+      return [...cloud, ...local.filter(e => !seen.has(e.id))].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+    }
+    return cloud;
   },
   async addMistake(m) {
-    const c = await client(); const { data, error } = await c.from('mistakes').insert(m).select().single(); if (error) throw error; return data;
+    // Saving must never fail for the user. Try the cloud; if it's rejected
+    // (missing table/column, RLS) or offline, buffer locally and sync on next load.
+    try { const c = await client(); const { data, error } = await c.from('mistakes').insert(m).select().single(); if (error) throw error; return data; }
+    catch { return await localDb.addMistake(m); }
   },
   async updateMistake(id, patch) {
-    const c = await client(); const { data } = await c.from('mistakes').update(patch).eq('id', id).select().maybeSingle(); return data;
+    try { const c = await client(); await c.from('mistakes').update(patch).eq('id', id); } catch {}
+    try { await localDb.updateMistake(id, patch); } catch {}   // also patch a still-buffered entry
+    return null;
   },
   async deleteMistake(id) {
     try { const c = await client(); await c.from('mistakes').delete().eq('id', id); } catch {}
+    try { await localDb.deleteMistake(id); } catch {}
     return true;
   },
   async getGeofence() {
