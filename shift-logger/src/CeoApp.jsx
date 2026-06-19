@@ -325,11 +325,33 @@ function currentShift() {
   return 'Night';
 }
 
+// Multi-select people picker (chips + dropdown) — a mistake can involve several people.
+function PeoplePicker({ people, value, onChange }) {
+  const selected = Array.isArray(value) ? value : (value ? [value] : []);
+  const available = people.filter(p => !selected.includes(p));
+  return (
+    <div>
+      <Label>Who made it<span style={{ color: C.violet }}> *</span></Label>
+      {selected.length > 0 && <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+        {selected.map(p => (
+          <span key={p} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: C.violetBg, color: C.violetDim, borderRadius: 8, padding: '5px 6px 5px 10px', fontSize: 12, fontWeight: 700 }}>
+            {p}<button onClick={() => onChange(selected.filter(x => x !== p))} title="Remove" style={{ border: 'none', background: 'transparent', color: C.violetDim, cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}><X size={13} /></button>
+          </span>))}
+      </div>}
+      <select className="gi" value="" onChange={e => { if (e.target.value) onChange([...selected, e.target.value]); }}>
+        <option value="">{selected.length ? 'Add another person…' : 'Select…'}</option>
+        {available.map(p => <option key={p} value={p}>{p}</option>)}
+      </select>
+      {selected.length > 1 && <div style={{ fontSize: 10.5, color: C.dim, marginTop: 5 }}>{selected.length} people selected</div>}
+    </div>
+  );
+}
+
 function MistakesPanel({ mistakes, reload }) {
   const [roster, setRoster] = useState([]);
   useEffect(() => { db.getRoster().then(setRoster); }, []);
   const people = [...new Set(roster.filter(r => r.active && r.name).map(r => r.name))];
-  const blank = () => ({ person: '', category: '', severity: 'Medium', description: '', shift: currentShift(), happened_on: todayPKT(), happened_time: timePKT(), profile: '', logged_by: '' });
+  const blank = () => ({ person: [], category: '', severity: 'Medium', description: '', shift: currentShift(), happened_on: todayPKT(), happened_time: timePKT(), profile: '', logged_by: '' });
   const [form, setForm] = useState(blank());
   const [showForm, setShowForm] = useState(false);
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
@@ -337,10 +359,10 @@ function MistakesPanel({ mistakes, reload }) {
   const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); setErr(''); };
 
   const submit = async () => {
-    if (!form.person) { setErr('Pick who made the mistake.'); return; }
+    if (!form.person || !form.person.length) { setErr('Pick who made the mistake.'); return; }
     if (!form.description.trim()) { setErr('Describe what happened.'); return; }
     setBusy(true);
-    try { await db.addMistake({ ...form, description: form.description.trim() }); setShowForm(false); setForm(blank()); reload(); }
+    try { await db.addMistake({ ...form, person: form.person.join(', '), description: form.description.trim() }); setShowForm(false); setForm(blank()); reload(); }
     catch { setErr('Could not save — check your connection (and that the mistakes table exists).'); }
     finally { setBusy(false); }
   };
@@ -348,7 +370,8 @@ function MistakesPanel({ mistakes, reload }) {
   const saveNote = async (m, ceo_note) => { await db.updateMistake(m.id, { ceo_note }); reload(); };
   const remove = async (m) => { if (!window.confirm('Delete this mistake entry? This cannot be undone.')) return; await db.deleteMistake(m.id); reload(); };
 
-  const filtered = mistakes.filter(m => (fStatus === 'all' || m.status === fStatus) && (fPerson === 'all' || m.person === fPerson));
+  const namesOf = m => (m.person || '').split(',').map(s => s.trim()).filter(Boolean);
+  const filtered = mistakes.filter(m => (fStatus === 'all' || m.status === fStatus) && (fPerson === 'all' || namesOf(m).includes(fPerson)));
   const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString();
   const openN = mistakes.filter(m => m.status === 'open').length;
   const highN = mistakes.filter(m => m.severity === 'High' && m.status !== 'resolved').length;
@@ -376,7 +399,7 @@ function MistakesPanel({ mistakes, reload }) {
         <div style={{ flex: 1 }} />
         <Select value={fPerson} onChange={e => setFPerson(e.target.value)}>
           <option value="all">All people</option>
-          {[...new Set(mistakes.map(m => m.person).filter(Boolean))].sort().map(p => <option key={p} value={p}>{p}</option>)}
+          {[...new Set(mistakes.flatMap(namesOf))].sort().map(p => <option key={p} value={p}>{p}</option>)}
         </Select>
       </div>
 
@@ -408,7 +431,7 @@ function MistakesPanel({ mistakes, reload }) {
 
       {showForm && <Modal title="Log a mistake" subtitle="Manager entry" onClose={() => setShowForm(false)} width={460}>
         <div style={{ display: 'grid', gap: 12 }}>
-          <Field field={{ name: 'person', label: 'Who made it', type: 'select', options: people, required: true }} value={form.person} onChange={v => set('person', v)} />
+          <PeoplePicker people={people} value={form.person} onChange={v => set('person', v)} />
           <Field field={{ name: 'category', label: 'Category', type: 'select', options: MISTAKE_CATEGORIES }} value={form.category} onChange={v => set('category', v)} />
           <Field field={{ name: 'severity', label: 'Severity', type: 'segment', options: MISTAKE_SEVERITIES, required: true }} value={form.severity} onChange={v => set('severity', v)} />
           <div>
