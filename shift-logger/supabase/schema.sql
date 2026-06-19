@@ -141,21 +141,6 @@ drop policy if exists "devices write" on devices;
 create policy "devices read"  on devices for select using (true);
 create policy "devices write" on devices for all    using (true) with check (true);
 
--- ── App settings (key/value) ──
--- Holds the work-area geofence ({enabled, lat, lng, radiusM, label}) under the
--- key 'geofence', set from the CEO console and enforced on every device.
-create table if not exists settings (
-  key        text primary key,
-  value      jsonb not null default '{}'::jsonb,
-  updated_at timestamptz default now()
-);
-do $$ begin alter publication supabase_realtime add table settings; exception when duplicate_object then null; end $$;
-alter table settings enable row level security;
-drop policy if exists "settings read"  on settings;
-drop policy if exists "settings write" on settings;
-create policy "settings read"  on settings for select using (true);
-create policy "settings write" on settings for all    using (true) with check (true);
-
 -- ── Mistakes log (manager records, CEO reviews) ──
 -- The manager records what went wrong (who, when, shift, severity); the CEO
 -- reviews and signs off (status open → reviewed → resolved, optional note).
