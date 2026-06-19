@@ -161,7 +161,7 @@ function Authed() {
             <div><div className="disp" style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>CEO Console <span style={{ fontSize: 11, fontWeight: 700, color: C.mint }}>· <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 9, background: C.mint, boxShadow: `0 0 0 3px ${C.mintBg}` }} /> live</span></div>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.18em', textTransform: 'uppercase', color: C.dim }}>HaseebMadeIt · Operations</div></div>
           </div>
-          <div className="flex items-center gap-2"><Tab id="live" icon={BarChart3} label="Live" /><Tab id="roster" icon={Users} label="Roster" /><Tab id="mistakes" icon={ClipboardList} label="Mistakes" badge={openMistakes} /><Tab id="security" icon={ShieldAlert} label="Security" badge={unseen} /></div>
+          <div className="flex items-center gap-2"><Tab id="live" icon={BarChart3} label="Live" /><Tab id="mistakes" icon={ClipboardList} label="Mistakes" badge={openMistakes} /><Tab id="roster" icon={Users} label="Roster" /><Tab id="security" icon={ShieldAlert} label="Security" badge={unseen} /></div>
         </div>
       </div>
       <main className="mx-auto max-w-[1500px] px-6 py-6">
@@ -351,7 +351,7 @@ function MistakesPanel({ mistakes, reload }) {
   const [roster, setRoster] = useState([]);
   useEffect(() => { db.getRoster().then(setRoster); }, []);
   const people = [...new Set(roster.filter(r => r.active && r.name).map(r => r.name))];
-  const blank = () => ({ person: [], category: '', severity: 'Medium', description: '', shift: currentShift(), happened_on: todayPKT(), happened_time: timePKT(), profile: '', logged_by: '' });
+  const blank = () => ({ person: [], category: '', severity: 'Medium', description: '', client: '', project: '', shift: currentShift(), happened_on: todayPKT(), happened_time: timePKT(), profile: '', logged_by: '' });
   const [form, setForm] = useState(blank());
   const [showForm, setShowForm] = useState(false);
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
@@ -422,6 +422,7 @@ function MistakesPanel({ mistakes, reload }) {
               <button onClick={() => remove(m)} title="Delete entry" style={{ border: 'none', background: 'rgba(124,41,255,.08)', width: 28, height: 28, borderRadius: 8, color: C.coral, cursor: 'pointer', flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={13} /></button>
             </div>
             {m.description && <div style={{ fontSize: 13, color: C.ink, marginTop: 8, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{m.description}</div>}
+            {(m.client || m.project) && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>{[m.client && ('Client: ' + m.client), m.project && ('Project: ' + m.project)].filter(Boolean).join('  ·  ')}</div>}
             <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <input defaultValue={m.ceo_note} placeholder="CEO note (optional)…" onBlur={e => { if (e.target.value !== (m.ceo_note || '')) saveNote(m, e.target.value); }} className="gi" style={{ flex: 1, minWidth: 160, padding: '7px 10px', fontSize: 12 }} />
               {m.status !== 'reviewed' && m.status !== 'resolved' && <Btn variant="ghost" onClick={() => setStatus(m, 'reviewed')} style={{ padding: '7px 12px', fontSize: 12 }}>Mark reviewed</Btn>}
@@ -437,6 +438,10 @@ function MistakesPanel({ mistakes, reload }) {
           <div>
             <Label>What happened <span style={{ color: C.violet }}>*</span></Label>
             <textarea className="gi" value={form.description} onChange={e => set('description', e.target.value)} placeholder="Factual description — what went wrong" style={{ resize: 'vertical', minHeight: 72, lineHeight: 1.5 }} />
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ flex: 1 }}><Field field={{ name: 'client', label: 'Client name', type: 'text' }} value={form.client} onChange={v => set('client', v)} /></div>
+            <div style={{ flex: 1 }}><Field field={{ name: 'project', label: 'Project', type: 'text' }} value={form.project} onChange={v => set('project', v)} /></div>
           </div>
           <Field field={{ name: 'shift', label: 'Shift', type: 'segment', options: SHIFTS.map(s => s.key), required: true }} value={form.shift} onChange={v => set('shift', v)} />
           <div style={{ display: 'flex', gap: 10 }}>

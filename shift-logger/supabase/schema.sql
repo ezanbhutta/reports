@@ -165,6 +165,8 @@ create table if not exists mistakes (
   category      text default '',
   severity      text default 'Medium',    -- Low | Medium | High
   description   text default '',
+  client        text default '',          -- client name (optional)
+  project       text default '',          -- project (optional)
   happened_on   date,                     -- when it happened (date)
   happened_time text default '',          -- when it happened (time, free text e.g. "9:30 PM")
   shift         text default '',          -- Morning | Evening | Night
