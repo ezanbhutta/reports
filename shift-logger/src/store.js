@@ -168,6 +168,7 @@ const localDb = {
 // Supabase backend
 // ════════════════════════════════════════════════════════════════
 let sb = null;
+let _subCh = null, _subStarted = false; const _subCbs = new Set();
 async function client() {
   if (sb) return sb;
   const { createClient } = await import('@supabase/supabase-js');
@@ -345,17 +346,19 @@ const supaDb = {
     return true;
   },
   subscribe(cb) {
-    let ch;
-    client().then(c => {
-      ch = c.channel('sl-changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' }, cb)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'actions' }, cb)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'security_log' }, cb)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, cb)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'devices' }, cb)
-        .subscribe();
-    });
-    return () => { if (ch && sb) sb.removeChannel(ch); };
+    // One shared realtime channel, fanned out to every listener (with the changed
+    // table name) — instead of opening a websocket channel per component.
+    _subCbs.add(cb);
+    if (!_subStarted) {
+      _subStarted = true;
+      client().then(c => {
+        _subCh = c.channel('sl-changes');
+        ['reports', 'actions', 'security_log', 'settings', 'devices', 'mistakes', 'roster'].forEach(t =>
+          _subCh.on('postgres_changes', { event: '*', schema: 'public', table: t }, (p) => { const tb = (p && p.table) || t; _subCbs.forEach(f => { try { f(tb); } catch {} }); }));
+        _subCh.subscribe();
+      });
+    }
+    return () => { _subCbs.delete(cb); };
   },
 };
 

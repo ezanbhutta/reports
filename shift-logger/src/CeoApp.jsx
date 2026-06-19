@@ -4,7 +4,7 @@ import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, 
 import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, CEO_PASSWORD, GROUPS, isDesigner, MISTAKE_CATEGORIES } from './config.js';
 import { db, todayPKT, timePKT, addDays, BACKEND } from './store.js';
 import { getPosition, fmtDist, RADIUS_PRESETS } from './geo.js';
-import { Btn, Card, StatCard, Pill, Select, Chip, SectionHeader, Modal, Label, Field, actionSummary, Logo, TrendChart, ConfirmDelete } from './ui.jsx';
+import { Btn, Card, StatCard, Pill, Select, Chip, SectionHeader, Modal, Label, Field, actionSummary, Logo, TrendChart, ConfirmDelete, useLive } from './ui.jsx';
 
 const AUTH_KEY = 'sl_ceo_ok';
 const uid = () => (crypto?.randomUUID ? crypto.randomUUID() : 'r_' + Math.random().toString(36).slice(2));
@@ -133,18 +133,9 @@ export default function CeoApp() {
 
 function Authed() {
   const [view, setView] = useState('live');
-  const [secLog, setSecLog] = useState([]);
-  const [mistakes, setMistakes] = useState([]);
-  const reloadMistakes = useCallback(() => db.listMistakes().then(setMistakes), []);
+  const [secLog] = useLive('secLog', () => db.listAccessLog(), ['security_log']);
+  const [mistakes, reloadMistakes] = useLive('mistakes', () => db.listMistakes(), ['mistakes']);
   const [seenAt, setSeenAt] = useState(() => localStorage.getItem(SEEN_KEY) || '');
-  useEffect(() => {
-    const reload = () => { db.listAccessLog().then(setSecLog); db.listMistakes().then(setMistakes); };
-    reload();
-    const onFocus = () => reload();
-    window.addEventListener('focus', onFocus);
-    let t; const off = db.subscribe(() => { clearTimeout(t); t = setTimeout(reload, 300); });
-    return () => { clearTimeout(t); off && off(); window.removeEventListener('focus', onFocus); };
-  }, []);
   const unseen = secLog.filter(e => e.event === 'failed' && (e.created_at || '') > seenAt).length;
   const openMistakes = mistakes.filter(m => m.status !== 'reviewed').length;
   const markSeen = useCallback(() => { const now = new Date().toISOString(); localStorage.setItem(SEEN_KEY, now); setSeenAt(now); }, []);
@@ -624,12 +615,13 @@ function Calendar({ value, onApply, pos, popRef }) {
 }
 
 function Console() {
-  const [reports, setReports] = useState([]); const [allActions, setAllActions] = useState([]); const [roster, setRoster] = useState([]);
+  const [reports, reloadReports] = useLive('reports', () => db.listReports(), ['reports']);
+  const [allActions, reloadActions] = useLive('actions', () => db.allActions(), ['actions']);
+  const [roster] = useLive('roster', () => db.getRoster(), ['roster']);
   const [fShift, setFShift] = useState('all'); const [fProfile, setFProfile] = useState('all'); const [fCSR, setFCSR] = useState('all'); const [range, setRange] = useState({ mode: 'today' });
   const [drill, setDrill] = useState(null); const [panel, setPanel] = useState(null); const [act, setAct] = useState(null);
   const [exporting, setExporting] = useState(false);
-  const load = useCallback(() => { db.listReports().then(setReports); db.allActions().then(setAllActions); }, []);
-  useEffect(() => { load(); db.getRoster().then(setRoster); let t; const off = db.subscribe(() => { clearTimeout(t); t = setTimeout(load, 250); }); return () => { clearTimeout(t); off && off(); }; }, [load]);
+  const load = useCallback(() => { reloadReports(); reloadActions(); }, [reloadReports, reloadActions]);
 
   const win = useMemo(() => winFor(range), [range]);
   const filtered = useMemo(() => reports.filter(r => (fShift === 'all' || r.shift === fShift) && (fProfile === 'all' || r.profile === fProfile) && (fCSR === 'all' || r.csr_name === fCSR) && inWin(r.date, win)), [reports, fShift, fProfile, fCSR, win]);

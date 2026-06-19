@@ -1,6 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, AlertTriangle } from 'lucide-react';
 import { C } from './config.js';
+import { db } from './store.js';
+
+// ── Live data hook ──────────────────────────────────────────────
+// Shows last-known data instantly (cached across mounts, so switching tabs /
+// reopening a screen never blanks), then refreshes in the background. Re-fetches
+// on a realtime change to a relevant table or on window focus. Returns
+// [data, refresh, set] — `set` updates cache + state for optimistic edits.
+const _live = new Map();
+export function useLive(key, fetcher, tables, initial = []) {
+  const [data, setData] = useState(() => (_live.has(key) ? _live.get(key) : initial));
+  const ref = useRef(); ref.current = { fetcher, tables };
+  const refresh = useCallback(async () => { const d = await ref.current.fetcher(); _live.set(key, d); setData(d); return d; }, [key]);
+  useEffect(() => {
+    let alive = true, timer;
+    refresh();
+    const off = db.subscribe((table) => {
+      const tb = ref.current.tables;
+      if (tb && table && !tb.includes(table)) return;
+      clearTimeout(timer); timer = setTimeout(() => { if (alive) refresh(); }, 250);
+    });
+    const onFocus = () => refresh();
+    window.addEventListener('focus', onFocus);
+    return () => { alive = false; clearTimeout(timer); off && off(); window.removeEventListener('focus', onFocus); };
+  }, [key, refresh]);
+  const set = useCallback((upd) => setData(prev => { const next = typeof upd === 'function' ? upd(prev) : upd; _live.set(key, next); return next; }), [key]);
+  return [data, refresh, set];
+}
 
 // Official HaseebMadeIt mark (served from /public/favicon.svg). Never substitute another logo.
 export const Logo = ({ size = 30, className = '', style }) => (

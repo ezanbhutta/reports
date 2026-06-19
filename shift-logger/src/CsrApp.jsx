@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Check, Clock, Sunrise, Sunset, Moon, Zap, ArrowRightLeft, ShieldCheck, RotateCcw, StickyNote, X, Trash2, Laptop } from 'lucide-react';
 import { C, SHIFTS, PROFILES, ACTIONS, ACTION_BY_KEY, GROUPS, CHECKLIST, KPI_LABEL, isDesigner } from './config.js';
 import { db, todayPKT, timePKT } from './store.js';
-import { Btn, Card, Pill, Modal, Label, Field, actionSummary, Logo, ConfirmDelete } from './ui.jsx';
+import { Btn, Card, Pill, Modal, Label, Field, actionSummary, Logo, ConfirmDelete, useLive } from './ui.jsx';
 
 const groupColor = k => (GROUPS.find(g => g.key === k) || {}).color || C.violet;
 // The project name for an action (order_assigned stores it in the client field).
@@ -523,9 +523,10 @@ function WrapUp({ onClose, onSubmit, note, shifts }) {
 
 // ── Team log ──
 function TeamLog({ onBack, profile }) {
-  const [reports, setReports] = useState([]); const [all, setAll] = useState([]); const [open, setOpen] = useState(null);
-  const load = useCallback(() => { db.listReports().then(rs => setReports(profile ? rs.filter(r => r.profile === profile) : rs)); db.allActions().then(setAll); }, [profile]);
-  useEffect(() => { load(); let t; const off = db.subscribe(() => { clearTimeout(t); t = setTimeout(load, 200); }); return () => { clearTimeout(t); off && off(); }; }, [load]);
+  const [allReports] = useLive('reports', () => db.listReports(), ['reports']);
+  const [all] = useLive('actions', () => db.allActions(), ['actions']);
+  const [open, setOpen] = useState(null);
+  const reports = profile ? allReports.filter(r => r.profile === profile) : allReports;
   const cf = id => { const m = {}; all.filter(a => a.report_id === id).forEach(a => m[a.type] = (m[a.type] || 0) + 1); return m; };
   return (
     <Shell>
