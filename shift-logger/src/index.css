@@ -13,10 +13,8 @@ body {
   -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
   color: #160A33;
   background:
-    radial-gradient(55rem 45rem at 100% -12%, rgba(255,176,128,.07), transparent 60%),
-    radial-gradient(50rem 50rem at 0% -8%, rgba(124,77,255,.09), transparent 60%),
-    radial-gradient(46rem 40rem at 50% 122%, rgba(14,165,233,.05), transparent 60%),
-    #FAFAFE;
+    radial-gradient(60rem 48rem at 50% -14%, rgba(124,77,255,.045), transparent 62%),
+    #FBFBFD;
   background-attachment: fixed;
 }
 * { box-sizing: border-box; }
@@ -26,28 +24,26 @@ body {
 input, select, textarea, button { font-family: inherit; }
 ::selection { background: rgba(124,77,255,.22); }
 
-/* ── Frosted glass · Refero "Air" + soft elevation ── */
+/* ── Surfaces · sleek + minimal: flat fills, hairline borders, restrained shadow ── */
 .glass {
-  background: rgba(255,255,255,.62);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255,255,255,.7);
-  box-shadow: 0 1px 2px rgba(22,10,51,.04), 0 16px 40px rgba(22,10,51,.08), inset 0 1px 0 rgba(255,255,255,.6);
+  background: rgba(255,255,255,.78);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  backdrop-filter: blur(12px) saturate(140%);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 2px rgba(22,10,51,.035), 0 6px 18px rgba(22,10,51,.04);
 }
 .glass-2 {
-  background: rgba(255,255,255,.78);
-  -webkit-backdrop-filter: blur(30px) saturate(190%);
-  backdrop-filter: blur(30px) saturate(190%);
-  border: 1px solid rgba(255,255,255,.8);
-  box-shadow: 0 2px 6px rgba(22,10,51,.06), 0 30px 70px rgba(22,10,51,.16), inset 0 1px 0 rgba(255,255,255,.66);
+  background: rgba(255,255,255,.95);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  backdrop-filter: blur(16px) saturate(150%);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 30px rgba(22,10,51,.12);
 }
 .glass-soft {
-  /* List-item card. No backdrop-filter on purpose: these render many-per-list inside
-     scroll containers, and stacked/scrolling backdrop-filters cause scroll flicker + jank.
-     A solid-ish fill with a hairline border/shadow reads the same without the GPU cost. */
-  background: rgba(255,255,255,.72);
+  /* List-item card. No backdrop-filter: many-per-list inside scroll containers, and
+     stacked/scrolling backdrop-filters cause flicker. Flat white + hairline border. */
+  background: #fff;
   border: 1px solid var(--border);
-  box-shadow: 0 1px 2px rgba(22,10,51,.04);
 }
 .glass-dark {
   background: rgba(20,10,45,.55);
@@ -60,12 +56,12 @@ input, select, textarea, button { font-family: inherit; }
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
-.lift { transition: transform .18s cubic-bezier(.2,.7,.3,1), box-shadow .18s ease; }
-.lift:hover { transform: translateY(-3px); box-shadow: 0 2px 6px rgba(22,10,51,.05), 0 22px 50px rgba(22,10,51,.14); }
-.gi { /* glass input */
-  background: rgba(255,255,255,.6);
-  border: 1px solid rgba(124,77,255,.18);
-  border-radius: 12px; padding: 10px 12px; font-size: 13.5px; color: #160A33; outline: none; width: 100%;
+.lift { transition: transform .16s cubic-bezier(.2,.7,.3,1), box-shadow .16s ease; }
+.lift:hover { transform: translateY(-1px); box-shadow: 0 1px 2px rgba(22,10,51,.04), 0 8px 20px rgba(22,10,51,.08); }
+.gi { /* input */
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px 12px; font-size: 13.5px; color: #160A33; outline: none; width: 100%;
 }
 .gi:focus { border-color: rgba(124,77,255,.55); box-shadow: 0 0 0 3px rgba(124,77,255,.12); background-color: rgba(255,255,255,.85); }
 /* Native select: replace the cramped browser arrow with a balanced custom chevron + right padding */
