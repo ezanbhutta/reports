@@ -155,3 +155,29 @@ drop policy if exists "settings read"  on settings;
 drop policy if exists "settings write" on settings;
 create policy "settings read"  on settings for select using (true);
 create policy "settings write" on settings for all    using (true) with check (true);
+
+-- ── Mistakes log (manager records, CEO reviews) ──
+-- The manager records what went wrong (who, when, shift, severity); the CEO
+-- reviews and signs off (status open → reviewed → resolved, optional note).
+create table if not exists mistakes (
+  id            uuid primary key default gen_random_uuid(),
+  person        text not null,            -- who made the mistake (roster name)
+  category      text default '',
+  severity      text default 'Medium',    -- Low | Medium | High
+  description   text default '',
+  happened_on   date,                     -- when it happened (date)
+  happened_time text default '',          -- when it happened (time, free text e.g. "9:30 PM")
+  shift         text default '',          -- Morning | Evening | Night
+  profile       text default '',          -- brand profile (optional)
+  logged_by     text default '',          -- which manager recorded it (optional)
+  status        text default 'open',      -- open | reviewed | resolved
+  ceo_note      text default '',          -- CEO's review note
+  created_at    timestamptz default now()
+);
+create index if not exists mistakes_created_idx on mistakes (created_at desc);
+do $$ begin alter publication supabase_realtime add table mistakes; exception when duplicate_object then null; end $$;
+alter table mistakes enable row level security;
+drop policy if exists "mistakes read"  on mistakes;
+drop policy if exists "mistakes write" on mistakes;
+create policy "mistakes read"  on mistakes for select using (true);
+create policy "mistakes write" on mistakes for all    using (true) with check (true);

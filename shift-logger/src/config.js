@@ -201,6 +201,13 @@ export const KPI_LABEL = {
   meeting: 'Meetings', frustrated: 'Frustrated', disputed: 'Disputed', extension: 'Extensions', spam: 'Spam',
 };
 
+// Mistakes log (manager records, CEO reviews) — categories + severity scale
+export const MISTAKE_CATEGORIES = [
+  'Missed follow-up', 'Wrong info to client', 'Late delivery', 'CRM / ClickUp not updated',
+  'Tone / communication', 'Process skipped', 'Wrong assignment', 'Other',
+];
+export const MISTAKE_SEVERITIES = ['Low', 'Medium', 'High'];
+
 // CEO console password (change this; it's a light gate, not hard security).
 // Override at build time with VITE_CEO_PASSWORD.
 export const CEO_PASSWORD = import.meta.env.VITE_CEO_PASSWORD || 'haseeb-ceo';

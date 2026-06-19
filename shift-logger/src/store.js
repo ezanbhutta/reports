@@ -30,7 +30,7 @@ export function addDays(ymd, n) {
 // localStorage backend
 // ════════════════════════════════════════════════════════════════
 const LS = {
-  reports: 'sl_reports_v1', actions: 'sl_actions_v1', roster: 'sl_roster_v1', security: 'sl_security_v1', geofence: 'sl_geofence_v1', devices: 'sl_devices_v1',
+  reports: 'sl_reports_v1', actions: 'sl_actions_v1', roster: 'sl_roster_v1', security: 'sl_security_v1', geofence: 'sl_geofence_v1', devices: 'sl_devices_v1', mistakes: 'sl_mistakes_v1',
 };
 const read = (k, fallback) => { try { return JSON.parse(localStorage.getItem(k)) ?? fallback; } catch { return fallback; } };
 const write = (k, v) => { localStorage.setItem(k, JSON.stringify(v)); ping(); };
@@ -118,6 +118,22 @@ const localDb = {
   async listAccessLog() {
     return read(LS.security, []).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
   },
+  async listMistakes() {
+    return read(LS.mistakes, []).sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+  },
+  async addMistake(m) {
+    const list = read(LS.mistakes, []);
+    const row = { status: 'open', ceo_note: '', ...m, id: uid(), created_at: new Date().toISOString() };
+    list.push(row); write(LS.mistakes, list);
+    return row;
+  },
+  async updateMistake(id, patch) {
+    const list = read(LS.mistakes, []);
+    const i = list.findIndex(x => x.id === id);
+    if (i >= 0) { list[i] = { ...list[i], ...patch }; write(LS.mistakes, list); }
+    return list[i];
+  },
+  async deleteMistake(id) { write(LS.mistakes, read(LS.mistakes, []).filter(x => x.id !== id)); return true; },
   async getGeofence() { return read(LS.geofence, null); },
   async setGeofence(obj) { write(LS.geofence, obj); return obj; },
   async listDevices() { return read(LS.devices, []); },
@@ -262,6 +278,19 @@ const supaDb = {
     const local = await localDb.listAccessLog();
     const seen = new Set(cloud.map(e => e.id));
     return [...cloud, ...local.filter(e => !seen.has(e.id))].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+  },
+  async listMistakes() {
+    try { const c = await client(); const { data, error } = await c.from('mistakes').select('*').order('created_at', { ascending: false }).limit(500); if (error) throw error; return data || []; } catch { return []; }
+  },
+  async addMistake(m) {
+    const c = await client(); const { data, error } = await c.from('mistakes').insert(m).select().single(); if (error) throw error; return data;
+  },
+  async updateMistake(id, patch) {
+    const c = await client(); const { data } = await c.from('mistakes').update(patch).eq('id', id).select().maybeSingle(); return data;
+  },
+  async deleteMistake(id) {
+    try { const c = await client(); await c.from('mistakes').delete().eq('id', id); } catch {}
+    return true;
   },
   async getGeofence() {
     try { const c = await client(); const { data } = await c.from('settings').select('value').eq('key', 'geofence').maybeSingle(); return (data && data.value) || null; } catch { return null; }

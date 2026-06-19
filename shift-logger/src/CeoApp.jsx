@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock, Download, ChevronLeft, ChevronRight, CalendarDays, ShieldAlert, ShieldCheck, Monitor, MapPin, Crosshair, Loader2, Laptop } from 'lucide-react';
-import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, CEO_PASSWORD, GROUPS, isDesigner } from './config.js';
+import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, CEO_PASSWORD, GROUPS, isDesigner, MISTAKE_CATEGORIES, MISTAKE_SEVERITIES } from './config.js';
 import { db, todayPKT, timePKT, addDays, BACKEND } from './store.js';
 import { getPosition, fmtDist, RADIUS_PRESETS } from './geo.js';
-import { Btn, Card, StatCard, Pill, Select, Chip, SectionHeader, Modal, Label, actionSummary, Logo, TrendChart, ConfirmDelete } from './ui.jsx';
+import { Btn, Card, StatCard, Pill, Select, Chip, SectionHeader, Modal, Label, Field, actionSummary, Logo, TrendChart, ConfirmDelete } from './ui.jsx';
 
 const AUTH_KEY = 'sl_ceo_ok';
 const uid = () => (crypto?.randomUUID ? crypto.randomUUID() : 'r_' + Math.random().toString(36).slice(2));
@@ -134,9 +134,11 @@ export default function CeoApp() {
 function Authed() {
   const [view, setView] = useState('live');
   const [secLog, setSecLog] = useState([]);
+  const [mistakes, setMistakes] = useState([]);
+  const reloadMistakes = useCallback(() => db.listMistakes().then(setMistakes), []);
   const [seenAt, setSeenAt] = useState(() => localStorage.getItem(SEEN_KEY) || '');
   useEffect(() => {
-    const reload = () => db.listAccessLog().then(setSecLog);
+    const reload = () => { db.listAccessLog().then(setSecLog); db.listMistakes().then(setMistakes); };
     reload();
     const onFocus = () => reload();
     window.addEventListener('focus', onFocus);
@@ -144,6 +146,7 @@ function Authed() {
     return () => { clearTimeout(t); off && off(); window.removeEventListener('focus', onFocus); };
   }, []);
   const unseen = secLog.filter(e => e.event === 'failed' && (e.created_at || '') > seenAt).length;
+  const openMistakes = mistakes.filter(m => m.status === 'open').length;
   const markSeen = useCallback(() => { const now = new Date().toISOString(); localStorage.setItem(SEEN_KEY, now); setSeenAt(now); }, []);
   const Tab = ({ id, icon: Icon, label, badge }) => { const on = view === id; return (
     <button onClick={() => setView(id)} className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-all"
@@ -158,7 +161,7 @@ function Authed() {
             <div><div className="disp" style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>CEO Console <span style={{ fontSize: 11, fontWeight: 700, color: C.mint }}>· <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 9, background: C.mint, boxShadow: `0 0 0 3px ${C.mintBg}` }} /> live</span></div>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.18em', textTransform: 'uppercase', color: C.dim }}>HaseebMadeIt · Operations</div></div>
           </div>
-          <div className="flex items-center gap-2"><Tab id="live" icon={BarChart3} label="Live" /><Tab id="roster" icon={Users} label="Roster" /><Tab id="security" icon={ShieldAlert} label="Security" badge={unseen} /></div>
+          <div className="flex items-center gap-2"><Tab id="live" icon={BarChart3} label="Live" /><Tab id="roster" icon={Users} label="Roster" /><Tab id="mistakes" icon={ClipboardList} label="Mistakes" badge={openMistakes} /><Tab id="security" icon={ShieldAlert} label="Security" badge={unseen} /></div>
         </div>
       </div>
       <main className="mx-auto max-w-[1500px] px-6 py-6">
@@ -172,7 +175,7 @@ function Authed() {
             <span style={{ fontWeight: 800, fontSize: 13, whiteSpace: 'nowrap' }}>Review →</span>
           </div>
         )}
-        {view === 'live' ? <Console /> : view === 'roster' ? <RosterManager /> : <SecurityPanel log={secLog} seenAt={seenAt} onSeen={markSeen} />}
+        {view === 'live' ? <Console /> : view === 'roster' ? <RosterManager /> : view === 'mistakes' ? <MistakesPanel mistakes={mistakes} reload={reloadMistakes} /> : <SecurityPanel log={secLog} seenAt={seenAt} onSeen={markSeen} />}
       </main>
     </div>
   );
@@ -309,6 +312,124 @@ function DevicesCard() {
             ))}
           </div>}
     </Card>
+  );
+}
+
+// ── Mistakes log: manager records, CEO reviews ──
+const MISTAKE_STATUS = { open: { label: 'Open', color: C.amber }, reviewed: { label: 'Reviewed', color: C.cyan }, resolved: { label: 'Resolved', color: C.mint } };
+const sevColor = s => s === 'High' ? C.coral : s === 'Low' ? C.dim : C.amber;
+function currentShift() {
+  const h = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Karachi', hour: 'numeric', hour12: false }).format(new Date())) % 24;
+  if (h >= 9 && h < 17) return 'Morning';
+  if (h >= 17 || h < 1) return 'Evening';
+  return 'Night';
+}
+
+function MistakesPanel({ mistakes, reload }) {
+  const [roster, setRoster] = useState([]);
+  useEffect(() => { db.getRoster().then(setRoster); }, []);
+  const people = [...new Set(roster.filter(r => r.active && r.name).map(r => r.name))];
+  const blank = () => ({ person: '', category: '', severity: 'Medium', description: '', shift: currentShift(), happened_on: todayPKT(), happened_time: timePKT(), profile: '', logged_by: '' });
+  const [form, setForm] = useState(blank());
+  const [showForm, setShowForm] = useState(false);
+  const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
+  const [fStatus, setFStatus] = useState('all'); const [fPerson, setFPerson] = useState('all');
+  const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); setErr(''); };
+
+  const submit = async () => {
+    if (!form.person) { setErr('Pick who made the mistake.'); return; }
+    if (!form.description.trim()) { setErr('Describe what happened.'); return; }
+    setBusy(true);
+    try { await db.addMistake({ ...form, description: form.description.trim() }); setShowForm(false); setForm(blank()); reload(); }
+    catch { setErr('Could not save — check your connection (and that the mistakes table exists).'); }
+    finally { setBusy(false); }
+  };
+  const setStatus = async (m, status) => { await db.updateMistake(m.id, { status }); reload(); };
+  const saveNote = async (m, ceo_note) => { await db.updateMistake(m.id, { ceo_note }); reload(); };
+  const remove = async (m) => { if (!window.confirm('Delete this mistake entry? This cannot be undone.')) return; await db.deleteMistake(m.id); reload(); };
+
+  const filtered = mistakes.filter(m => (fStatus === 'all' || m.status === fStatus) && (fPerson === 'all' || m.person === fPerson));
+  const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString();
+  const openN = mistakes.filter(m => m.status === 'open').length;
+  const highN = mistakes.filter(m => m.severity === 'High' && m.status !== 'resolved').length;
+  const weekN = mistakes.filter(m => (m.created_at || '') >= weekAgo).length;
+
+  return (
+    <>
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h2 className="disp text-lg font-bold" style={{ color: C.ink }}>Mistakes log</h2>
+          <p className="mt-1 text-xs" style={{ color: C.muted }}>Record what went wrong — who, when and which shift. The CEO reviews and signs off here. Best used for coaching and spotting patterns, not blame.</p>
+        </div>
+        <Btn onClick={() => { setForm(blank()); setErr(''); setShowForm(true); }} className="lift"><Plus size={15} strokeWidth={2.6} />Log a mistake</Btn>
+      </div>
+
+      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <StatCard label="Total logged" value={mistakes.length} sub="all time" accent={C.violet} icon={ClipboardList} />
+        <StatCard label="Open" value={openN} sub="awaiting review" accent={openN ? C.amber : C.mint} icon={AlertTriangle} />
+        <StatCard label="High · unresolved" value={highN} sub="need attention" accent={highN ? C.coral : C.mint} icon={AlertTriangle} />
+        <StatCard label="This week" value={weekN} sub="last 7 days" accent={C.cyan} icon={CalendarDays} />
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap" style={{ marginBottom: 14 }}>
+        {['all', 'open', 'reviewed', 'resolved'].map(s => <Chip key={s} active={fStatus === s} onClick={() => setFStatus(s)}>{s === 'all' ? 'All' : MISTAKE_STATUS[s].label}</Chip>)}
+        <div style={{ flex: 1 }} />
+        <Select value={fPerson} onChange={e => setFPerson(e.target.value)}>
+          <option value="all">All people</option>
+          {[...new Set(mistakes.map(m => m.person).filter(Boolean))].sort().map(p => <option key={p} value={p}>{p}</option>)}
+        </Select>
+      </div>
+
+      {filtered.length === 0
+        ? <Card className="p-5"><span style={{ color: C.dim, fontSize: 13 }}>{mistakes.length === 0 ? 'No mistakes logged yet — tap “Log a mistake” to add the first one.' : 'Nothing matches this filter.'}</span></Card>
+        : filtered.map(m => { const st = MISTAKE_STATUS[m.status] || MISTAKE_STATUS.open; return (
+          <div key={m.id} className="glass-soft rounded-xl" style={{ padding: '12px 14px', marginBottom: 8, borderLeft: `3px solid ${sevColor(m.severity)}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 800, fontSize: 14, color: C.ink }}>{m.person || '—'}</span>
+                  <Pill color={sevColor(m.severity)}>{m.severity}</Pill>
+                  {m.category && <Pill color={C.violet}>{m.category}</Pill>}
+                  <Pill color={st.color}>{st.label}</Pill>
+                </div>
+                <div style={{ fontSize: 11, color: C.dim, marginTop: 3 }}>
+                  {fmtShort(m.happened_on)}{m.happened_time ? ' · ' + m.happened_time : ''}{m.shift ? ' · ' + m.shift + ' shift' : ''}{m.profile ? ' · ' + m.profile : ''}{m.logged_by ? ' · by ' + m.logged_by : ''}
+                </div>
+              </div>
+              <button onClick={() => remove(m)} title="Delete entry" style={{ border: 'none', background: 'rgba(124,41,255,.08)', width: 28, height: 28, borderRadius: 8, color: C.coral, cursor: 'pointer', flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={13} /></button>
+            </div>
+            {m.description && <div style={{ fontSize: 13, color: C.ink, marginTop: 8, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{m.description}</div>}
+            <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input defaultValue={m.ceo_note} placeholder="CEO note (optional)…" onBlur={e => { if (e.target.value !== (m.ceo_note || '')) saveNote(m, e.target.value); }} className="gi" style={{ flex: 1, minWidth: 160, padding: '7px 10px', fontSize: 12 }} />
+              {m.status !== 'reviewed' && m.status !== 'resolved' && <Btn variant="ghost" onClick={() => setStatus(m, 'reviewed')} style={{ padding: '7px 12px', fontSize: 12 }}>Mark reviewed</Btn>}
+              {m.status !== 'resolved' ? <Btn variant="ok" onClick={() => setStatus(m, 'resolved')} style={{ padding: '7px 12px', fontSize: 12 }}>Resolve</Btn> : <Btn variant="ghost" onClick={() => setStatus(m, 'open')} style={{ padding: '7px 12px', fontSize: 12 }}>Reopen</Btn>}
+            </div>
+          </div>); })}
+
+      {showForm && <Modal title="Log a mistake" subtitle="Manager entry" onClose={() => setShowForm(false)} width={460}>
+        <div style={{ display: 'grid', gap: 12 }}>
+          <Field field={{ name: 'person', label: 'Who made it', type: 'select', options: people, required: true }} value={form.person} onChange={v => set('person', v)} />
+          <Field field={{ name: 'category', label: 'Category', type: 'select', options: MISTAKE_CATEGORIES }} value={form.category} onChange={v => set('category', v)} />
+          <Field field={{ name: 'severity', label: 'Severity', type: 'segment', options: MISTAKE_SEVERITIES, required: true }} value={form.severity} onChange={v => set('severity', v)} />
+          <div>
+            <Label>What happened <span style={{ color: C.violet }}>*</span></Label>
+            <textarea className="gi" value={form.description} onChange={e => set('description', e.target.value)} placeholder="Factual description — what went wrong" style={{ resize: 'vertical', minHeight: 72, lineHeight: 1.5 }} />
+          </div>
+          <Field field={{ name: 'shift', label: 'Shift', type: 'segment', options: SHIFTS.map(s => s.key), required: true }} value={form.shift} onChange={v => set('shift', v)} />
+          <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ flex: 1 }}><Field field={{ name: 'happened_on', label: 'Date', type: 'date' }} value={form.happened_on} onChange={v => set('happened_on', v)} /></div>
+            <div style={{ flex: 1 }}><Field field={{ name: 'happened_time', label: 'Time', type: 'text' }} value={form.happened_time} onChange={v => set('happened_time', v)} /></div>
+          </div>
+          <Field field={{ name: 'profile', label: 'Profile (optional)', type: 'select', options: PROFILES }} value={form.profile} onChange={v => set('profile', v)} />
+          <Field field={{ name: 'logged_by', label: 'Logged by (optional)', type: 'text' }} value={form.logged_by} onChange={v => set('logged_by', v)} />
+          {err && <div style={{ color: C.coral, fontSize: 12 }}>{err}</div>}
+          <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+            <Btn variant="ghost" onClick={() => setShowForm(false)} style={{ flex: 1 }}>Cancel</Btn>
+            <Btn variant="ok" onClick={submit} disabled={busy} className="lift" style={{ flex: 1 }}>{busy ? 'Saving…' : 'Save'}</Btn>
+          </div>
+        </div>
+      </Modal>}
+    </>
   );
 }
 
