@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock, Download, ChevronLeft, ChevronRight, CalendarDays, ShieldAlert, ShieldCheck, Monitor, MapPin, Crosshair, Loader2, Laptop } from 'lucide-react';
-import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, CEO_PASSWORD, GROUPS, isDesigner, MISTAKE_CATEGORIES, MISTAKE_SEVERITIES } from './config.js';
+import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, CEO_PASSWORD, GROUPS, isDesigner, MISTAKE_CATEGORIES } from './config.js';
 import { db, todayPKT, timePKT, addDays, BACKEND } from './store.js';
 import { getPosition, fmtDist, RADIUS_PRESETS } from './geo.js';
 import { Btn, Card, StatCard, Pill, Select, Chip, SectionHeader, Modal, Label, Field, actionSummary, Logo, TrendChart, ConfirmDelete } from './ui.jsx';
@@ -317,7 +317,6 @@ function DevicesCard() {
 
 // ── Mistakes log: manager records, CEO reviews ──
 const MISTAKE_STATUS = { open: { label: 'Open', color: C.amber }, reviewed: { label: 'Reviewed', color: C.cyan }, resolved: { label: 'Resolved', color: C.mint } };
-const sevColor = s => s === 'High' ? C.coral : s === 'Low' ? C.dim : C.amber;
 function currentShift() {
   const h = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Karachi', hour: 'numeric', hour12: false }).format(new Date())) % 24;
   if (h >= 9 && h < 17) return 'Morning';
@@ -351,9 +350,10 @@ function MistakesPanel({ mistakes, reload }) {
   const [roster, setRoster] = useState([]);
   useEffect(() => { db.getRoster().then(setRoster); }, []);
   const people = [...new Set(roster.filter(r => r.active && r.name).map(r => r.name))];
-  const blank = () => ({ person: [], category: '', severity: 'Medium', description: '', client: '', project: '', shift: currentShift(), happened_on: todayPKT(), happened_time: timePKT(), profile: '', logged_by: '' });
+  const blank = () => ({ person: [], category: '', description: '', client: '', project: '', shift: currentShift(), happened_on: todayPKT(), happened_time: timePKT(), profile: '', logged_by: '' });
   const [form, setForm] = useState(blank());
   const [showForm, setShowForm] = useState(false);
+  const [detail, setDetail] = useState(null);
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   const [fStatus, setFStatus] = useState('all'); const [fPerson, setFPerson] = useState('all');
   const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); setErr(''); };
@@ -374,7 +374,7 @@ function MistakesPanel({ mistakes, reload }) {
   const filtered = mistakes.filter(m => (fStatus === 'all' || m.status === fStatus) && (fPerson === 'all' || namesOf(m).includes(fPerson)));
   const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString();
   const openN = mistakes.filter(m => m.status === 'open').length;
-  const highN = mistakes.filter(m => m.severity === 'High' && m.status !== 'resolved').length;
+  const resolvedN = mistakes.filter(m => m.status === 'resolved').length;
   const weekN = mistakes.filter(m => (m.created_at || '') >= weekAgo).length;
 
   return (
@@ -390,7 +390,7 @@ function MistakesPanel({ mistakes, reload }) {
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard label="Total logged" value={mistakes.length} sub="all time" accent={C.violet} icon={ClipboardList} />
         <StatCard label="Open" value={openN} sub="awaiting review" accent={openN ? C.amber : C.mint} icon={AlertTriangle} />
-        <StatCard label="High · unresolved" value={highN} sub="need attention" accent={highN ? C.coral : C.mint} icon={AlertTriangle} />
+        <StatCard label="Resolved" value={resolvedN} sub="signed off" accent={C.mint} icon={ShieldCheck} />
         <StatCard label="This week" value={weekN} sub="last 7 days" accent={C.cyan} icon={CalendarDays} />
       </div>
 
@@ -406,12 +406,11 @@ function MistakesPanel({ mistakes, reload }) {
       {filtered.length === 0
         ? <Card className="p-5"><span style={{ color: C.dim, fontSize: 13 }}>{mistakes.length === 0 ? 'No mistakes logged yet — tap “Log a mistake” to add the first one.' : 'Nothing matches this filter.'}</span></Card>
         : filtered.map(m => { const st = MISTAKE_STATUS[m.status] || MISTAKE_STATUS.open; return (
-          <div key={m.id} className="glass-soft rounded-xl" style={{ padding: '12px 14px', marginBottom: 8, borderLeft: `3px solid ${sevColor(m.severity)}` }}>
+          <div key={m.id} onClick={() => setDetail(m)} className="glass-soft rounded-xl lift" style={{ padding: '12px 14px', marginBottom: 8, borderLeft: `3px solid ${st.color}`, cursor: 'pointer' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
                   <span style={{ fontWeight: 800, fontSize: 14, color: C.ink }}>{m.person || '—'}</span>
-                  <Pill color={sevColor(m.severity)}>{m.severity}</Pill>
                   {m.category && <Pill color={C.violet}>{m.category}</Pill>}
                   <Pill color={st.color}>{st.label}</Pill>
                 </div>
@@ -419,22 +418,43 @@ function MistakesPanel({ mistakes, reload }) {
                   {fmtShort(m.happened_on)}{m.happened_time ? ' · ' + m.happened_time : ''}{m.shift ? ' · ' + m.shift + ' shift' : ''}{m.profile ? ' · ' + m.profile : ''}{m.logged_by ? ' · by ' + m.logged_by : ''}
                 </div>
               </div>
-              <button onClick={() => remove(m)} title="Delete entry" style={{ border: 'none', background: 'rgba(124,41,255,.08)', width: 28, height: 28, borderRadius: 8, color: C.coral, cursor: 'pointer', flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={13} /></button>
+              <span style={{ fontSize: 20, color: C.dim, lineHeight: 1, flex: '0 0 auto', marginTop: -1 }}>›</span>
             </div>
-            {m.description && <div style={{ fontSize: 13, color: C.ink, marginTop: 8, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>{m.description}</div>}
+            {m.description && <div style={{ fontSize: 13, color: C.ink, marginTop: 8, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{m.description}</div>}
             {(m.client || m.project) && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>{[m.client && ('Client: ' + m.client), m.project && ('Project: ' + m.project)].filter(Boolean).join('  ·  ')}</div>}
-            <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <input defaultValue={m.ceo_note} placeholder="CEO note (optional)…" onBlur={e => { if (e.target.value !== (m.ceo_note || '')) saveNote(m, e.target.value); }} className="gi" style={{ flex: 1, minWidth: 160, padding: '7px 10px', fontSize: 12 }} />
-              {m.status !== 'reviewed' && m.status !== 'resolved' && <Btn variant="ghost" onClick={() => setStatus(m, 'reviewed')} style={{ padding: '7px 12px', fontSize: 12 }}>Mark reviewed</Btn>}
-              {m.status !== 'resolved' ? <Btn variant="ok" onClick={() => setStatus(m, 'resolved')} style={{ padding: '7px 12px', fontSize: 12 }}>Resolve</Btn> : <Btn variant="ghost" onClick={() => setStatus(m, 'open')} style={{ padding: '7px 12px', fontSize: 12 }}>Reopen</Btn>}
-            </div>
           </div>); })}
+
+      {detail && (() => { const st = MISTAKE_STATUS[detail.status] || MISTAKE_STATUS.open; return (
+        <Modal title={detail.person || 'Mistake'} subtitle={detail.category || 'Mistake detail'} onClose={() => setDetail(null)} width={520}>
+          <div style={{ display: 'grid', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+              {detail.category && <Pill color={C.violet}>{detail.category}</Pill>}
+              <Pill color={st.color}>{st.label}</Pill>
+            </div>
+            <div style={{ fontSize: 12, color: C.muted }}>{fmtShort(detail.happened_on)}{detail.happened_time ? ' · ' + detail.happened_time : ''}{detail.shift ? ' · ' + detail.shift + ' shift' : ''}{detail.profile ? ' · ' + detail.profile : ''}{detail.logged_by ? ' · by ' + detail.logged_by : ''}</div>
+            {(detail.client || detail.project) && <div style={{ fontSize: 13, color: C.ink }}>{[detail.client && ('Client: ' + detail.client), detail.project && ('Project: ' + detail.project)].filter(Boolean).join('     ·     ')}</div>}
+            <div>
+              <Label>What happened</Label>
+              <div style={{ fontSize: 14.5, color: C.ink, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{detail.description || '—'}</div>
+            </div>
+            <div>
+              <Label>CEO note</Label>
+              <textarea className="gi" defaultValue={detail.ceo_note} placeholder="Add a review note…" onBlur={e => { if (e.target.value !== (detail.ceo_note || '')) { saveNote(detail, e.target.value); setDetail(d => d && { ...d, ceo_note: e.target.value }); } }} style={{ minHeight: 64, resize: 'vertical', lineHeight: 1.5 }} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              {detail.status !== 'reviewed' && detail.status !== 'resolved' && <Btn variant="ghost" onClick={() => { setStatus(detail, 'reviewed'); setDetail(d => d && { ...d, status: 'reviewed' }); }}>Mark reviewed</Btn>}
+              {detail.status !== 'resolved' ? <Btn variant="ok" onClick={() => { setStatus(detail, 'resolved'); setDetail(d => d && { ...d, status: 'resolved' }); }}>Resolve</Btn> : <Btn variant="ghost" onClick={() => { setStatus(detail, 'open'); setDetail(d => d && { ...d, status: 'open' }); }}>Reopen</Btn>}
+              <div style={{ flex: 1 }} />
+              <Btn variant="ghost" onClick={() => { remove(detail); setDetail(null); }} style={{ color: C.coral }}><Trash2 size={14} />Delete</Btn>
+            </div>
+          </div>
+        </Modal>
+      ); })()}
 
       {showForm && <Modal title="Log a mistake" subtitle="Manager entry" onClose={() => setShowForm(false)} width={460}>
         <div style={{ display: 'grid', gap: 12 }}>
           <PeoplePicker people={people} value={form.person} onChange={v => set('person', v)} />
           <Field field={{ name: 'category', label: 'Category', type: 'select', options: MISTAKE_CATEGORIES }} value={form.category} onChange={v => set('category', v)} />
-          <Field field={{ name: 'severity', label: 'Severity', type: 'segment', options: MISTAKE_SEVERITIES, required: true }} value={form.severity} onChange={v => set('severity', v)} />
           <div>
             <Label>What happened <span style={{ color: C.violet }}>*</span></Label>
             <textarea className="gi" value={form.description} onChange={e => set('description', e.target.value)} placeholder="Factual description — what went wrong" style={{ resize: 'vertical', minHeight: 72, lineHeight: 1.5 }} />
