@@ -363,7 +363,7 @@ function MistakesPanel({ mistakes, reload }) {
     if (!form.description.trim()) { setErr('Describe what happened.'); return; }
     setBusy(true);
     try { await db.addMistake({ ...form, person: form.person.join(', '), description: form.description.trim() }); setShowForm(false); setForm(blank()); reload(); }
-    catch { setErr('Could not save — check your connection (and that the mistakes table exists).'); }
+    catch (e) { const msg = (e && (e.message || e.error_description || e.hint)) || 'Unknown error'; setErr('Could not save: ' + msg + (e && e.code ? ` (${e.code})` : '')); }
     finally { setBusy(false); }
   };
   const setStatus = async (m, status) => { await db.updateMistake(m.id, { status }); reload(); };
