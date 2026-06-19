@@ -146,7 +146,7 @@ function Authed() {
     return () => { clearTimeout(t); off && off(); window.removeEventListener('focus', onFocus); };
   }, []);
   const unseen = secLog.filter(e => e.event === 'failed' && (e.created_at || '') > seenAt).length;
-  const openMistakes = mistakes.filter(m => m.status === 'open').length;
+  const openMistakes = mistakes.filter(m => m.status !== 'reviewed').length;
   const markSeen = useCallback(() => { const now = new Date().toISOString(); localStorage.setItem(SEEN_KEY, now); setSeenAt(now); }, []);
   const Tab = ({ id, icon: Icon, label, badge }) => { const on = view === id; return (
     <button onClick={() => setView(id)} className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-all"
@@ -316,7 +316,7 @@ function DevicesCard() {
 }
 
 // ── Mistakes log: manager records, CEO reviews ──
-const MISTAKE_STATUS = { open: { label: 'Open', color: C.amber }, reviewed: { label: 'Reviewed', color: C.cyan }, resolved: { label: 'Resolved', color: C.mint } };
+const MISTAKE_STATUS = { open: { label: 'Open', color: C.amber }, reviewed: { label: 'Reviewed', color: C.mint } };
 function currentShift() {
   const h = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Karachi', hour: 'numeric', hour12: false }).format(new Date())) % 24;
   if (h >= 9 && h < 17) return 'Morning';
@@ -371,10 +371,10 @@ function MistakesPanel({ mistakes, reload }) {
   const remove = async (m) => { if (!window.confirm('Delete this mistake entry? This cannot be undone.')) return; await db.deleteMistake(m.id); reload(); };
 
   const namesOf = m => (m.person || '').split(',').map(s => s.trim()).filter(Boolean);
-  const filtered = mistakes.filter(m => (fStatus === 'all' || m.status === fStatus) && (fPerson === 'all' || namesOf(m).includes(fPerson)));
+  const filtered = mistakes.filter(m => (fStatus === 'all' || (fStatus === 'reviewed' ? m.status === 'reviewed' : m.status !== 'reviewed')) && (fPerson === 'all' || namesOf(m).includes(fPerson)));
   const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString();
-  const openN = mistakes.filter(m => m.status === 'open').length;
-  const resolvedN = mistakes.filter(m => m.status === 'resolved').length;
+  const openN = mistakes.filter(m => m.status !== 'reviewed').length;
+  const reviewedN = mistakes.filter(m => m.status === 'reviewed').length;
   const weekN = mistakes.filter(m => (m.created_at || '') >= weekAgo).length;
 
   return (
@@ -389,13 +389,13 @@ function MistakesPanel({ mistakes, reload }) {
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard label="Total logged" value={mistakes.length} sub="all time" accent={C.violet} icon={ClipboardList} />
-        <StatCard label="Open" value={openN} sub="awaiting review" accent={openN ? C.amber : C.mint} icon={AlertTriangle} />
-        <StatCard label="Resolved" value={resolvedN} sub="signed off" accent={C.mint} icon={ShieldCheck} />
+        <StatCard label="To review" value={openN} sub="awaiting review" accent={openN ? C.amber : C.mint} icon={AlertTriangle} />
+        <StatCard label="Reviewed" value={reviewedN} sub="signed off" accent={C.mint} icon={ShieldCheck} />
         <StatCard label="This week" value={weekN} sub="last 7 days" accent={C.cyan} icon={CalendarDays} />
       </div>
 
       <div className="flex items-center gap-2 flex-wrap" style={{ marginBottom: 14 }}>
-        {['all', 'open', 'reviewed', 'resolved'].map(s => <Chip key={s} active={fStatus === s} onClick={() => setFStatus(s)}>{s === 'all' ? 'All' : MISTAKE_STATUS[s].label}</Chip>)}
+        {[['all', 'All'], ['open', 'To review'], ['reviewed', 'Reviewed']].map(([s, lbl]) => <Chip key={s} active={fStatus === s} onClick={() => setFStatus(s)}>{lbl}</Chip>)}
         <div style={{ flex: 1 }} />
         <Select value={fPerson} onChange={e => setFPerson(e.target.value)}>
           <option value="all">All people</option>
@@ -405,23 +405,32 @@ function MistakesPanel({ mistakes, reload }) {
 
       {filtered.length === 0
         ? <Card className="p-5"><span style={{ color: C.dim, fontSize: 13 }}>{mistakes.length === 0 ? 'No mistakes logged yet — tap “Log a mistake” to add the first one.' : 'Nothing matches this filter.'}</span></Card>
-        : filtered.map(m => { const st = MISTAKE_STATUS[m.status] || MISTAKE_STATUS.open; return (
-          <div key={m.id} onClick={() => setDetail(m)} className="glass-soft rounded-xl lift" style={{ padding: '12px 14px', marginBottom: 8, borderLeft: `3px solid ${st.color}`, cursor: 'pointer' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-                  <span style={{ fontWeight: 800, fontSize: 14, color: C.ink }}>{m.person || '—'}</span>
-                  {m.category && <Pill color={C.violet}>{m.category}</Pill>}
-                  <Pill color={st.color}>{st.label}</Pill>
+        : filtered.map(m => { const st = MISTAKE_STATUS[m.status] || MISTAKE_STATUS.open; const reviewed = m.status === 'reviewed'; return (
+          <div key={m.id} className="glass-soft rounded-xl" style={{ marginBottom: 8, borderLeft: `3px solid ${st.color}`, overflow: 'hidden' }}>
+            <div onClick={() => setDetail(m)} style={{ padding: '12px 14px 8px', cursor: 'pointer' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 800, fontSize: 14, color: C.ink }}>{m.person || '—'}</span>
+                    {m.category && <Pill color={C.violet}>{m.category}</Pill>}
+                    <Pill color={st.color}>{st.label}</Pill>
+                  </div>
+                  <div style={{ fontSize: 11, color: C.dim, marginTop: 3 }}>
+                    {fmtShort(m.happened_on)}{m.happened_time ? ' · ' + m.happened_time : ''}{m.shift ? ' · ' + m.shift + ' shift' : ''}{m.profile ? ' · ' + m.profile : ''}{m.logged_by ? ' · by ' + m.logged_by : ''}
+                  </div>
                 </div>
-                <div style={{ fontSize: 11, color: C.dim, marginTop: 3 }}>
-                  {fmtShort(m.happened_on)}{m.happened_time ? ' · ' + m.happened_time : ''}{m.shift ? ' · ' + m.shift + ' shift' : ''}{m.profile ? ' · ' + m.profile : ''}{m.logged_by ? ' · by ' + m.logged_by : ''}
-                </div>
+                <span style={{ fontSize: 11, color: C.dim, whiteSpace: 'nowrap', flex: '0 0 auto' }}>tap to read ›</span>
               </div>
-              <span style={{ fontSize: 20, color: C.dim, lineHeight: 1, flex: '0 0 auto', marginTop: -1 }}>›</span>
+              {m.description && <div style={{ fontSize: 13, color: C.ink, marginTop: 8, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{m.description}</div>}
+              {(m.client || m.project) && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>{[m.client && ('Client: ' + m.client), m.project && ('Project: ' + m.project)].filter(Boolean).join('  ·  ')}</div>}
             </div>
-            {m.description && <div style={{ fontSize: 13, color: C.ink, marginTop: 8, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{m.description}</div>}
-            {(m.client || m.project) && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>{[m.client && ('Client: ' + m.client), m.project && ('Project: ' + m.project)].filter(Boolean).join('  ·  ')}</div>}
+            <div style={{ padding: '0 14px 11px', display: 'flex', gap: 8, alignItems: 'center' }}>
+              {reviewed
+                ? <Btn variant="ghost" onClick={() => setStatus(m, 'open')} style={{ padding: '7px 14px', fontSize: 12 }}>Reopen</Btn>
+                : <Btn variant="ok" onClick={() => setStatus(m, 'reviewed')} style={{ padding: '7px 14px', fontSize: 12 }}>Mark reviewed</Btn>}
+              <div style={{ flex: 1 }} />
+              <button onClick={() => remove(m)} title="Delete entry" style={{ border: 'none', background: 'rgba(124,41,255,.08)', width: 30, height: 30, borderRadius: 8, color: C.coral, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={14} /></button>
+            </div>
           </div>); })}
 
       {detail && (() => { const st = MISTAKE_STATUS[detail.status] || MISTAKE_STATUS.open; return (
@@ -442,8 +451,9 @@ function MistakesPanel({ mistakes, reload }) {
               <textarea className="gi" defaultValue={detail.ceo_note} placeholder="Add a review note…" onBlur={e => { if (e.target.value !== (detail.ceo_note || '')) { saveNote(detail, e.target.value); setDetail(d => d && { ...d, ceo_note: e.target.value }); } }} style={{ minHeight: 64, resize: 'vertical', lineHeight: 1.5 }} />
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-              {detail.status !== 'reviewed' && detail.status !== 'resolved' && <Btn variant="ghost" onClick={() => { setStatus(detail, 'reviewed'); setDetail(d => d && { ...d, status: 'reviewed' }); }}>Mark reviewed</Btn>}
-              {detail.status !== 'resolved' ? <Btn variant="ok" onClick={() => { setStatus(detail, 'resolved'); setDetail(d => d && { ...d, status: 'resolved' }); }}>Resolve</Btn> : <Btn variant="ghost" onClick={() => { setStatus(detail, 'open'); setDetail(d => d && { ...d, status: 'open' }); }}>Reopen</Btn>}
+              {detail.status === 'reviewed'
+                ? <Btn variant="ghost" onClick={() => { setStatus(detail, 'open'); setDetail(d => d && { ...d, status: 'open' }); }}>Reopen</Btn>
+                : <Btn variant="ok" onClick={() => { setStatus(detail, 'reviewed'); setDetail(d => d && { ...d, status: 'reviewed' }); }}>Mark reviewed</Btn>}
               <div style={{ flex: 1 }} />
               <Btn variant="ghost" onClick={() => { remove(detail); setDetail(null); }} style={{ color: C.coral }}><Trash2 size={14} />Delete</Btn>
             </div>
