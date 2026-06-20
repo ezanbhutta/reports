@@ -80,6 +80,7 @@ const localDb = {
     if (i >= 0) { actions[i] = { ...actions[i], ...patch, updated_at: new Date().toISOString() }; write(LS.actions, actions); }
     return actions[i];
   },
+  async deleteAction(actionId) { write(LS.actions, read(LS.actions, []).filter(a => a.id !== actionId)); return true; },
   async submitReport(reportId, { checklist, note_for_next }) {
     const reports = read(LS.reports, []);
     const i = reports.findIndex(r => r.id === reportId);
@@ -221,6 +222,11 @@ const supaDb = {
     const c = await client();
     const { data } = await c.from('actions').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id).select().single();
     return data;
+  },
+  async deleteAction(id) {
+    const c = await client();
+    await c.from('actions').delete().eq('id', id);
+    return true;
   },
   async submitReport(id, { checklist, note_for_next }) {
     const c = await client();

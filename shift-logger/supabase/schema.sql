@@ -79,9 +79,15 @@ create policy "reports delete" on reports for delete using (true);
 drop policy if exists "actions read"                  on actions;
 drop policy if exists "actions insert"                on actions;
 drop policy if exists "actions update while report open" on actions;
+drop policy if exists "actions delete while report open" on actions;
 create policy "actions read"   on actions for select using (true);
 create policy "actions insert" on actions for insert with check (true);
 create policy "actions update while report open" on actions for update using (
+  exists (select 1 from reports r where r.id = actions.report_id and r.status = 'open')
+);
+-- A CSR can delete a timeline entry only while the report is still open;
+-- once submitted, entries are locked (mirrors the update policy above).
+create policy "actions delete while report open" on actions for delete using (
   exists (select 1 from reports r where r.id = actions.report_id and r.status = 'open')
 );
 
