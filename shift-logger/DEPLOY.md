@@ -31,13 +31,12 @@ Part 1 sets up the database. Part 2 puts the app online. Part 3 is a quick check
 7. On the setup screen:
    - **Root Directory:** click **Edit** and choose the **`shift-logger`** folder. *(Important — the app lives in that folder.)*
    - **Framework Preset:** it should say **Vite** automatically. Leave the rest as-is.
-   - Open **Environment Variables** and add these **three** (Name → Value):
+   - Open **Environment Variables** and add these **two** (Name → Value):
 
      | Name | Value |
      |---|---|
      | `VITE_SUPABASE_URL` | the Project URL from step 4 |
      | `VITE_SUPABASE_ANON_KEY` | the anon key from step 4 |
-     | `VITE_CEO_PASSWORD` | a password you choose for the CEO screen |
 
 8. Click **Deploy**. Wait 1–2 minutes.
 9. When it finishes, click the live link. There are **two screens, one link**:
@@ -58,7 +57,9 @@ Part 1 sets up the database. Part 2 puts the app online. Part 3 is a quick check
 ## Good to know
 
 - **Updating later:** anything pushed to the repo's `main` branch auto-redeploys on Vercel. No steps needed.
-- **Change the CEO password:** Vercel → your project → **Settings → Environment Variables** → edit
-  `VITE_CEO_PASSWORD` → then **Deployments → … → Redeploy**.
+- **Manager accounts (CEO login):** sign-in uses **Supabase Auth** — no password lives in the app.
+  Add or change managers in Supabase → **Authentication → Users** (use **Add user** + *Auto Confirm*,
+  or send a password reset). Turn **off** public sign-ups under **Authentication → Providers → Email**
+  so only people you add can get in. If Supabase isn't configured (local demo), the console password is `admin`.
 - **Two separate links, one password:** the CSR app needs no password; only the `#ceo` screen does.
 - If you skip Part 1 (Supabase), the app still runs but only saves on one device — so do Part 1 for the real, shared, live version.

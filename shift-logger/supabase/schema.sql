@@ -122,9 +122,11 @@ create index if not exists security_log_created_idx on security_log (created_at 
 do $$ begin alter publication supabase_realtime add table security_log; exception when duplicate_object then null; end $$;
 
 alter table security_log enable row level security;
+-- Anyone may INSERT a sign-in attempt (it happens before auth); only a signed-in
+-- manager may READ the log.
 drop policy if exists "security read"  on security_log;
 drop policy if exists "security write" on security_log;
-create policy "security read"  on security_log for select using (true);
+create policy "security read"  on security_log for select using (auth.role() = 'authenticated');
 create policy "security write" on security_log for insert with check (true);
 
 -- ── Registered devices (per-laptop binding) ──
@@ -185,7 +187,10 @@ create table if not exists mistakes (
 create index if not exists mistakes_created_idx on mistakes (created_at desc);
 do $$ begin alter publication supabase_realtime add table mistakes; exception when duplicate_object then null; end $$;
 alter table mistakes enable row level security;
+-- Manager-only: readable/writable solely by a signed-in manager (Supabase Auth).
 drop policy if exists "mistakes read"  on mistakes;
 drop policy if exists "mistakes write" on mistakes;
-create policy "mistakes read"  on mistakes for select using (true);
-create policy "mistakes write" on mistakes for all    using (true) with check (true);
+drop policy if exists "mistakes manager read"  on mistakes;
+drop policy if exists "mistakes manager write" on mistakes;
+create policy "mistakes manager read"  on mistakes for select using (auth.role() = 'authenticated');
+create policy "mistakes manager write" on mistakes for all    using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');

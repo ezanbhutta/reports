@@ -208,6 +208,7 @@ export const MISTAKE_CATEGORIES = [
 ];
 export const MISTAKE_SEVERITIES = ['Low', 'Medium', 'High'];
 
-// CEO console password (change this; it's a light gate, not hard security).
-// Override at build time with VITE_CEO_PASSWORD.
-export const CEO_PASSWORD = import.meta.env.VITE_CEO_PASSWORD || 'haseeb-ceo';
+// ── CEO console access ───────────────────────────────────────────────────────
+// Managers sign in with Supabase Auth (email + password) — see store.js (db.signIn).
+// No password or hash is shipped in the client bundle. In local/demo mode (no
+// Supabase configured), the console accepts the demo password "admin".

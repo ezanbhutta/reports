@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock, Download, ChevronLeft, ChevronRight, CalendarDays, ShieldAlert, ShieldCheck, Monitor, Loader2, Laptop } from 'lucide-react';
-import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, CEO_PASSWORD, GROUPS, isDesigner, MISTAKE_CATEGORIES } from './config.js';
+import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock, Download, ChevronLeft, ChevronRight, CalendarDays, ShieldAlert, ShieldCheck, Monitor, Loader2, Laptop, LogOut } from 'lucide-react';
+import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, GROUPS, isDesigner, MISTAKE_CATEGORIES } from './config.js';
 import { db, todayPKT, timePKT, addDays, BACKEND } from './store.js';
 import { Btn, Card, StatCard, Pill, Select, Chip, SectionHeader, Modal, Label, Field, actionSummary, Logo, TrendChart, ConfirmDelete, useLive } from './ui.jsx';
 
-const AUTH_KEY = 'sl_ceo_ok';
 const uid = () => (crypto?.randomUUID ? crypto.randomUUID() : 'r_' + Math.random().toString(36).slice(2));
 const SHIFT_COLOR = { Morning: C.amber, Evening: C.cyan, Night: C.violet };
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -103,34 +102,56 @@ function buildTrend(times, win) {
 }
 
 export default function CeoApp() {
-  const [ok, setOk] = useState(() => sessionStorage.getItem(AUTH_KEY) === '1');
-  const [pw, setPw] = useState(''); const [err, setErr] = useState(false);
-  if (!ok) {
-    const tryOpen = () => {
-      const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
-      if (pw === CEO_PASSWORD) { db.logAccess('success', { ua }); sessionStorage.setItem(AUTH_KEY, '1'); setOk(true); }
-      else { db.logAccess('failed', { pw, ua }); setErr(true); }
-    };
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-        <div className="glass-2 rounded-2xl pop" style={{ width: 340, overflow: 'hidden' }}>
-          <div style={{ padding: '30px 26px 26px', textAlign: 'center' }}>
-            <Logo size={52} style={{ margin: '0 auto 14px' }} />
-            <div className="disp" style={{ fontWeight: 700, fontSize: 19, color: C.ink }}>CEO Console</div>
-            <div style={{ fontSize: 12, color: C.muted, marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Lock size={11} /> Password-locked · managers only</div>
-            <input type="password" value={pw} autoFocus onChange={e => { setPw(e.target.value); setErr(false); }} onKeyDown={e => e.key === 'Enter' && tryOpen()}
-              className="gi" style={{ marginTop: 16, textAlign: 'center', borderColor: err ? C.coral : undefined }} placeholder="Password" />
-            {err && <div style={{ color: C.coral, fontSize: 12, marginTop: 8 }}>Wrong password.</div>}
-            <Btn onClick={tryOpen} className="lift" style={{ width: '100%', marginTop: 12, padding: 11 }}>Unlock</Btn>
-          </div>
-        </div>
-      </div>
-    );
-  }
-  return <Authed />;
+  const [user, setUser] = useState(undefined); // undefined = checking · null = signed out · object = signed in
+  useEffect(() => {
+    let alive = true;
+    db.currentUser().then(u => { if (alive) setUser(u || null); });
+    const off = db.onAuth(u => { if (alive) setUser(u || null); });
+    return () => { alive = false; off && off(); };
+  }, []);
+  if (user === undefined) return null;
+  if (!user) return <Login onSignedIn={u => setUser(u)} />;
+  return <Authed user={user} onSignOut={async () => { await db.signOut(); setUser(null); }} />;
 }
 
-function Authed() {
+function Login({ onSignedIn }) {
+  const [email, setEmail] = useState('');
+  const [pw, setPw] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    if (busy) return;
+    setBusy(true); setErr('');
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    try {
+      const u = await db.signIn(email.trim(), pw);
+      db.logAccess('success', { email: email.trim(), ua });
+      onSignedIn(u || { email: email.trim() });
+    } catch {
+      db.logAccess('failed', { email: email.trim(), ua });
+      setErr('Wrong email or password.'); setBusy(false);
+    }
+  };
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div className="glass-2 rounded-2xl pop" style={{ width: 360, overflow: 'hidden' }}>
+        <div style={{ padding: '30px 26px 26px', textAlign: 'center' }}>
+          <Logo size={52} style={{ margin: '0 auto 14px' }} />
+          <div className="disp" style={{ fontWeight: 700, fontSize: 19, color: C.ink }}>CEO Console</div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Lock size={11} /> Manager sign-in</div>
+          <input type="email" value={email} autoFocus onChange={e => { setEmail(e.target.value); setErr(''); }} onKeyDown={e => e.key === 'Enter' && submit()}
+            className="gi" style={{ marginTop: 16, textAlign: 'center' }} placeholder="Email" autoComplete="username" />
+          <input type="password" value={pw} onChange={e => { setPw(e.target.value); setErr(''); }} onKeyDown={e => e.key === 'Enter' && submit()}
+            className="gi" style={{ marginTop: 10, textAlign: 'center', borderColor: err ? C.coral : undefined }} placeholder="Password" autoComplete="current-password" />
+          {err && <div style={{ color: C.coral, fontSize: 12, marginTop: 8 }}>{err}</div>}
+          <Btn onClick={submit} disabled={busy} className="lift" style={{ width: '100%', marginTop: 12, padding: 11 }}>{busy ? 'Signing in…' : 'Sign in'}</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Authed({ user, onSignOut }) {
   const [view, setView] = useState('live');
   const [secLog] = useLive('secLog', () => db.listAccessLog(), ['security_log']);
   const [mistakes, reloadMistakes] = useLive('mistakes', () => db.listMistakes(), ['mistakes']);
@@ -151,7 +172,8 @@ function Authed() {
             <div><div className="disp" style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>CEO Console <span style={{ fontSize: 11, fontWeight: 700, color: C.mint }}>· <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 9, background: C.mint, boxShadow: `0 0 0 3px ${C.mintBg}` }} /> live</span></div>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.18em', textTransform: 'uppercase', color: C.dim }}>HaseebMadeIt · Operations</div></div>
           </div>
-          <div className="flex items-center gap-2"><Tab id="live" icon={BarChart3} label="Live" /><Tab id="mistakes" icon={ClipboardList} label="Mistakes" badge={openMistakes} /><Tab id="roster" icon={Users} label="Roster" /><Tab id="security" icon={ShieldAlert} label="Security" badge={unseen} /></div>
+          <div className="flex items-center gap-2"><Tab id="live" icon={BarChart3} label="Live" /><Tab id="mistakes" icon={ClipboardList} label="Mistakes" badge={openMistakes} /><Tab id="roster" icon={Users} label="Roster" /><Tab id="security" icon={ShieldAlert} label="Security" badge={unseen} />
+            <button onClick={onSignOut} title={user && user.email ? `Signed in as ${user.email}` : 'Sign out'} className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-all" style={{ background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }}><LogOut size={14} />Sign out</button></div>
         </div>
       </div>
       <main className="mx-auto max-w-[1500px] px-6 py-6">
@@ -160,7 +182,7 @@ function Authed() {
             <ShieldAlert size={20} />
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 800, fontSize: 14 }}>{unseen} failed access attempt{unseen > 1 ? 's' : ''} on the CEO console</div>
-              <div style={{ fontSize: 12, opacity: .9 }}>Someone tried a wrong password since you last checked. Tap to review.</div>
+              <div style={{ fontSize: 12, opacity: .9 }}>A failed sign-in to the CEO console since you last checked. Tap to review.</div>
             </div>
             <span style={{ fontWeight: 800, fontSize: 13, whiteSpace: 'nowrap' }}>Review →</span>
           </div>
@@ -394,7 +416,7 @@ function SecurityPanel({ log, seenAt, onSeen }) {
     <>
       <div className="mb-4">
         <h2 className="disp text-lg font-bold" style={{ color: C.ink }}>Access security</h2>
-        <p className="mt-1 text-xs" style={{ color: C.muted }}>Every wrong-password attempt on the CEO console is recorded here. The real password is never stored — only what an intruder typed.</p>
+        <p className="mt-1 text-xs" style={{ color: C.muted }}>Every failed sign-in to the CEO console is recorded here. Passwords are never stored — only the email someone tried.</p>
       </div>
 
       <SectionHeader eyebrow="Access" title="Registered devices" right="laptop → profile" />
@@ -409,7 +431,7 @@ function SecurityPanel({ log, seenAt, onSeen }) {
       <SectionHeader eyebrow="Watch" title="Failed attempts" color={C.coral} right={`${failed.length}`} />
       <Card className="p-4 mb-6">
         {failed.length === 0
-          ? <div style={{ color: C.mint, fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}><ShieldCheck size={15} /> No failed attempts — nobody's tried a wrong password.</div>
+          ? <div style={{ color: C.mint, fontSize: 12.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}><ShieldCheck size={15} /> No failed sign-ins — nobody's tried to get in.</div>
           : <div className="scroll-y" style={{ maxHeight: 460, overflowY: 'auto', paddingRight: 6 }}>
               {failed.map(e => { const isNew = (e.created_at || '') > hiSince; return (
                 <div key={e.id} className="glass-soft rounded-xl" style={{ padding: '11px 13px', marginBottom: 8, borderLeft: `3px solid ${C.coral}` }}>

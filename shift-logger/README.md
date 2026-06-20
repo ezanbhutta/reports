@@ -27,9 +27,9 @@ tabs in the same browser — great for a demo).
    ```
    VITE_SUPABASE_URL=https://YOURPROJECT.supabase.co
    VITE_SUPABASE_ANON_KEY=your-anon-key
-   VITE_CEO_PASSWORD=choose-a-password
    ```
-3. Rebuild. Now every CSR writes to one shared database and the CEO sees everyone live.
+3. Create a **manager account** in the Supabase dashboard (**Authentication → Users → Add user**, tick *Auto Confirm*), and turn **off** public sign-ups (**Authentication → Providers → Email**).
+4. Rebuild. Now every CSR writes to one shared database and the CEO sees everyone live.
 
 ## What's where
 
@@ -46,5 +46,6 @@ tabs in the same browser — great for a demo).
 - **One profile per report.** A CSR covering two profiles files two reports.
 - **Hand-off note** routes by profile — the next CSR on that profile sees it at login and taps *Noted*.
 - **No edits after submit** — enforced in the app and by an RLS policy.
-- The CEO password is a light gate (client-side). Fine for internal use; can be hardened later.
-- Default CEO password is `haseeb-ceo` until you set `VITE_CEO_PASSWORD`.
+- **Manager login uses Supabase Auth** (email + password) — no password or hash is shipped in the app bundle. Create manager accounts in Supabase (**Authentication → Users → Add user**, tick *Auto Confirm*) and disable public sign-ups.
+- The **mistakes log** and the **sign-in / security log** are readable only by a signed-in manager (enforced by RLS). The CSR app has no password and is unchanged.
+- Local/demo mode (no Supabase configured) accepts the demo password **`admin`** for the console.
