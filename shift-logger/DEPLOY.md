@@ -37,7 +37,7 @@ Part 1 sets up the database. Part 2 puts the app online. Part 3 is a quick check
      |---|---|
      | `VITE_SUPABASE_URL` | the Project URL from step 4 |
      | `VITE_SUPABASE_ANON_KEY` | the anon key from step 4 |
-     | `VITE_CEO_PASSWORD` | a password you choose for the CEO screen |
+     | `VITE_CEO_PASSWORD_HASH` | the SHA-256 hash of your CEO password — see **Set the CEO password** below |
 
 8. Click **Deploy**. Wait 1–2 minutes.
 9. When it finishes, click the live link. There are **two screens, one link**:
@@ -58,7 +58,14 @@ Part 1 sets up the database. Part 2 puts the app online. Part 3 is a quick check
 ## Good to know
 
 - **Updating later:** anything pushed to the repo's `main` branch auto-redeploys on Vercel. No steps needed.
-- **Change the CEO password:** Vercel → your project → **Settings → Environment Variables** → edit
-  `VITE_CEO_PASSWORD` → then **Deployments → … → Redeploy**.
+- **Set / change the CEO password:** the app stores only the *hash* of your password, never the
+  password itself. Pick a password, then generate its SHA-256 hash — open any browser, press F12 →
+  **Console**, paste this (swap in your password), and press Enter:
+  ```js
+  crypto.subtle.digest('SHA-256', new TextEncoder().encode('YOUR-PASSWORD')).then(b => console.log([...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('')))
+  ```
+  Copy the 64-character result. In Vercel → **Settings → Environment Variables**, set
+  `VITE_CEO_PASSWORD_HASH` to that hash (and delete the old `VITE_CEO_PASSWORD` if it's still there).
+  Then **Deployments → … → Redeploy**. If the hash isn't set, the local default password is `admin`.
 - **Two separate links, one password:** the CSR app needs no password; only the `#ceo` screen does.
 - If you skip Part 1 (Supabase), the app still runs but only saves on one device — so do Part 1 for the real, shared, live version.

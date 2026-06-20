@@ -27,7 +27,7 @@ tabs in the same browser — great for a demo).
    ```
    VITE_SUPABASE_URL=https://YOURPROJECT.supabase.co
    VITE_SUPABASE_ANON_KEY=your-anon-key
-   VITE_CEO_PASSWORD=choose-a-password
+   VITE_CEO_PASSWORD_HASH=sha256-hex-of-your-password
    ```
 3. Rebuild. Now every CSR writes to one shared database and the CEO sees everyone live.
 
@@ -46,5 +46,9 @@ tabs in the same browser — great for a demo).
 - **One profile per report.** A CSR covering two profiles files two reports.
 - **Hand-off note** routes by profile — the next CSR on that profile sees it at login and taps *Noted*.
 - **No edits after submit** — enforced in the app and by an RLS policy.
-- The CEO password is a light gate (client-side). Fine for internal use; can be hardened later.
-- Default CEO password is `haseeb-ceo` until you set `VITE_CEO_PASSWORD`.
+- The CEO password is verified by **SHA-256 hash** — only the hash goes in `VITE_CEO_PASSWORD_HASH`, so the plaintext password is never shipped in the bundle. It's still a client-side gate (a deterrent); the data itself is guarded by Supabase RLS.
+- Generate the hash for your password (run in any browser console, then copy the 64-char result):
+  ```js
+  crypto.subtle.digest('SHA-256', new TextEncoder().encode('YOUR-PASSWORD')).then(b => console.log([...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('')))
+  ```
+- If `VITE_CEO_PASSWORD_HASH` is unset, a **local-dev default of `admin`** applies.

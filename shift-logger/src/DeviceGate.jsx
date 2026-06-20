@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Laptop, ShieldAlert, Loader2, LockKeyhole, RefreshCw } from 'lucide-react';
-import { C, CEO_PASSWORD } from './config.js';
+import { C, checkCeoPassword } from './config.js';
 import { db } from './store.js';
 import { getDeviceId, getDeviceCode } from './device.js';
 
@@ -43,7 +43,7 @@ function BlockScreen({ phase, code, onRetry, onOverride }) {
   const [pw, setPw] = useState('');
   const [pwErr, setPwErr] = useState(false);
   const checking = phase === 'checking';
-  const submit = () => { if (pw === CEO_PASSWORD) onOverride(); else setPwErr(true); };
+  const submit = async () => { if (await checkCeoPassword(pw)) onOverride(); else setPwErr(true); };
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>

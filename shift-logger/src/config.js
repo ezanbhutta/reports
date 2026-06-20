@@ -208,6 +208,23 @@ export const MISTAKE_CATEGORIES = [
 ];
 export const MISTAKE_SEVERITIES = ['Low', 'Medium', 'High'];
 
-// CEO console password (change this; it's a light gate, not hard security).
-// Override at build time with VITE_CEO_PASSWORD.
-export const CEO_PASSWORD = import.meta.env.VITE_CEO_PASSWORD || 'haseeb-ceo';
+// ── CEO console gate ────────────────────────────────────────────────────────
+// The password is NEVER shipped in the bundle — only the SHA-256 hash of it is.
+// Set VITE_CEO_PASSWORD_HASH (the 64-char hex SHA-256 of your chosen password) at
+// build time. If unset, a local-dev default of "admin" applies (see README/DEPLOY).
+// This remains a client-side gate (a deterrent); the team data itself is guarded
+// by Supabase Row-Level Security, not by this password.
+const DEFAULT_CEO_HASH = '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918'; // SHA-256("admin") — dev only
+export const CEO_PASSWORD_HASH = (import.meta.env.VITE_CEO_PASSWORD_HASH || DEFAULT_CEO_HASH).trim().toLowerCase();
+
+// Hash a string with SHA-256 → lowercase hex (Web Crypto; needs HTTPS or localhost).
+export async function sha256Hex(str) {
+  const data = new TextEncoder().encode(String(str ?? ''));
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// True when the typed password matches the configured hash. Never compares plaintext.
+export async function checkCeoPassword(input) {
+  try { return (await sha256Hex(input)) === CEO_PASSWORD_HASH; } catch { return false; }
+}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock, Download, ChevronLeft, ChevronRight, CalendarDays, ShieldAlert, ShieldCheck, Monitor, Loader2, Laptop } from 'lucide-react';
-import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, CEO_PASSWORD, GROUPS, isDesigner, MISTAKE_CATEGORIES } from './config.js';
+import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, checkCeoPassword, GROUPS, isDesigner, MISTAKE_CATEGORIES } from './config.js';
 import { db, todayPKT, timePKT, addDays, BACKEND } from './store.js';
 import { Btn, Card, StatCard, Pill, Select, Chip, SectionHeader, Modal, Label, Field, actionSummary, Logo, TrendChart, ConfirmDelete, useLive } from './ui.jsx';
 
@@ -106,9 +106,9 @@ export default function CeoApp() {
   const [ok, setOk] = useState(() => sessionStorage.getItem(AUTH_KEY) === '1');
   const [pw, setPw] = useState(''); const [err, setErr] = useState(false);
   if (!ok) {
-    const tryOpen = () => {
+    const tryOpen = async () => {
       const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
-      if (pw === CEO_PASSWORD) { db.logAccess('success', { ua }); sessionStorage.setItem(AUTH_KEY, '1'); setOk(true); }
+      if (await checkCeoPassword(pw)) { db.logAccess('success', { ua }); sessionStorage.setItem(AUTH_KEY, '1'); setOk(true); }
       else { db.logAccess('failed', { pw, ua }); setErr(true); }
     };
     return (
