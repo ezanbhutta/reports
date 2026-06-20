@@ -30,7 +30,7 @@ export function addDays(ymd, n) {
 // localStorage backend
 // ════════════════════════════════════════════════════════════════
 const LS = {
-  reports: 'sl_reports_v1', actions: 'sl_actions_v1', roster: 'sl_roster_v1', security: 'sl_security_v1', devices: 'sl_devices_v1', mistakes: 'sl_mistakes_v1',
+  reports: 'sl_reports_v1', actions: 'sl_actions_v1', roster: 'sl_roster_v1', security: 'sl_security_v1', devices: 'sl_devices_v1', mistakes: 'sl_mistakes_v1', auth: 'sl_local_auth',
 };
 const read = (k, fallback) => { try { return JSON.parse(localStorage.getItem(k)) ?? fallback; } catch { return fallback; } };
 const write = (k, v) => { localStorage.setItem(k, JSON.stringify(v)); ping(); };
@@ -113,7 +113,7 @@ const localDb = {
   async allActions() { return read(LS.actions, []); },
   async logAccess(event, detail) {
     const log = read(LS.security, []);
-    log.push({ id: uid(), event, pw_tried: (detail && detail.pw) || '', ua: (detail && detail.ua) || '', created_at: new Date().toISOString() });
+    log.push({ id: uid(), event, pw_tried: (detail && detail.email) || '', ua: (detail && detail.ua) || '', created_at: new Date().toISOString() });
     write(LS.security, log);
   },
   async listAccessLog() {
@@ -153,6 +153,14 @@ const localDb = {
     return dev;
   },
   async removeDevice(id) { write(LS.devices, read(LS.devices, []).filter(d => d.id !== id)); return true; },
+  // Manager auth (demo) — local mode has no server, so "admin" unlocks the console.
+  async signIn(email, password) {
+    if (String(password) === 'admin') { localStorage.setItem(LS.auth, '1'); return { email: email || 'manager@local', local: true }; }
+    throw new Error('Invalid login credentials');
+  },
+  async signOut() { localStorage.removeItem(LS.auth); },
+  async currentUser() { return localStorage.getItem(LS.auth) === '1' ? { email: 'manager@local', local: true } : null; },
+  onAuth() { return () => {}; },
   subscribe(cb) {
     const bc = (() => { try { return new BroadcastChannel('sl'); } catch { return null; } })();
     const onMsg = () => cb();
@@ -176,6 +184,20 @@ async function client() {
 }
 
 const supaDb = {
+  // ── Manager auth (Supabase Auth) — the session unlocks manager-only data via RLS ──
+  async signIn(email, password) {
+    const c = await client();
+    const { data, error } = await c.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    return (data && data.user) || null;
+  },
+  async signOut() { try { const c = await client(); await c.auth.signOut(); } catch {} },
+  async currentUser() { try { const c = await client(); const { data } = await c.auth.getUser(); return (data && data.user) || null; } catch { return null; } },
+  onAuth(cb) {
+    let unsub = () => {};
+    client().then(c => { const { data } = c.auth.onAuthStateChange((_evt, session) => cb((session && session.user) || null)); unsub = () => { try { data.subscription.unsubscribe(); } catch {} }; });
+    return () => unsub();
+  },
   async getRoster() {
     const c = await client();
     const { data } = await c.from('roster').select('*').order('shift');
@@ -273,7 +295,7 @@ const supaDb = {
     // Security events must never be silently lost. If the cloud insert fails
     // (e.g. the security_log table/migration is missing), keep a local copy so
     // the console still records and shows the attempt.
-    try { const c = await client(); const { error } = await c.from('security_log').insert({ event, pw_tried: (detail && detail.pw) || '', ua: (detail && detail.ua) || '' }); if (error) throw error; }
+    try { const c = await client(); const { error } = await c.from('security_log').insert({ event, pw_tried: (detail && detail.email) || '', ua: (detail && detail.ua) || '' }); if (error) throw error; }
     catch { try { await localDb.logAccess(event, detail); } catch {} }
   },
   async listAccessLog() {
