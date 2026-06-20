@@ -41,6 +41,7 @@ export default function CsrApp({ boundProfile }) {
   const [form, setForm] = useState(null);   // { action, values, editId, error }
   const [wrap, setWrap] = useState(false);
   const [del, setDel] = useState(false);
+  const [delEntry, setDelEntry] = useState(null);  // a single timeline entry pending delete confirm
   const [flash, setFlash] = useState(false);   // success banner on the login for the next person
   const [oops, setOops] = useState(false);     // submit failed — keep the report, let them retry
   const [name, setName] = useState(''); const [shift, setShift] = useState(currentShift()); const [profile, setProfile] = useState('');
@@ -139,6 +140,14 @@ export default function CsrApp({ boundProfile }) {
         .then(saved => { if (saved && saved.id) setActions(prev => prev.map(x => x.id === temp.id ? saved : x)); })           // swap in the saved row
         .catch(refresh);
     }
+  }
+  // Delete a single timeline entry — only while the report is open (mirrors edit; enforced again by RLS).
+  function requestDeleteEntry() { if (!form || !form.editId) return; const id = form.editId; setForm(null); setDelEntry(id); }
+  function deleteEntry(id) {
+    if (!id || !report || report.status !== 'open') return;
+    setActions(prev => prev.filter(x => x.id !== id));      // optimistic remove
+    Promise.resolve(db.deleteAction(id)).catch(refresh);    // persist in background
+    setDelEntry(null);
   }
   function tryWrapUp() {
     if (handoff && !handoffSeen) { setShowHandoff(true); return; } // must read the previous note first
@@ -347,7 +356,7 @@ export default function CsrApp({ boundProfile }) {
         <Card className="p-5">
           <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
             <div style={{ fontWeight: 800, fontSize: 15, color: C.ink }}>Today's timeline</div>
-            <span style={{ fontSize: 11, color: C.dim }}>{actions.length} {actions.length === 1 ? 'entry' : 'entries'}{!locked && actions.length > 0 ? ' · tap to edit' : ''}</span>
+            <span style={{ fontSize: 11, color: C.dim }}>{actions.length} {actions.length === 1 ? 'entry' : 'entries'}{!locked && actions.length > 0 ? ' · tap to edit or delete' : ''}</span>
           </div>
           {actions.length === 0 && (
             <div style={{ textAlign: 'center', padding: '26px 0', color: C.dim }}>
@@ -365,12 +374,13 @@ export default function CsrApp({ boundProfile }) {
                 </div>
                 {g.items.map(a => { const col = groupColor(ACTION_BY_KEY[a.type]?.group); const labelTxt = ACTION_BY_KEY[a.type]?.label || a.type; const proj = projectOf(a); const sub = [proj ? labelTxt : null, a.client, actionSummary(a)].filter(Boolean).join(' · '); return (
                   <div key={a.id} onClick={() => !locked && openForm(ACTION_BY_KEY[a.type], { ...a.details, client: a.client }, a.id)}
-                    className="glass-soft rounded-xl lift" style={{ display: 'flex', gap: 11, padding: '11px 13px', marginBottom: 8, cursor: locked ? 'default' : 'pointer', borderLeft: `3px solid ${col}` }}>
+                    className="glass-soft rounded-xl lift" style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 13px', marginBottom: 8, cursor: locked ? 'default' : 'pointer', borderLeft: `3px solid ${col}` }}>
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div className="truncate" style={{ fontSize: 13.5, fontWeight: 800, color: C.ink }}>{proj || labelTxt}</div>
                       <div className="truncate" style={{ fontSize: 11.5, color: C.muted }}>{sub || '—'}</div>
                     </div>
                     <span style={{ fontSize: 10.5, color: C.dim, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3 }}>{timePKT(a.created_at)}{!locked && <Pencil size={10} style={{ color: C.violetLine }} />}</span>
+                    {!locked && <button onClick={e => { e.stopPropagation(); setDelEntry(a.id); }} title="Delete entry" style={{ flex: '0 0 auto', border: 'none', background: 'rgba(244,63,94,.10)', width: 28, height: 28, borderRadius: 8, color: C.coral, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={13} /></button>}
                   </div>
                 ); })}
               </div>
@@ -418,6 +428,7 @@ export default function CsrApp({ boundProfile }) {
             onChange={v => setForm(m => ({ ...m, values: { ...m.values, [f.name]: v }, error: null }))} />; })}
         {form.error && <div style={{ color: C.coral, fontSize: 12, marginTop: 10 }}>{form.error}</div>}
         <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
+          {form.editId && <Btn variant="ghost" onClick={requestDeleteEntry} style={{ color: C.coral }}><Trash2 size={15} />Delete</Btn>}
           <Btn variant="ghost" onClick={() => setForm(null)} style={{ flex: 1 }}>Cancel</Btn>
           <Btn variant="ok" onClick={saveForm} className="lift" style={{ flex: 1 }}>{form.editId ? 'Save' : 'Add'}</Btn>
         </div>
@@ -425,6 +436,7 @@ export default function CsrApp({ boundProfile }) {
 
       {wrap && <WrapUp note={noteDraft} shifts={noteShifts} onClose={() => setWrap(false)} onSubmit={submit} />}
       {del && report && <ConfirmDelete what="this report" onConfirm={async () => { await db.deleteReport(report.id); clearActive(); setReport(null); setActions([]); setHandoff(null); setShowHandoff(false); setName(''); setProfile(''); setView('login'); }} onClose={() => setDel(false)} />}
+      {delEntry && <ConfirmDelete what="this entry" onConfirm={() => deleteEntry(delEntry)} onClose={() => setDelEntry(null)} />}
     </Shell>
   );
 }

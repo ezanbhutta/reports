@@ -30,7 +30,7 @@ export function addDays(ymd, n) {
 // localStorage backend
 // ════════════════════════════════════════════════════════════════
 const LS = {
-  reports: 'sl_reports_v1', actions: 'sl_actions_v1', roster: 'sl_roster_v1', security: 'sl_security_v1', geofence: 'sl_geofence_v1', devices: 'sl_devices_v1', mistakes: 'sl_mistakes_v1',
+  reports: 'sl_reports_v1', actions: 'sl_actions_v1', roster: 'sl_roster_v1', security: 'sl_security_v1', devices: 'sl_devices_v1', mistakes: 'sl_mistakes_v1',
 };
 const read = (k, fallback) => { try { return JSON.parse(localStorage.getItem(k)) ?? fallback; } catch { return fallback; } };
 const write = (k, v) => { localStorage.setItem(k, JSON.stringify(v)); ping(); };
@@ -80,6 +80,7 @@ const localDb = {
     if (i >= 0) { actions[i] = { ...actions[i], ...patch, updated_at: new Date().toISOString() }; write(LS.actions, actions); }
     return actions[i];
   },
+  async deleteAction(actionId) { write(LS.actions, read(LS.actions, []).filter(a => a.id !== actionId)); return true; },
   async submitReport(reportId, { checklist, note_for_next }) {
     const reports = read(LS.reports, []);
     const i = reports.findIndex(r => r.id === reportId);
@@ -134,8 +135,6 @@ const localDb = {
     return list[i];
   },
   async deleteMistake(id) { write(LS.mistakes, read(LS.mistakes, []).filter(x => x.id !== id)); return true; },
-  async getGeofence() { return read(LS.geofence, null); },
-  async setGeofence(obj) { write(LS.geofence, obj); return obj; },
   async listDevices() { return read(LS.devices, []); },
   async getDevice(id) { return read(LS.devices, []).find(d => d.id === id) || null; },
   async registerDevice({ id, code, ua }) {
@@ -223,6 +222,11 @@ const supaDb = {
     const c = await client();
     const { data } = await c.from('actions').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id).select().single();
     return data;
+  },
+  async deleteAction(id) {
+    const c = await client();
+    await c.from('actions').delete().eq('id', id);
+    return true;
   },
   async submitReport(id, { checklist, note_for_next }) {
     const c = await client();
@@ -313,15 +317,6 @@ const supaDb = {
     try { await localDb.deleteMistake(id); } catch {}
     return true;
   },
-  async getGeofence() {
-    try { const c = await client(); const { data } = await c.from('settings').select('value').eq('key', 'geofence').maybeSingle(); return (data && data.value) || null; } catch { return null; }
-  },
-  async setGeofence(obj) {
-    const c = await client();
-    const { error } = await c.from('settings').upsert({ key: 'geofence', value: obj, updated_at: new Date().toISOString() });
-    if (error) throw error;
-    return obj;
-  },
   async listDevices() {
     try { const c = await client(); const { data } = await c.from('devices').select('*').order('created_at'); return data || []; } catch { return []; }
   },
@@ -353,7 +348,7 @@ const supaDb = {
       _subStarted = true;
       client().then(c => {
         _subCh = c.channel('sl-changes');
-        ['reports', 'actions', 'security_log', 'settings', 'devices', 'mistakes', 'roster'].forEach(t =>
+        ['reports', 'actions', 'security_log', 'devices', 'mistakes', 'roster'].forEach(t =>
           _subCh.on('postgres_changes', { event: '*', schema: 'public', table: t }, (p) => { const tb = (p && p.table) || t; _subCbs.forEach(f => { try { f(tb); } catch {} }); }));
         _subCh.subscribe();
       });
