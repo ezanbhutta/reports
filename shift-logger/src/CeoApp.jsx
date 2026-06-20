@@ -269,15 +269,26 @@ function MistakesPanel({ mistakes, reload }) {
   const [form, setForm] = useState(blank());
   const [showForm, setShowForm] = useState(false);
   const [detail, setDetail] = useState(null);
+  const [editId, setEditId] = useState(null);   // id of the mistake being edited (null = new entry)
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   const [fStatus, setFStatus] = useState('all'); const [fPerson, setFPerson] = useState('all');
   const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); setErr(''); };
 
+  const openNew = () => { setForm(blank()); setEditId(null); setErr(''); setShowForm(true); };
+  const openEdit = (m) => {
+    setForm({ person: (m.person || '').split(',').map(s => s.trim()).filter(Boolean), category: m.category || '', description: m.description || '', client: m.client || '', project: m.project || '', shift: m.shift || currentShift(), happened_on: m.happened_on || todayPKT(), happened_time: m.happened_time || '', profile: m.profile || '', logged_by: m.logged_by || '' });
+    setEditId(m.id); setErr(''); setDetail(null); setShowForm(true);
+  };
+  const closeForm = () => { setShowForm(false); setEditId(null); setForm(blank()); setErr(''); };
   const submit = async () => {
     if (!form.person || !form.person.length) { setErr('Pick who made the mistake.'); return; }
     if (!form.description.trim()) { setErr('Describe what happened.'); return; }
     setBusy(true);
-    try { await db.addMistake({ ...form, person: form.person.join(', '), description: form.description.trim() }); setShowForm(false); setForm(blank()); reload(); }
+    const payload = { ...form, person: form.person.join(', '), description: form.description.trim() };
+    try {
+      if (editId) await db.updateMistake(editId, payload); else await db.addMistake(payload);
+      closeForm(); reload();
+    }
     catch (e) { const msg = (e && (e.message || e.error_description || e.hint)) || 'Unknown error'; setErr('Could not save: ' + msg + (e && e.code ? ` (${e.code})` : '')); }
     finally { setBusy(false); }
   };
@@ -299,7 +310,7 @@ function MistakesPanel({ mistakes, reload }) {
           <h2 className="disp text-lg font-bold" style={{ color: C.ink }}>Mistakes log</h2>
           <p className="mt-1 text-xs" style={{ color: C.muted }}>Record what went wrong — who, when and which shift. The CEO reviews and signs off here. Best used for coaching and spotting patterns, not blame.</p>
         </div>
-        <Btn onClick={() => { setForm(blank()); setErr(''); setShowForm(true); }} className="lift"><Plus size={15} strokeWidth={2.6} />Log a mistake</Btn>
+        <Btn onClick={openNew} className="lift"><Plus size={15} strokeWidth={2.6} />Log a mistake</Btn>
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -344,6 +355,7 @@ function MistakesPanel({ mistakes, reload }) {
                 ? <Btn variant="ghost" onClick={() => setStatus(m, 'open')} style={{ padding: '7px 14px', fontSize: 12 }}>Reopen</Btn>
                 : <Btn variant="ok" onClick={() => setStatus(m, 'reviewed')} style={{ padding: '7px 14px', fontSize: 12 }}>Mark reviewed</Btn>}
               <div style={{ flex: 1 }} />
+              <button onClick={() => openEdit(m)} title="Edit entry" style={{ border: 'none', background: 'rgba(124,41,255,.08)', width: 30, height: 30, borderRadius: 8, color: C.violet, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Pencil size={14} /></button>
               <button onClick={() => remove(m)} title="Delete entry" style={{ border: 'none', background: 'rgba(124,41,255,.08)', width: 30, height: 30, borderRadius: 8, color: C.coral, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={14} /></button>
             </div>
           </div>); })}
@@ -369,6 +381,7 @@ function MistakesPanel({ mistakes, reload }) {
               {detail.status === 'reviewed'
                 ? <Btn variant="ghost" onClick={() => { setStatus(detail, 'open'); setDetail(d => d && { ...d, status: 'open' }); }}>Reopen</Btn>
                 : <Btn variant="ok" onClick={() => { setStatus(detail, 'reviewed'); setDetail(d => d && { ...d, status: 'reviewed' }); }}>Mark reviewed</Btn>}
+              <Btn variant="ghost" onClick={() => openEdit(detail)}><Pencil size={14} />Edit</Btn>
               <div style={{ flex: 1 }} />
               <Btn variant="ghost" onClick={() => { remove(detail); setDetail(null); }} style={{ color: C.coral }}><Trash2 size={14} />Delete</Btn>
             </div>
@@ -376,7 +389,7 @@ function MistakesPanel({ mistakes, reload }) {
         </Modal>
       ); })()}
 
-      {showForm && <Modal title="Log a mistake" subtitle="Manager entry" onClose={() => setShowForm(false)} width={460}>
+      {showForm && <Modal title={editId ? 'Edit mistake' : 'Log a mistake'} subtitle={editId ? 'Edit entry' : 'Manager entry'} onClose={closeForm} width={460}>
         <div style={{ display: 'grid', gap: 12 }}>
           <PeoplePicker people={people} value={form.person} onChange={v => set('person', v)} />
           <Field field={{ name: 'category', label: 'Category', type: 'select', options: MISTAKE_CATEGORIES }} value={form.category} onChange={v => set('category', v)} />
@@ -397,7 +410,7 @@ function MistakesPanel({ mistakes, reload }) {
           <Field field={{ name: 'logged_by', label: 'Logged by (optional)', type: 'text' }} value={form.logged_by} onChange={v => set('logged_by', v)} />
           {err && <div style={{ color: C.coral, fontSize: 12 }}>{err}</div>}
           <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
-            <Btn variant="ghost" onClick={() => setShowForm(false)} style={{ flex: 1 }}>Cancel</Btn>
+            <Btn variant="ghost" onClick={closeForm} style={{ flex: 1 }}>Cancel</Btn>
             <Btn variant="ok" onClick={submit} disabled={busy} className="lift" style={{ flex: 1 }}>{busy ? 'Saving…' : 'Save'}</Btn>
           </div>
         </div>
