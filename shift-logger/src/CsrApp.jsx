@@ -374,12 +374,13 @@ export default function CsrApp({ boundProfile }) {
                 </div>
                 {g.items.map(a => { const col = groupColor(ACTION_BY_KEY[a.type]?.group); const labelTxt = ACTION_BY_KEY[a.type]?.label || a.type; const proj = projectOf(a); const sub = [proj ? labelTxt : null, a.client, actionSummary(a)].filter(Boolean).join(' · '); return (
                   <div key={a.id} onClick={() => !locked && openForm(ACTION_BY_KEY[a.type], { ...a.details, client: a.client }, a.id)}
-                    className="glass-soft rounded-xl lift" style={{ display: 'flex', gap: 11, padding: '11px 13px', marginBottom: 8, cursor: locked ? 'default' : 'pointer', borderLeft: `3px solid ${col}` }}>
+                    className="glass-soft rounded-xl lift" style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 13px', marginBottom: 8, cursor: locked ? 'default' : 'pointer', borderLeft: `3px solid ${col}` }}>
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div className="truncate" style={{ fontSize: 13.5, fontWeight: 800, color: C.ink }}>{proj || labelTxt}</div>
                       <div className="truncate" style={{ fontSize: 11.5, color: C.muted }}>{sub || '—'}</div>
                     </div>
                     <span style={{ fontSize: 10.5, color: C.dim, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3 }}>{timePKT(a.created_at)}{!locked && <Pencil size={10} style={{ color: C.violetLine }} />}</span>
+                    {!locked && <button onClick={e => { e.stopPropagation(); setDelEntry(a.id); }} title="Delete entry" style={{ flex: '0 0 auto', border: 'none', background: 'rgba(244,63,94,.10)', width: 28, height: 28, borderRadius: 8, color: C.coral, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={13} /></button>}
                   </div>
                 ); })}
               </div>
