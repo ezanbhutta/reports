@@ -22,11 +22,23 @@ function ago(iso) {
 }
 const SEEN_KEY = 'sl_sec_seen';
 // Short, readable device label from a user-agent string.
+function browserName(ua) {
+  if (!ua) return '';
+  return /Edg\//.test(ua) ? 'Edge' : /OPR\/|Opera/.test(ua) ? 'Opera' : /SamsungBrowser/.test(ua) ? 'Samsung Internet' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'Browser';
+}
+function osName(ua) {
+  if (!ua) return '';
+  return /Windows/.test(ua) ? 'Windows' : /iPhone|iPad|iPod/.test(ua) ? 'iOS' : /Android/.test(ua) ? 'Android' : /Mac OS/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : 'Unknown OS';
+}
+function deviceKind(ua) {
+  if (!ua) return '';
+  if (/iPad/.test(ua) || (/Android/.test(ua) && !/Mobile/.test(ua))) return 'Tablet';
+  if (/Mobi|iPhone|iPod/.test(ua)) return 'Phone';
+  return 'Desktop / Laptop';
+}
 function deviceLabel(ua) {
   if (!ua) return 'Unknown device';
-  const os = /Windows/.test(ua) ? 'Windows' : /iPhone|iPad|iPod/.test(ua) ? 'iOS' : /Android/.test(ua) ? 'Android' : /Mac OS/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : 'Unknown OS';
-  const br = /Edg\//.test(ua) ? 'Edge' : /OPR\/|Opera/.test(ua) ? 'Opera' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'Browser';
-  return `${br} · ${os}`;
+  return `${browserName(ua)} · ${osName(ua)}`;
 }
 // Full field-by-field detail for an action — mirrors exactly what the CSR typed.
 function actionDetails(action) {
@@ -211,7 +223,7 @@ function DevicesCard() {
       {devices.length === 0
         ? <div style={{ color: C.dim, fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}><Laptop size={15} /> No laptops yet — open the staff app on one to register it.</div>
         : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {devices.map(d => { const m = d.meta || {}; const loc = [m.city, m.region, m.country].filter(Boolean).join(', '); const isOpen = !!open[d.id]; const rows = [['Browser / OS', m.ua ? deviceLabel(m.ua) : ''], ['Location', loc], ['IP', m.ip], ['ISP', m.isp], ['Timezone', m.tz], ['Language', m.langs || m.lang], ['Screen', m.screen ? m.screen + (m.dpr ? ` @${m.dpr}x` : '') : ''], ['CPU / RAM', [m.cores && `${m.cores} cores`, m.memory && `${m.memory} GB`].filter(Boolean).join(' · ')], ['Platform', m.platform], ['First seen', d.created_at ? `${fmtShort(dayPKT(d.created_at))} · ${timePKT(d.created_at)}` : ''], ['Last seen', d.last_seen ? `${fmtShort(dayPKT(d.last_seen))} · ${timePKT(d.last_seen)}` : '']].filter(([, v]) => v); return (
+            {devices.map(d => { const m = d.meta || {}; const loc = [m.city, m.region, m.country].filter(Boolean).join(', '); const isOpen = !!open[d.id]; const rows = [['Browser', m.ua ? browserName(m.ua) : ''], ['Computer / OS', m.ua ? osName(m.ua) : ''], ['Device type', m.ua ? deviceKind(m.ua) : ''], ['Location', loc], ['IP', m.ip], ['ISP', m.isp], ['Timezone', m.tz], ['Language', m.langs || m.lang], ['Screen', m.screen ? m.screen + (m.dpr ? ` @${m.dpr}x` : '') : ''], ['CPU / RAM', [m.cores && `${m.cores} cores`, m.memory && `${m.memory} GB`].filter(Boolean).join(' · ')], ['Platform', m.platform], ['First seen', d.created_at ? `${fmtShort(dayPKT(d.created_at))} · ${timePKT(d.created_at)}` : ''], ['Last seen', d.last_seen ? `${fmtShort(dayPKT(d.last_seen))} · ${timePKT(d.last_seen)}` : '']].filter(([, v]) => v); return (
               <div key={d.id} className="glass-soft rounded-xl" style={{ borderLeft: `3px solid ${d.profile === '*' ? C.violet : d.profile ? C.mint : C.amber}`, overflow: 'hidden' }}>
                 <div style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                   <div style={{ minWidth: 90 }}>
