@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Laptop, Loader2, RefreshCw } from 'lucide-react';
 import { C } from './config.js';
 import { db } from './store.js';
-import { getDeviceId, getDeviceCode } from './device.js';
+import { getDeviceId, getDeviceCode, onDeviceSignals, ipMeta } from './device.js';
 
 // Gates the CSR app: a laptop must be registered to a profile (by the CEO) before
 // it can report, and it's locked to that profile. children is a render-prop that
@@ -14,13 +14,21 @@ export default function DeviceGate({ children }) {
   const code = getDeviceCode(id);
 
   const check = useCallback(async () => {
+    const meta = onDeviceSignals();
     let dev = null;
-    const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
-    try { dev = await db.registerDevice({ id, code, ua }); } catch {}
+    try { dev = await db.registerDevice({ id, code, ua: meta.ua, meta }); } catch {}
     if (!dev) { try { dev = await db.getDevice(id); } catch {} }
     // profile === '*' = admin device (access to ALL profiles → no lock).
     if (dev && dev.profile) { setBound(dev.profile === '*' ? null : dev.profile); setPhase('ok'); }
     else setPhase('pending');
+  }, [id, code]);
+
+  // Best-effort: enrich the device record with rough IP/location (free service,
+  // cached 12h) once on mount — never blocks the gate.
+  useEffect(() => {
+    let alive = true;
+    ipMeta().then(ip => { if (alive && ip && ip.ip) { const meta = { ...onDeviceSignals(), ...ip }; db.registerDevice({ id, code, ua: meta.ua, meta }).catch(() => {}); } });
+    return () => { alive = false; };
   }, [id, code]);
 
   useEffect(() => {

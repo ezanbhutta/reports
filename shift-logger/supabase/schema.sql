@@ -139,9 +139,12 @@ create table if not exists devices (
   label      text default '',
   profile    text default '',
   ua         text default '',
+  meta       jsonb default '{}'::jsonb,   -- legal, permission-free device signals (browser, tz, screen, IP/city, ISP, …)
   created_at timestamptz default now(),
   last_seen  timestamptz default now()
 );
+-- add to existing installs too (no-op if the column is already there)
+alter table devices add column if not exists meta jsonb default '{}'::jsonb;
 do $$ begin alter publication supabase_realtime add table devices; exception when duplicate_object then null; end $$;
 alter table devices enable row level security;
 drop policy if exists "devices read"  on devices;
