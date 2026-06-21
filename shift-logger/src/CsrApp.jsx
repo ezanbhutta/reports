@@ -5,6 +5,9 @@ import { db, todayPKT, timePKT } from './store.js';
 import { Btn, Card, Pill, Modal, Label, Field, actionSummary, Logo, ConfirmDelete, useLive } from './ui.jsx';
 
 const groupColor = k => (GROUPS.find(g => g.key === k) || {}).color || C.violet;
+// Show the keyboard hint for the user's actual OS — never a Mac ⌘ on Windows/Linux.
+const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.userAgentData?.platform || navigator.platform || navigator.userAgent || '');
+const MOD_K = IS_MAC ? '⌘K' : 'Ctrl K';
 // The project name for an action (order_assigned stores it in the client field).
 const projectOf = a => (a.type === 'order_assigned' ? a.client : (a.details && a.details.project)) || '';
 const QUICK = ['inquiry', 'client_conversation', 'followup_client', 'shared', 'revision_assigned', 'meeting', 'new_order'];
@@ -318,7 +321,7 @@ export default function CsrApp({ boundProfile }) {
                 <span style={{ display: 'block', fontWeight: 800, fontSize: 15.5 }}>Log an activity</span>
                 <span style={{ display: 'block', fontSize: 11, opacity: .85, fontWeight: 600 }}>Search 20+ actions or pick a quick one below</span>
               </span>
-              <span className="hidden sm:flex" style={{ marginLeft: 'auto', alignItems: 'center', gap: 5, fontSize: 11, opacity: .9, background: 'rgba(255,255,255,.18)', padding: '5px 9px', borderRadius: 8, flex: '0 0 auto' }}><Search size={12} /> ⌘K</span>
+              <span className="hidden sm:flex" style={{ marginLeft: 'auto', alignItems: 'center', gap: 5, fontSize: 11, opacity: .9, background: 'rgba(255,255,255,.18)', padding: '5px 9px', borderRadius: 8, flex: '0 0 auto' }}><Search size={12} /> {MOD_K}</span>
             </button>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 14 }}>
               {quickKeys.map(k => { const a = ACTION_BY_KEY[k]; if (!a) return null; return (
