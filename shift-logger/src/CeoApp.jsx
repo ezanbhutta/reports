@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock, Download, ChevronLeft, ChevronRight, CalendarDays, ShieldAlert, ShieldCheck, Monitor, Loader2, Laptop, LogOut } from 'lucide-react';
+import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock, Download, ChevronLeft, ChevronRight, CalendarDays, ShieldAlert, ShieldCheck, Monitor, Loader2, Laptop, LogOut, MapPin, Info } from 'lucide-react';
 import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, GROUPS, isDesigner, MISTAKE_CATEGORIES } from './config.js';
 import { db, todayPKT, timePKT, addDays, BACKEND } from './store.js';
 import { Btn, Card, StatCard, Pill, Select, Chip, SectionHeader, Modal, Label, Field, actionSummary, Logo, TrendChart, ConfirmDelete, useLive } from './ui.jsx';
@@ -196,6 +196,7 @@ function Authed({ user, onSignOut }) {
 // Per-laptop device registry — assign each laptop a profile (it locks to it).
 function DevicesCard() {
   const [devices, setDevices] = useState([]);
+  const [open, setOpen] = useState({});   // device id → details expanded
   const reload = useCallback(() => db.listDevices().then(setDevices), []);
   useEffect(() => { reload(); let t; const off = db.subscribe(() => { clearTimeout(t); t = setTimeout(reload, 300); }); return () => { clearTimeout(t); off && off(); }; }, [reload]);
   const assign = async (d, patch) => { setDevices(ds => ds.map(x => x.id === d.id ? { ...x, ...patch } : x)); await db.saveDevice({ ...d, ...patch }); reload(); };
@@ -204,27 +205,40 @@ function DevicesCard() {
   return (
     <Card className="p-4">
       <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 12, lineHeight: 1.5 }}>
-        Each laptop locks to the profile you assign here. Open the staff app on a laptop once and it appears below by its code — pick a profile and it unlocks on that laptop automatically.
+        Each laptop locks to the profile you assign here. Open the staff app on a laptop once and it appears below by its code — pick a profile and it unlocks on that laptop automatically. Tap <b>ⓘ</b> on any row to see what its browser reveals (browser, location, IP) — handy for spotting an unexpected device.
         {pending > 0 && <b style={{ color: C.amber }}> · {pending} waiting to assign</b>}
       </div>
       {devices.length === 0
         ? <div style={{ color: C.dim, fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}><Laptop size={15} /> No laptops yet — open the staff app on one to register it.</div>
         : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {devices.map(d => (
-              <div key={d.id} className="glass-soft rounded-xl" style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', borderLeft: `3px solid ${d.profile === '*' ? C.violet : d.profile ? C.mint : C.amber}` }}>
-                <div style={{ minWidth: 90 }}>
-                  <div className="mono" style={{ fontSize: 14, fontWeight: 800, color: C.ink, letterSpacing: '.06em' }}>{d.code || String(d.id).slice(0, 6)}</div>
-                  <div style={{ fontSize: 9.5, color: d.profile === '*' ? C.violet : d.profile ? C.mint : C.amber, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em' }}>{d.profile === '*' ? 'admin · all' : d.profile ? 'bound' : 'pending'}</div>
+            {devices.map(d => { const m = d.meta || {}; const loc = [m.city, m.region, m.country].filter(Boolean).join(', '); const isOpen = !!open[d.id]; const rows = [['Browser / OS', m.ua ? deviceLabel(m.ua) : ''], ['Location', loc], ['IP', m.ip], ['ISP', m.isp], ['Timezone', m.tz], ['Language', m.langs || m.lang], ['Screen', m.screen ? m.screen + (m.dpr ? ` @${m.dpr}x` : '') : ''], ['CPU / RAM', [m.cores && `${m.cores} cores`, m.memory && `${m.memory} GB`].filter(Boolean).join(' · ')], ['Platform', m.platform], ['First seen', d.created_at ? `${fmtShort(dayPKT(d.created_at))} · ${timePKT(d.created_at)}` : ''], ['Last seen', d.last_seen ? `${fmtShort(dayPKT(d.last_seen))} · ${timePKT(d.last_seen)}` : '']].filter(([, v]) => v); return (
+              <div key={d.id} className="glass-soft rounded-xl" style={{ borderLeft: `3px solid ${d.profile === '*' ? C.violet : d.profile ? C.mint : C.amber}`, overflow: 'hidden' }}>
+                <div style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={{ minWidth: 90 }}>
+                    <div className="mono" style={{ fontSize: 14, fontWeight: 800, color: C.ink, letterSpacing: '.06em' }}>{d.code || String(d.id).slice(0, 6)}</div>
+                    <div style={{ fontSize: 9.5, color: d.profile === '*' ? C.violet : d.profile ? C.mint : C.amber, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em' }}>{d.profile === '*' ? 'admin · all' : d.profile ? 'bound' : 'pending'}</div>
+                  </div>
+                  <input defaultValue={d.label} onBlur={e => { if (e.target.value !== (d.label || '')) assign(d, { label: e.target.value }); }} placeholder="Laptop name (e.g. Desk 1)" className="gi" style={{ flex: 1, minWidth: 130, padding: '8px 10px', fontSize: 12.5 }} />
+                  <Select value={d.profile || ''} onChange={e => assign(d, { profile: e.target.value })}>
+                    <option value="">— unassigned —</option>
+                    <option value="*">All profiles (admin)</option>
+                    {PROFILES.map(p => <option key={p} value={p}>{p}</option>)}
+                  </Select>
+                  <button onClick={() => setOpen(o => ({ ...o, [d.id]: !o[d.id] }))} title="Device details" style={{ border: 'none', background: isOpen ? C.violet : 'rgba(124,41,255,.08)', width: 30, height: 30, borderRadius: 9, color: isOpen ? '#fff' : C.violet, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}><Info size={14} /></button>
+                  <button onClick={() => remove(d)} title="Remove device" style={{ border: 'none', background: 'rgba(124,41,255,.08)', width: 30, height: 30, borderRadius: 9, color: C.coral, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}><Trash2 size={14} /></button>
                 </div>
-                <input defaultValue={d.label} onBlur={e => { if (e.target.value !== (d.label || '')) assign(d, { label: e.target.value }); }} placeholder="Laptop name (e.g. Desk 1)" className="gi" style={{ flex: 1, minWidth: 130, padding: '8px 10px', fontSize: 12.5 }} />
-                <Select value={d.profile || ''} onChange={e => assign(d, { profile: e.target.value })}>
-                  <option value="">— unassigned —</option>
-                  <option value="*">All profiles (admin)</option>
-                  {PROFILES.map(p => <option key={p} value={p}>{p}</option>)}
-                </Select>
-                <button onClick={() => remove(d)} title="Remove device" style={{ border: 'none', background: 'rgba(124,41,255,.08)', width: 30, height: 30, borderRadius: 9, color: C.coral, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}><Trash2 size={14} /></button>
+                {(m.ua || loc) && <div style={{ padding: '0 12px 9px', fontSize: 11, color: C.muted, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  {m.ua && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Monitor size={12} />{deviceLabel(m.ua)}</span>}
+                  {loc && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><MapPin size={12} />{loc}</span>}
+                  {m.ip && <span className="mono" style={{ color: C.dim }}>{m.ip}</span>}
+                </div>}
+                {isOpen && (rows.length
+                  ? <div style={{ padding: '10px 12px', borderTop: '1px solid rgba(124,41,255,.08)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '8px 14px' }}>
+                      {rows.map(([k, v]) => <div key={k}><div style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: C.dim }}>{k}</div><div style={{ fontSize: 11.5, color: C.ink, wordBreak: 'break-word' }}>{v}</div></div>)}
+                    </div>
+                  : <div style={{ padding: '10px 12px', borderTop: '1px solid rgba(124,41,255,.08)', fontSize: 11, color: C.dim }}>No details captured yet — they appear after this laptop next opens the app.</div>)}
               </div>
-            ))}
+            ); })}
           </div>}
     </Card>
   );

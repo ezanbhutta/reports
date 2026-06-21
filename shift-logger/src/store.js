@@ -137,12 +137,13 @@ const localDb = {
   async deleteMistake(id) { write(LS.mistakes, read(LS.mistakes, []).filter(x => x.id !== id)); return true; },
   async listDevices() { return read(LS.devices, []); },
   async getDevice(id) { return read(LS.devices, []).find(d => d.id === id) || null; },
-  async registerDevice({ id, code, ua }) {
+  async registerDevice({ id, code, ua, meta }) {
     const list = read(LS.devices, []);
-    if (!list.some(d => d.id === id)) {
-      list.push({ id, code: code || '', label: '', profile: '', ua: ua || '', created_at: new Date().toISOString(), last_seen: new Date().toISOString() });
-      write(LS.devices, list);
-    }
+    const i = list.findIndex(d => d.id === id);
+    const now = new Date().toISOString();
+    if (i < 0) list.push({ id, code: code || '', label: '', profile: '', ua: ua || '', meta: meta || {}, created_at: now, last_seen: now });
+    else list[i] = { ...list[i], ua: ua || list[i].ua, last_seen: now, meta: { ...(list[i].meta || {}), ...(meta || {}) } };
+    write(LS.devices, list);
     return read(LS.devices, []).find(d => d.id === id) || null;
   },
   async saveDevice(dev) {
@@ -345,11 +346,14 @@ const supaDb = {
   async getDevice(id) {
     try { const c = await client(); const { data } = await c.from('devices').select('*').eq('id', id).maybeSingle(); return data || null; } catch { return null; }
   },
-  async registerDevice({ id, code, ua }) {
+  async registerDevice({ id, code, ua, meta }) {
     try {
       const c = await client();
       await c.from('devices').upsert({ id, code: code || '', ua: ua || '', last_seen: new Date().toISOString() }, { onConflict: 'id', ignoreDuplicates: true });
-      await c.from('devices').update({ last_seen: new Date().toISOString() }).eq('id', id);
+      const patch = { last_seen: new Date().toISOString() };
+      if (ua) patch.ua = ua;
+      if (meta && Object.keys(meta).length) patch.meta = meta;
+      await c.from('devices').update(patch).eq('id', id);
       const { data } = await c.from('devices').select('*').eq('id', id).maybeSingle();
       return data || null;
     } catch { return null; }
