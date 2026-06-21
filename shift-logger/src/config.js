@@ -204,7 +204,7 @@ export const KPI_LABEL = {
 // Mistakes log (manager records, CEO reviews) — categories + severity scale
 export const MISTAKE_CATEGORIES = [
   'Missed follow-up', 'Wrong info to client', 'Late delivery', 'CRM / ClickUp not updated',
-  'Tone / communication', 'Process skipped', 'Wrong assignment', 'Revision Assigned', 'Revision Shared', 'Other',
+  'Tone / communication', 'Process skipped', 'Wrong assignment', 'Order not assigned', 'Revision Assigned', 'Revision Shared', 'Other',
 ];
 export const MISTAKE_SEVERITIES = ['Low', 'Medium', 'High'];
 
