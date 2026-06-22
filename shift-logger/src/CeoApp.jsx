@@ -573,14 +573,16 @@ function Calendar({ value, onApply, pos, popRef }) {
 
 function Console() {
   const [reports, reloadReports] = useLive('reports', () => db.listReports(), ['reports']);
-  const [allActions, reloadActions] = useLive('actions', () => db.allActions(), ['actions']);
   const [roster] = useLive('roster', () => db.getRoster(), ['roster']);
   const [fShift, setFShift] = useState('all'); const [fProfile, setFProfile] = useState('all'); const [fCSR, setFCSR] = useState('all'); const [range, setRange] = useState({ mode: 'today' });
+  const win = useMemo(() => winFor(range), [range]);
+  // Load actions ONLY for the selected window (not the whole history) so a busy shift
+  // doesn't re-download every action on each realtime tick. 'All time' still loads everything.
+  const winKey = win ? `${win.s}_${win.e}` : 'all';
+  const [allActions, reloadActions] = useLive('actions:' + winKey, () => db.actionsInWindow(win), ['actions']);
   const [drill, setDrill] = useState(null); const [panel, setPanel] = useState(null); const [act, setAct] = useState(null);
   const [exporting, setExporting] = useState(false);
   const load = useCallback(() => { reloadReports(); reloadActions(); }, [reloadReports, reloadActions]);
-
-  const win = useMemo(() => winFor(range), [range]);
   const filtered = useMemo(() => reports.filter(r => (fShift === 'all' || r.shift === fShift) && (fProfile === 'all' || r.profile === fProfile) && (fCSR === 'all' || r.csr_name === fCSR) && inWin(r.date, win)), [reports, fShift, fProfile, fCSR, win]);
   const byReport = useMemo(() => { const m = {}; allActions.forEach(a => { (m[a.report_id] = m[a.report_id] || []).push(a); }); return m; }, [allActions]);
   const cnt = id => { const m = {}; (byReport[id] || []).forEach(a => m[a.type] = (m[a.type] || 0) + 1); return m; };
@@ -1134,8 +1136,11 @@ function ActionDetail({ action, report, onClose }) {
 
 function DrillDrawer({ report, actions, onClose, onDelete }) {
   const [del, setDel] = useState(false);
+  const [acts, setActs] = useState(actions || []);
+  // Always show the report's COMPLETE timeline (not just the windowed slice the list was built from).
+  useEffect(() => { setActs(actions || []); if (report) db.listActions(report.id).then(a => { if (Array.isArray(a)) setActs(a); }).catch(() => {}); }, [report && report.id]);
   if (!report) return null;
-  const c = {}; actions.forEach(a => c[a.type] = (c[a.type] || 0) + 1);
+  const c = {}; acts.forEach(a => c[a.type] = (c[a.type] || 0) + 1);
   return (
     <>
     <div onClick={onClose} className="scrim" style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', justifyContent: 'flex-end' }}>
@@ -1148,8 +1153,8 @@ function DrillDrawer({ report, actions, onClose, onDelete }) {
           <div className="flex items-center gap-3 mb-4" style={{ fontSize: 12, color: C.muted }}><span className="flex items-center gap-1"><Clock size={13} /> {timePKT(report.start_at)}{report.finish_at ? ' – ' + timePKT(report.finish_at) : ' · in progress'}</span><Pill color={report.status === 'open' ? C.mint : C.dim}>{report.status}</Pill></div>
           <div className="mb-4 flex flex-wrap gap-1.5">{Object.keys(c).map(t => <span key={t} style={{ background: 'rgba(124,41,255,.08)', borderRadius: 7, padding: '3px 9px', fontSize: 10.5, fontWeight: 700, color: C.violetDim }}>{(KPI_LABEL[t] || t)} {c[t]}</span>)}</div>
           <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.12em', color: C.dim, marginBottom: 8 }}>Timeline</div>
-          {actions.length === 0 && <div style={{ color: C.dim, fontSize: 12.5 }}>No actions logged.</div>}
-          {[...actions].reverse().map(a => { const det = actionDetails(a); return (
+          {acts.length === 0 && <div style={{ color: C.dim, fontSize: 12.5 }}>No actions logged.</div>}
+          {[...acts].reverse().map(a => { const det = actionDetails(a); return (
             <div key={a.id} className="glass-soft rounded-xl" style={{ padding: '11px 13px', marginBottom: 8 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
