@@ -629,6 +629,17 @@ function Console() {
     try {
       const { jsPDF } = await import('jspdf');
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
+      // Embed a Unicode font and register it AS 'helvetica' so every existing doc.text call uses it —
+      // non-Latin client names/notes render instead of empty boxes. (RTL Arabic/Urdu joining is still
+      // limited in jsPDF, but the glyphs appear.) Falls back to the built-in font if the module fails.
+      try {
+        const { DEJAVU_SANS_B64, DEJAVU_SANS_BOLD_B64 } = await import('./pdfFont.js');
+        doc.addFileToVFS('DejaVuSans.ttf', DEJAVU_SANS_B64);
+        doc.addFont('DejaVuSans.ttf', 'helvetica', 'normal');
+        doc.addFileToVFS('DejaVuSans-Bold.ttf', DEJAVU_SANS_BOLD_B64);
+        doc.addFont('DejaVuSans-Bold.ttf', 'helvetica', 'bold');
+        doc.setFont('helvetica', 'normal');
+      } catch {}
 
       const VIOLET = [114, 41, 255], INK = [22, 10, 51], BODY = [60, 50, 100],
         MUTED = [120, 110, 155], DIM = [170, 162, 200], HAIRLINE = [228, 224, 240],
