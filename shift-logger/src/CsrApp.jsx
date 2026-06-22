@@ -10,6 +10,9 @@ const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(n
 const MOD_K = IS_MAC ? '⌘K' : 'Ctrl K';
 // The project name for an action (order_assigned stores it in the client field).
 const projectOf = a => (a.type === 'order_assigned' ? a.client : (a.details && a.details.project)) || '';
+// A handoff note is "seen" for a shift only once THAT shift acknowledges it — a note
+// targeting two shifts must be read by both (not hidden the moment the first one reads it).
+const noteSeenFor = (h, sh) => !!(h && Array.isArray(h.note_seen_shifts) && sh && h.note_seen_shifts.includes(sh));
 const QUICK = ['inquiry', 'client_conversation', 'followup_client', 'shared', 'revision_assigned', 'meeting', 'new_order'];
 const getRecent = () => { try { return JSON.parse(localStorage.getItem('sl_recent_actions')) || []; } catch { return []; } };
 const bumpRecent = k => { const r = [k, ...getRecent().filter(x => x !== k)].slice(0, 8); localStorage.setItem('sl_recent_actions', JSON.stringify(r)); };
@@ -128,12 +131,13 @@ export default function CsrApp({ boundProfile }) {
     if (!name || !profile) return;
     const existing = resumable || await Promise.resolve(db.openReportFor(name, profile)).catch(() => null); // resume instead of duplicating
     const rep = existing || await db.createReport({ csr_name: name, shift, profile, date: todayPKT() });
+    if (!rep) { window.alert('Could not start the report — check your connection and try again.'); return; }
     setReport(rep); setActions([]); setHandoff(null); setHandoffSeen(false); setShowHandoff(false); setView('dashboard');
     db.listActions(rep.id).then(a => { if (Array.isArray(a)) setActions(a); }); // load prior entries when resuming
     // incoming note for THIS shift — pop it and require acknowledgement
-    db.latestNoteForProfile(profile, rep.id, rep.shift).then(h => { setHandoff(h); setHandoffSeen(!!(h && h.note_seen_by)); setShowHandoff(!!h && !h.note_seen_by); });
+    db.latestNoteForProfile(profile, rep.id, rep.shift).then(h => { setHandoff(h); setHandoffSeen(noteSeenFor(h, rep.shift)); setShowHandoff(!!h && !noteSeenFor(h, rep.shift)); });
   }
-  function ackHandoff() { setHandoffSeen(true); setShowHandoff(false); if (handoff) db.ackNote(handoff.id, name); } // mark read; note stays for reference
+  function ackHandoff() { const sh = report ? report.shift : shift; setHandoffSeen(true); setShowHandoff(false); if (handoff) db.ackNote(handoff.id, name, sh); } // mark read for THIS shift; the other targeted shift must still read it
 
   // Resume the locally-cached unsubmitted report (explicit choice on login).
   function resumeCached() {
@@ -144,7 +148,7 @@ export default function CsrApp({ boundProfile }) {
     setCachedResume(null); setView('dashboard');
     db.listActions(rep.id).then(a => { if (Array.isArray(a)) setActions(prev => [...prev.filter(x => typeof x.id === 'string' && x.id.startsWith('tmp_')), ...a]); }).catch(() => {});
     db.getReport(rep.id).then(r => { if (!r || r.status !== 'open') { clearActive(); setReport(null); setActions([]); setName(''); setProfile(''); setView('login'); } }).catch(() => {});
-    db.latestNoteForProfile(rep.profile, rep.id, rep.shift).then(h => { setHandoff(h); setHandoffSeen(!!(h && h.note_seen_by)); setShowHandoff(!!h && !h.note_seen_by); }).catch(() => {});
+    db.latestNoteForProfile(rep.profile, rep.id, rep.shift).then(h => { setHandoff(h); setHandoffSeen(noteSeenFor(h, rep.shift)); setShowHandoff(!!h && !noteSeenFor(h, rep.shift)); }).catch(() => {});
   }
   function dismissCached() { clearActive(); setCachedResume(null); }
 

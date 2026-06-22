@@ -473,8 +473,8 @@ function SecurityPanel({ log, seenAt, onSeen }) {
                 <div key={e.id} className="glass-soft rounded-xl" style={{ padding: '11px 13px', marginBottom: 8, borderLeft: `3px solid ${C.coral}` }}>
                   <div className="flex items-center justify-between gap-2" style={{ flexWrap: 'wrap' }}>
                     <div className="flex items-center gap-2" style={{ minWidth: 0 }}>
-                      <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em', color: C.dim }}>Tried</span>
-                      <span className="mono" style={{ fontSize: 13, fontWeight: 800, color: C.coral, background: 'rgba(244,63,94,.10)', padding: '2px 8px', borderRadius: 7, wordBreak: 'break-all' }}>{e.pw_tried || '(blank)'}</span>
+                      <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em', color: C.dim }}>Email tried</span>
+                      <span className="mono" style={{ fontSize: 13, fontWeight: 800, color: C.coral, background: 'rgba(244,63,94,.10)', padding: '2px 8px', borderRadius: 7, wordBreak: 'break-all' }}>{e.email_tried || e.pw_tried || '(blank)'}</span>
                       {isNew && <Pill color={C.coral}>New</Pill>}
                     </div>
                     <span style={{ fontSize: 10.5, color: C.dim, whiteSpace: 'nowrap' }}>{stamp(e.created_at)}</span>
