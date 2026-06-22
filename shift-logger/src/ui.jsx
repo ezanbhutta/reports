@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useId } from 'react';
 import { X, AlertTriangle } from 'lucide-react';
 import { C } from './config.js';
 import { db } from './store.js';
@@ -77,7 +77,7 @@ export const Btn = ({ children, onClick, variant = 'solid', disabled, style, cla
     dark: { background: C.ink, color: '#fff' },
     subtle: { background: 'rgba(124,41,255,.08)', color: C.violetDim },
   }[variant];
-  return <button onClick={onClick} disabled={disabled} className={`${base} ${className}`}
+  return <button type="button" onClick={onClick} disabled={disabled} className={`${base} ${className}`}
     style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, whiteSpace: 'nowrap', fontSize: 13, padding: '10px 16px', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1, border: 'none', ...v, ...style }} {...p}>{children}</button>;
 };
 
@@ -131,7 +131,9 @@ export const TrendChart = ({ data = [], labels = [], peak = -1, color = '#fff', 
 };
 
 export const StatCard = ({ label, value, sub, accent = C.violet, icon: Icon, series, onClick }) => (
-  <div onClick={onClick} className="glass lift rounded-2xl p-5" style={onClick ? { cursor: 'pointer' } : undefined}>
+  <div onClick={onClick} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined}
+    onKeyDown={onClick ? (e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(e); } }) : undefined}
+    className="glass lift rounded-2xl p-5" style={onClick ? { cursor: 'pointer' } : undefined}>
     <div className="mb-3 flex items-center justify-between">
       <span className="text-[10px] font-bold uppercase tracking-[0.15em]" style={{ color: C.dim }}>{label}</span>
       {Icon && <div className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: `${accent}22` }}><Icon size={13} style={{ color: accent }} strokeWidth={2.5} /></div>}
@@ -155,7 +157,7 @@ export const Select = ({ value, onChange, children, color }) => (
 );
 
 export const Chip = ({ active, onClick, children }) => (
-  <button onClick={onClick} className="rounded-xl px-3 text-xs font-semibold transition-all"
+  <button type="button" onClick={onClick} className="rounded-xl px-3 text-xs font-semibold transition-all"
     style={{ height: 36, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', ...(active ? { background: C.violet, color: '#fff', border: '1px solid transparent', boxShadow: '0 4px 12px rgba(114,41,255,.25)' } : { background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }) }}>{children}</button>
 );
 
@@ -169,22 +171,34 @@ export const SectionHeader = ({ eyebrow, title, right, color = C.violet }) => (
   </div>
 );
 
-export const Modal = ({ title, subtitle, onClose, children, width = 420 }) => (
-  <div onClick={onClose} className="scrim" style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, zIndex: 50 }}>
-    <div onClick={e => e.stopPropagation()} className="glass-2 rounded-2xl pop no-scrollbar" style={{ width, maxWidth: '100%', maxHeight: '90vh', overflow: 'auto' }}>
-      {title !== undefined && (
-        <div style={{ padding: '15px 18px', borderBottom: '1px solid rgba(124,41,255,.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 16, color: C.ink }}>{title}</div>
-            {subtitle && <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>{subtitle}</div>}
+export function Modal({ title, subtitle, onClose, children, width = 420 }) {
+  const panelRef = useRef(null);
+  const titleId = useId();
+  useEffect(() => {
+    const prev = document.activeElement;
+    const onKey = e => { if (e.key === 'Escape' && onClose) onClose(); };
+    document.addEventListener('keydown', onKey);
+    const t = setTimeout(() => { try { panelRef.current && panelRef.current.focus(); } catch {} }, 0);   // move focus into the dialog
+    return () => { document.removeEventListener('keydown', onKey); clearTimeout(t); try { prev && prev.focus && prev.focus(); } catch {} };  // restore focus on close
+  }, [onClose]);
+  return (
+    <div onClick={onClose} className="scrim" style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, zIndex: 50 }}>
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={title !== undefined ? titleId : undefined} tabIndex={-1}
+        onClick={e => e.stopPropagation()} className="glass-2 rounded-2xl pop no-scrollbar" style={{ width, maxWidth: '100%', maxHeight: '90vh', overflow: 'auto', outline: 'none' }}>
+        {title !== undefined && (
+          <div style={{ padding: '15px 18px', borderBottom: '1px solid rgba(124,41,255,.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div id={titleId} style={{ fontWeight: 800, fontSize: 16, color: C.ink }}>{title}</div>
+              {subtitle && <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>{subtitle}</div>}
+            </div>
+            <button type="button" aria-label="Close" onClick={onClose} className="rounded-lg" style={{ border: 'none', background: 'rgba(124,41,255,.08)', width: 30, height: 30, color: C.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} /></button>
           </div>
-          <button onClick={onClose} className="rounded-lg" style={{ border: 'none', background: 'rgba(124,41,255,.08)', width: 30, height: 30, color: C.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={16} /></button>
-        </div>
-      )}
-      <div style={{ padding: 18 }}>{children}</div>
+        )}
+        <div style={{ padding: 18 }}>{children}</div>
+      </div>
     </div>
-  </div>
-);
+  );
+}
 
 // Two-step delete confirmation — used to remove a whole report (asks twice).
 export function ConfirmDelete({ what = 'this report', onConfirm, onClose }) {
@@ -238,13 +252,13 @@ export function Field({ field, value, onChange }) {
       {type === 'segment' && (
         <div style={{ display: 'flex', gap: 6 }}>
           {options.map(o => { const on = value === o; return (
-            <button key={o} onClick={() => onChange(o)} className="rounded-xl" style={{ flex: 1, padding: '9px 4px', fontSize: 12, fontWeight: 700, cursor: 'pointer', border: on ? 'none' : `1px solid ${C.surfaceLine}`, background: on ? C.violet : C.surface, color: on ? '#fff' : C.muted }}>{o}</button>); })}
+            <button type="button" key={o} aria-pressed={on} onClick={() => onChange(o)} className="rounded-xl" style={{ flex: 1, padding: '9px 4px', fontSize: 12, fontWeight: 700, cursor: 'pointer', border: on ? 'none' : `1px solid ${C.surfaceLine}`, background: on ? C.violet : C.surface, color: on ? '#fff' : C.muted }}>{o}</button>); })}
         </div>
       )}
       {type === 'multiselect' && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
           {options.map(o => { const arr = Array.isArray(value) ? value : []; const on = arr.includes(o); return (
-            <button key={o} onClick={() => onChange(on ? arr.filter(x => x !== o) : [...arr, o])} className="rounded-full"
+            <button type="button" key={o} aria-pressed={on} onClick={() => onChange(on ? arr.filter(x => x !== o) : [...arr, o])} className="rounded-full"
               style={{ padding: '7px 12px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', border: on ? 'none' : `1px solid ${C.surfaceLine}`, background: on ? C.violet : C.surface, color: on ? '#fff' : C.violetDim }}>{on ? '✓ ' : ''}{o}</button>); })}
         </div>
       )}
