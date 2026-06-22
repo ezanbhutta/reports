@@ -66,7 +66,7 @@ export default function CsrApp({ boundProfile }) {
       setName(rep.csr_name); setShift(rep.shift); setProfile(rep.profile);
       setView('dashboard');
       db.listActions(rep.id).then(a => { if (Array.isArray(a)) setActions(a); }).catch(() => {});
-      db.getReport(rep.id).then(r => { if (r && r.status !== 'open') clearActive(); }).catch(() => {});
+      db.getReport(rep.id).then(r => { if (!r || r.status !== 'open') clearActive(); }).catch(() => {});
       db.latestNoteForProfile(rep.profile, rep.id, rep.shift).then(h => { setHandoff(h); setHandoffSeen(!!(h && h.note_seen_by)); setShowHandoff(!!h && !h.note_seen_by); }).catch(() => {});
     }
   }, []);
