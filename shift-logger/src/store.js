@@ -118,6 +118,12 @@ const localDb = {
     return read(LS.reports, []).sort((a, b) => (b.start_at || '').localeCompare(a.start_at || ''));
   },
   async allActions() { return read(LS.actions, []); },
+  async actionsInWindow(win) {
+    const all = read(LS.actions, []);
+    if (!win) return all;
+    const s = new Date(`${win.s}T00:00:00+05:00`).getTime(), e = new Date(`${win.e}T23:59:59.999+05:00`).getTime();
+    return all.filter(a => { const t = new Date(a.created_at).getTime(); return t >= s && t <= e; });
+  },
   async logAccess(event, detail) {
     const log = read(LS.security, []);
     log.push({ id: uid(), event, email_tried: (detail && detail.email) || '', ua: (detail && detail.ua) || '', created_at: new Date().toISOString() });
@@ -320,6 +326,18 @@ const supaDb = {
   },
   async allActions() {
     return fetchAll('actions', 'created_at');
+  },
+  async actionsInWindow(win) {
+    if (!win) return fetchAll('actions', 'created_at');   // 'all time' — full set
+    const c = await client();
+    const startISO = `${win.s}T00:00:00+05:00`, endISO = `${win.e}T23:59:59.999+05:00`;   // PKT day bounds
+    const size = 1000; const out = [];
+    for (let from = 0; ; from += size) {
+      const { data, error } = await c.from('actions').select('*').gte('created_at', startISO).lte('created_at', endISO).order('created_at', { ascending: false }).range(from, from + size - 1);
+      if (error || !data || !data.length) break;
+      out.push(...data); if (data.length < size) break;
+    }
+    return out;
   },
   async logAccess(event, detail) {
     // Security events must never be silently lost. If the cloud insert fails
