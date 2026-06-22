@@ -103,10 +103,15 @@ const localDb = {
       .sort((a, b) => (b.finish_at || '').localeCompare(a.finish_at || ''));
     return reports[0] || null;
   },
-  async ackNote(reportId, by) {
+  async ackNote(reportId, by, shift) {
     const reports = read(LS.reports, []);
     const i = reports.findIndex(r => r.id === reportId);
-    if (i >= 0) { reports[i] = { ...reports[i], note_seen_by: by, note_seen_at: new Date().toISOString() }; write(LS.reports, reports); }
+    if (i >= 0) {
+      const seen = Array.isArray(reports[i].note_seen_shifts) ? reports[i].note_seen_shifts : [];
+      const note_seen_shifts = shift && !seen.includes(shift) ? [...seen, shift] : seen;
+      reports[i] = { ...reports[i], note_seen_by: by, note_seen_at: new Date().toISOString(), note_seen_shifts };
+      write(LS.reports, reports);
+    }
     return reports[i];
   },
   async listReports() {
@@ -115,7 +120,7 @@ const localDb = {
   async allActions() { return read(LS.actions, []); },
   async logAccess(event, detail) {
     const log = read(LS.security, []);
-    log.push({ id: uid(), event, pw_tried: (detail && detail.email) || '', ua: (detail && detail.ua) || '', created_at: new Date().toISOString() });
+    log.push({ id: uid(), event, email_tried: (detail && detail.email) || '', ua: (detail && detail.ua) || '', created_at: new Date().toISOString() });
     write(LS.security, log);
   },
   async listAccessLog() {
@@ -233,7 +238,12 @@ const supaDb = {
   async createReport(r) {
     const c = await client();
     const row = { ...r, start_at: new Date().toISOString(), checklist: {}, note_for_next: '', status: 'open' };
-    const { data } = await c.from('reports').insert(row).select().single();
+    const { data, error } = await c.from('reports').insert(row).select().single();
+    if (error) {
+      // one-open-report-per-csr+profile: if a concurrent open report already exists, adopt it instead of duplicating
+      if (error.code === '23505') { const ex = await this.openReportFor(r.csr_name, r.profile); if (ex) return ex; }
+      return null;
+    }
     return data;
   },
   async getReport(id) {
@@ -297,12 +307,12 @@ const supaDb = {
       return !t || !t.length || (shift && t.includes(shift));
     }) || null;
   },
-  async ackNote(id, by) {
+  async ackNote(id, by, shift) {
     const c = await client();
-    // note_seen_* live on a SUBMITTED report, which the row-level "update while
-    // open" policy blocks — so a direct update silently fails and the handoff
-    // re-pops on reload. A SECURITY DEFINER function records just the ack.
-    const { error } = await c.rpc('ack_note', { p_id: id, p_by: by });
+    // note_seen_* live on a SUBMITTED report, which the "update while open" policy
+    // blocks — a SECURITY DEFINER function records the ack per shift, so a note
+    // targeting two shifts keeps popping until each of them has read it.
+    const { error } = await c.rpc('ack_note', { p_id: id, p_by: by, p_shift: shift || '' });
     if (error) { try { await c.from('reports').update({ note_seen_by: by, note_seen_at: new Date().toISOString() }).eq('id', id); } catch {} }
   },
   async listReports() {
@@ -315,7 +325,7 @@ const supaDb = {
     // Security events must never be silently lost. If the cloud insert fails
     // (e.g. the security_log table/migration is missing), keep a local copy so
     // the console still records and shows the attempt.
-    try { const c = await client(); const { error } = await c.from('security_log').insert({ event, pw_tried: (detail && detail.email) || '', ua: (detail && detail.ua) || '' }); if (error) throw error; }
+    try { const c = await client(); const { error } = await c.from('security_log').insert({ event, email_tried: (detail && detail.email) || '', ua: (detail && detail.ua) || '' }); if (error) throw error; }
     catch { try { await localDb.logAccess(event, detail); } catch {} }
   },
   async listAccessLog() {

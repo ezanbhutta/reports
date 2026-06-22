@@ -26,11 +26,23 @@ create table if not exists reports (
   note_for_next text default '',
   note_seen_by  text,
   note_seen_at  timestamptz,
+  note_seen_shifts jsonb default '[]'::jsonb,   -- which shifts acknowledged the handoff note (two-shift notes need BOTH)
   status        text default 'open',           -- 'open' | 'submitted'
   created_at    timestamptz default now()
 );
+-- add to existing installs too (no-op if already present)
+alter table reports add column if not exists note_seen_shifts jsonb default '[]'::jsonb;
 create index if not exists reports_profile_idx on reports (profile, status);
 create index if not exists reports_date_idx on reports (date);
+-- One open report per CSR+profile. Close older duplicates first so the unique index can be built
+-- (keeps the newest open report; older duplicates are archived as 'submitted' — their activity is preserved).
+update reports r set status = 'submitted', finish_at = coalesce(finish_at, now())
+where status = 'open' and exists (
+  select 1 from reports r2
+  where r2.csr_name = r.csr_name and coalesce(r2.profile, '') = coalesce(r.profile, '')
+    and r2.status = 'open' and (r2.start_at > r.start_at or (r2.start_at = r.start_at and r2.id > r.id))
+);
+create unique index if not exists reports_one_open_per_csr_profile on reports (csr_name, profile) where status = 'open';
 
 create table if not exists actions (
   id         uuid primary key default gen_random_uuid(),
@@ -96,30 +108,49 @@ create policy "actions delete while report open" on actions for delete using (
 -- open" policy blocks. This SECURITY DEFINER function records ONLY those two
 -- columns so a CSR's "Noted ✓" sticks across reloads (one ack per profile+shift
 -- note) instead of the handoff popping up again every time.
-create or replace function ack_note(p_id uuid, p_by text)
+-- Records a handoff-note acknowledgement for a SPECIFIC shift, so a note targeting
+-- two shifts keeps popping until each of them has read it. (Drops the old 2-arg form.)
+drop function if exists ack_note(uuid, text);
+create or replace function ack_note(p_id uuid, p_by text, p_shift text default '')
 returns void
 language sql
 security definer
 set search_path = public
 as $$
-  update reports set note_seen_by = p_by, note_seen_at = now() where id = p_id;
+  update reports
+     set note_seen_by = p_by,
+         note_seen_at = now(),
+         note_seen_shifts = (
+           select coalesce(jsonb_agg(distinct e), '[]'::jsonb)
+           from jsonb_array_elements_text(coalesce(note_seen_shifts, '[]'::jsonb) || to_jsonb(array[p_shift])) as t(e)
+           where e <> ''
+         )
+   where id = p_id;
 $$;
-grant execute on function ack_note(uuid, text) to anon, authenticated;
+grant execute on function ack_note(uuid, text, text) to anon, authenticated;
 
 -- ── Access security log ──
 -- Every wrong-password attempt on the CEO console is recorded here so the CEO
 -- can review intrusion attempts. Only failed attempts store the typed password
 -- (the real one is never written). Anon may insert + read; no update/delete.
 create table if not exists security_log (
-  id         uuid primary key default gen_random_uuid(),
-  event      text not null,                 -- 'failed' | 'success'
-  pw_tried   text default '',               -- the (wrong) password that was typed
-  ua         text default '',               -- browser / device user-agent
-  created_at timestamptz default now()
+  id          uuid primary key default gen_random_uuid(),
+  event       text not null,                 -- 'failed' | 'success'
+  email_tried text default '',               -- the email someone typed (passwords are NEVER stored)
+  ua          text default '',               -- browser / device user-agent
+  created_at  timestamptz default now()
 );
+-- rename the old column on existing installs (it always held the email; the name was misleading)
+do $$ begin
+  if exists (select 1 from information_schema.columns where table_name = 'security_log' and column_name = 'pw_tried')
+     and not exists (select 1 from information_schema.columns where table_name = 'security_log' and column_name = 'email_tried')
+  then alter table security_log rename column pw_tried to email_tried; end if;
+end $$;
 create index if not exists security_log_created_idx on security_log (created_at desc);
 
-do $$ begin alter publication supabase_realtime add table security_log; exception when duplicate_object then null; end $$;
+-- The access log is manager-only — it must NOT be broadcast over realtime (anon staff
+-- clients subscribe to the shared channel). Remove it from the publication if present.
+do $$ begin alter publication supabase_realtime drop table security_log; exception when others then null; end $$;
 
 alter table security_log enable row level security;
 -- Anyone may INSERT a sign-in attempt (it happens before auth); only a signed-in
