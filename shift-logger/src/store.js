@@ -95,8 +95,10 @@ const localDb = {
     return reports[i];
   },
   async latestNoteForProfile(profile, beforeReportId, shift) {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;   // only genuinely recent handoffs
     const reports = read(LS.reports, [])
       .filter(r => r.profile === profile && r.status === 'submitted' && (r.note_for_next || '').trim() && r.id !== beforeReportId)
+      .filter(r => r.finish_at && new Date(r.finish_at).getTime() >= cutoff)
       .filter(r => { const t = r.checklist && r.checklist.__shifts; return !t || !t.length || (shift && t.includes(shift)); })
       .sort((a, b) => (b.finish_at || '').localeCompare(a.finish_at || ''));
     return reports[0] || null;
@@ -210,7 +212,7 @@ const supaDb = {
     if (error) throw error;
     return (data && data.user) || null;
   },
-  async signOut() { try { const c = await client(); await c.auth.signOut(); } catch {} },
+  async signOut() { const c = await client(); const { error } = await c.auth.signOut(); if (error) throw error; },
   async currentUser() { try { const c = await client(); const { data } = await c.auth.getUser(); return (data && data.user) || null; } catch { return null; } },
   onAuth(cb) {
     let unsub = () => {};
@@ -241,7 +243,8 @@ const supaDb = {
   },
   async deleteReport(id) {
     const c = await client();
-    await c.from('reports').delete().eq('id', id); // its actions cascade via the FK
+    const { error } = await c.from('reports').delete().eq('id', id); // its actions cascade via the FK
+    if (error) throw error;   // let the confirm dialog show the failure instead of closing as if it worked
     return true;
   },
   async openReportFor(csr_name, profile) {
@@ -283,9 +286,11 @@ const supaDb = {
   },
   async latestNoteForProfile(profile, beforeReportId, shift) {
     const c = await client();
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();   // only surface genuinely recent handoffs
     const { data } = await c.from('reports').select('*').eq('profile', profile).eq('status', 'submitted')
       .neq('id', beforeReportId || '00000000-0000-0000-0000-000000000000')
-      .not('note_for_next', 'is', null).order('finish_at', { ascending: false }).limit(10);
+      .gte('finish_at', since)
+      .not('note_for_next', 'is', null).order('finish_at', { ascending: false }).limit(50);
     return (data || []).find(r => {
       if (!(r.note_for_next || '').trim()) return false;
       const t = r.checklist && r.checklist.__shifts;
@@ -345,14 +350,16 @@ const supaDb = {
     catch { return await localDb.addMistake(m); }
   },
   async updateMistake(id, patch) {
-    try { const c = await client(); await c.from('mistakes').update(patch).eq('id', id); } catch {}
+    let ok = false;
+    try { const c = await client(); const { error } = await c.from('mistakes').update(patch).eq('id', id); if (error) throw error; ok = true; } catch {}
     try { await localDb.updateMistake(id, patch); } catch {}   // also patch a still-buffered entry
-    return null;
+    return ok;                                                  // tells the caller whether the cloud save stuck
   },
   async deleteMistake(id) {
-    try { const c = await client(); await c.from('mistakes').delete().eq('id', id); } catch {}
+    let ok = false;
+    try { const c = await client(); const { error } = await c.from('mistakes').delete().eq('id', id); if (error) throw error; ok = true; } catch {}
     try { await localDb.deleteMistake(id); } catch {}
-    return true;
+    return ok;
   },
   async listDevices() {
     try { const c = await client(); const { data } = await c.from('devices').select('*').order('created_at'); return data || []; } catch { return []; }
@@ -377,8 +384,7 @@ const supaDb = {
     return dev;
   },
   async removeDevice(id) {
-    try { const c = await client(); await c.from('devices').delete().eq('id', id); } catch {}
-    return true;
+    try { const c = await client(); const { error } = await c.from('devices').delete().eq('id', id); if (error) throw error; return true; } catch { return false; }
   },
   subscribe(cb) {
     // One shared realtime channel, fanned out to every listener (with the changed

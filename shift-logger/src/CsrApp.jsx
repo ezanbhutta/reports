@@ -49,6 +49,7 @@ export default function CsrApp({ boundProfile }) {
   const [oops, setOops] = useState(false);     // submit failed — keep the report, let them retry
   const [name, setName] = useState(''); const [shift, setShift] = useState(currentShift()); const [profile, setProfile] = useState('');
   const [resumable, setResumable] = useState(null); // an unsubmitted report for the picked name+profile
+  const [cachedResume, setCachedResume] = useState(null); // locally-cached unsubmitted report, offered on login
   const [handoffSeen, setHandoffSeen] = useState(false); // has the incoming note been acknowledged?
   const [showHandoff, setShowHandoff] = useState(false); // incoming-note modal open
   const [noteDraft, setNoteDraft] = useState('');        // outgoing note for the next shift
@@ -58,18 +59,17 @@ export default function CsrApp({ boundProfile }) {
   // This laptop is registered to a profile — force it and keep it locked.
   useEffect(() => { if (boundProfile) setProfile(boundProfile); }, [boundProfile]);
   // Resume an unsubmitted report after reload / tab close / offline (restores from cache instantly, reconciles when online)
+  // Resume an unsubmitted report after reload/tab-close — but only as an explicit choice on the login
+  // screen, so the next person on a shared laptop is never dropped into the previous CSR's report,
+  // and never a report that doesn't belong to this device's locked profile or isn't from today.
   useEffect(() => {
     const saved = readActive();
-    if (saved && saved.report && saved.report.status === 'open') {
-      const rep = saved.report;
-      setReport(rep); setActions(saved.actions || []);
-      setName(rep.csr_name); setShift(rep.shift); setProfile(rep.profile);
-      setView('dashboard');
-      db.listActions(rep.id).then(a => { if (Array.isArray(a)) setActions(a); }).catch(() => {});
-      db.getReport(rep.id).then(r => { if (!r || r.status !== 'open') clearActive(); }).catch(() => {});
-      db.latestNoteForProfile(rep.profile, rep.id, rep.shift).then(h => { setHandoff(h); setHandoffSeen(!!(h && h.note_seen_by)); setShowHandoff(!!h && !h.note_seen_by); }).catch(() => {});
-    }
-  }, []);
+    if (!saved || !saved.report || saved.report.status !== 'open') return;
+    const rep = saved.report;
+    if (boundProfile && rep.profile !== boundProfile) { clearActive(); setCachedResume(null); return; }   // wrong profile for this laptop
+    if (rep.date && rep.date !== todayPKT()) { clearActive(); setCachedResume(null); return; }            // stale (a previous day)
+    setCachedResume({ report: rep, actions: saved.actions || [] });
+  }, [boundProfile]);
   // Keep the open report cached so nothing is lost
   useEffect(() => { if (report && report.status === 'open') saveActive(report, actions); }, [report, actions]);
   // Outgoing note: seed from the report; default target = the other two shifts
@@ -97,7 +97,14 @@ export default function CsrApp({ boundProfile }) {
     db.openReportFor(name, profile).then(r => { if (!off) setResumable(r || null); }).catch(() => {});
     return () => { off = true; };
   }, [name, profile, view]);
-  const refresh = useCallback(() => { if (report) db.listActions(report.id).then(setActions); }, [report]);
+  const refresh = useCallback(() => {
+    if (!report) return;
+    db.listActions(report.id).then(server => {
+      if (!Array.isArray(server)) return;
+      // keep any optimistic rows not yet saved (incl. failed ones) so a background refresh never wipes them
+      setActions(prev => [...prev.filter(x => typeof x.id === 'string' && x.id.startsWith('tmp_')), ...server]);
+    }).catch(() => {});
+  }, [report]);
   useEffect(() => {
     refresh();
     let t; const off = db.subscribe(() => { clearTimeout(t); t = setTimeout(refresh, 200); }); // debounce live refetches
@@ -105,7 +112,12 @@ export default function CsrApp({ boundProfile }) {
   }, [refresh]);
   // ⌘K / Ctrl-K opens the activity palette
   useEffect(() => {
-    const onKey = e => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); if (report && report.status === 'open') setPicker(true); } };
+    const onKey = e => {
+      if (!((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k')) return;
+      const el = document.activeElement, tag = el && el.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (el && el.isContentEditable)) return;   // don't hijack typing
+      e.preventDefault(); if (report && report.status === 'open') setPicker(true);
+    };
     window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
   }, [report]);
 
@@ -123,6 +135,19 @@ export default function CsrApp({ boundProfile }) {
   }
   function ackHandoff() { setHandoffSeen(true); setShowHandoff(false); if (handoff) db.ackNote(handoff.id, name); } // mark read; note stays for reference
 
+  // Resume the locally-cached unsubmitted report (explicit choice on login).
+  function resumeCached() {
+    const c = cachedResume; if (!c) return;
+    const rep = c.report;
+    setReport(rep); setActions(c.actions || []);
+    setName(rep.csr_name); setShift(rep.shift); setProfile(rep.profile);
+    setCachedResume(null); setView('dashboard');
+    db.listActions(rep.id).then(a => { if (Array.isArray(a)) setActions(prev => [...prev.filter(x => typeof x.id === 'string' && x.id.startsWith('tmp_')), ...a]); }).catch(() => {});
+    db.getReport(rep.id).then(r => { if (!r || r.status !== 'open') { clearActive(); setReport(null); setActions([]); setName(''); setProfile(''); setView('login'); } }).catch(() => {});
+    db.latestNoteForProfile(rep.profile, rep.id, rep.shift).then(h => { setHandoff(h); setHandoffSeen(!!(h && h.note_seen_by)); setShowHandoff(!!h && !h.note_seen_by); }).catch(() => {});
+  }
+  function dismissCached() { clearActive(); setCachedResume(null); }
+
   function openForm(action, prefill, editId) { setPicker(false); setForm({ action, values: prefill || {}, editId }); }
   function saveForm() {
     const { action, values, editId } = form;
@@ -134,15 +159,26 @@ export default function CsrApp({ boundProfile }) {
     setForm(null); // close the form instantly
     if (editId) {
       setActions(prev => prev.map(x => x.id === editId ? { ...x, client, details, updated_at: new Date().toISOString() } : x)); // optimistic
-      Promise.resolve(db.updateAction(editId, { client, details })).catch(refresh);                                            // persist in background
+      Promise.resolve(db.updateAction(editId, { client, details })).then(saved => { if (!saved) refresh(); }).catch(refresh);  // revert if it didn't persist
     } else {
       const now = new Date().toISOString();
-      const temp = { id: 'tmp_' + Math.random().toString(36).slice(2), report_id: report.id, type: action.key, client, details, created_at: now, updated_at: now };
+      const payload = { type: action.key, client, details };
+      const temp = { id: 'tmp_' + Math.random().toString(36).slice(2), report_id: report.id, ...payload, created_at: now, updated_at: now };
       setActions(prev => [temp, ...prev]);                                                                                     // show immediately
-      Promise.resolve(db.addAction(report.id, { type: action.key, client, details }))
-        .then(saved => { if (saved && saved.id) setActions(prev => prev.map(x => x.id === temp.id ? saved : x)); })           // swap in the saved row
-        .catch(refresh);
+      persistAction(temp.id, payload);
     }
+  }
+
+  // Persist an optimistic action; if it never saves, mark the row so the CSR can retry — never a silent loss.
+  function persistAction(tempId, payload) {
+    Promise.resolve(db.addAction(report.id, payload))
+      .then(saved => setActions(prev => prev.map(x => x.id === tempId ? (saved && saved.id ? saved : { ...x, _failed: true, _payload: payload }) : x)))
+      .catch(() => setActions(prev => prev.map(x => x.id === tempId ? { ...x, _failed: true, _payload: payload } : x)));
+  }
+  function retryAction(a) {
+    if (!a || !a._payload || !report) return;
+    setActions(prev => prev.map(x => x.id === a.id ? { ...x, _failed: false } : x));
+    persistAction(a.id, a._payload);
   }
   // Delete a single timeline entry — only while the report is open (mirrors edit; enforced again by RLS).
   function requestDeleteEntry() { if (!form || !form.editId) return; const id = form.editId; setForm(null); setDelEntry(id); }
@@ -250,6 +286,14 @@ export default function CsrApp({ boundProfile }) {
                     </div>
                   : <select value={profile} onChange={e => setProfile(e.target.value)} className="gi" style={{ padding: '13px 34px 13px 13px' }}><option value="">Select profile…</option>{PROFILES.map(p => <option key={p} value={p}>{p}</option>)}</select>}
 
+                {cachedResume && <div style={{ marginTop: 16, padding: '11px 13px', borderRadius: 12, background: C.violetBg, border: `1px solid ${C.violetLine}` }}>
+                  <div style={{ fontSize: 12.5, color: C.ink, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}><RotateCcw size={13} style={{ color: C.violet }} /> Unsubmitted report on this device</div>
+                  <div style={{ fontSize: 11.5, color: C.muted, margin: '3px 0 9px' }}>{cachedResume.report.csr_name} · {cachedResume.report.profile} · {cachedResume.report.shift} — started {timePKT(cachedResume.report.start_at)}</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <Btn onClick={resumeCached} className="lift" style={{ flex: 1, padding: 10, fontSize: 12.5 }}>Resume</Btn>
+                    <Btn variant="ghost" onClick={dismissCached} style={{ flex: 1, padding: 10, fontSize: 12.5 }}>Start fresh</Btn>
+                  </div>
+                </div>}
                 {resumable && <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 16, padding: '9px 12px', borderRadius: 12, background: C.mintBg, color: C.mint, fontSize: 12, fontWeight: 700 }}>
                   <RotateCcw size={13} /> Unsubmitted report from {timePKT(resumable.start_at)} — you'll pick up where you left off.
                 </div>}
@@ -375,15 +419,17 @@ export default function CsrApp({ boundProfile }) {
                   <span style={{ flex: 1, height: 1, background: 'rgba(124,41,255,.10)' }} />
                   <span style={{ fontSize: 10, color: C.dim }}>{g.items.length}</span>
                 </div>
-                {g.items.map(a => { const col = groupColor(ACTION_BY_KEY[a.type]?.group); const labelTxt = ACTION_BY_KEY[a.type]?.label || a.type; const proj = projectOf(a); const sub = [proj ? labelTxt : null, a.client, actionSummary(a)].filter(Boolean).join(' · '); return (
-                  <div key={a.id} onClick={() => !locked && openForm(ACTION_BY_KEY[a.type], { ...a.details, client: a.client }, a.id)}
-                    className="glass-soft rounded-xl lift" style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 13px', marginBottom: 8, cursor: locked ? 'default' : 'pointer', borderLeft: `3px solid ${col}` }}>
+                {g.items.map(a => { const col = groupColor(ACTION_BY_KEY[a.type]?.group); const labelTxt = ACTION_BY_KEY[a.type]?.label || a.type; const proj = projectOf(a); const sub = [proj ? labelTxt : null, a.client, actionSummary(a)].filter(Boolean).join(' · '); const failed = !!a._failed; return (
+                  <div key={a.id} onClick={() => { if (failed) return retryAction(a); if (!locked) openForm(ACTION_BY_KEY[a.type], { ...a.details, client: a.client }, a.id); }}
+                    className="glass-soft rounded-xl lift" style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 13px', marginBottom: 8, cursor: (locked && !failed) ? 'default' : 'pointer', borderLeft: `3px solid ${failed ? C.coral : col}`, background: failed ? C.coralBg : undefined }}>
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div className="truncate" style={{ fontSize: 13.5, fontWeight: 800, color: C.ink }}>{proj || labelTxt}</div>
-                      <div className="truncate" style={{ fontSize: 11.5, color: C.muted }}>{sub || '—'}</div>
+                      <div className="truncate" style={{ fontSize: 11.5, color: failed ? C.coral : C.muted, fontWeight: failed ? 700 : 400 }}>{failed ? 'Not saved — tap to retry' : (sub || '—')}</div>
                     </div>
-                    <span style={{ fontSize: 10.5, color: C.dim, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3 }}>{timePKT(a.created_at)}{!locked && <Pencil size={10} style={{ color: C.violetLine }} />}</span>
-                    {!locked && <button onClick={e => { e.stopPropagation(); setDelEntry(a.id); }} title="Delete entry" style={{ flex: '0 0 auto', border: 'none', background: 'rgba(244,63,94,.10)', width: 28, height: 28, borderRadius: 8, color: C.coral, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={13} /></button>}
+                    {failed
+                      ? <span style={{ fontSize: 10.5, color: C.coral, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4, fontWeight: 700 }}><RotateCcw size={12} /> Retry</span>
+                      : <span style={{ fontSize: 10.5, color: C.dim, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3 }}>{timePKT(a.created_at)}{!locked && <Pencil size={10} style={{ color: C.violetLine }} />}</span>}
+                    {!locked && !failed && <button onClick={e => { e.stopPropagation(); setDelEntry(a.id); }} title="Delete entry" style={{ flex: '0 0 auto', border: 'none', background: 'rgba(244,63,94,.10)', width: 28, height: 28, borderRadius: 8, color: C.coral, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={13} /></button>}
                   </div>
                 ); })}
               </div>

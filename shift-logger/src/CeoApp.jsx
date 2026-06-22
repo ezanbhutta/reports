@@ -93,13 +93,10 @@ const hourFull = h => { const hh = h % 12 || 12; return hh + (h < 12 ? ' AM' : '
 function buildTrend(times, win) {
   const single = win && win.s === win.e;
   if (single) {
-    // Rolling 8-hour window: 7 previous hours on the left → current hour on the right (every hour shown).
-    const N = 8;
-    const endH = win.s === todayPKT() ? hourPKT(Date.now()) : 23;
-    const hrs = []; for (let i = N - 1; i >= 0; i--) hrs.push((endH - i + 24) % 24);
-    const slot = Object.fromEntries(hrs.map((h, i) => [h, i]));
-    const data = new Array(N).fill(0);
-    (times || []).forEach(t => { const h = hourPKT(t); if (h in slot) data[slot[h]]++; });
+    // Full day: one bucket per hour (00:00 → 23:00) so morning/early activity is never dropped.
+    const data = new Array(24).fill(0);
+    (times || []).forEach(t => { data[hourPKT(t)]++; });
+    const hrs = Array.from({ length: 24 }, (_, h) => h);
     return { data, labels: hrs.map(hourShort), full: hrs.map(hourFull) };
   }
   const start = win ? win.s : ((times || []).map(dayPKT).sort()[0] || todayPKT());
@@ -123,7 +120,7 @@ export default function CeoApp() {
   }, []);
   if (user === undefined) return null;
   if (!user) return <Login onSignedIn={u => setUser(u)} />;
-  return <Authed user={user} onSignOut={async () => { await db.signOut(); setUser(null); }} />;
+  return <Authed user={user} onSignOut={async () => { try { await db.signOut(); setUser(null); } catch { window.alert('Could not sign out — check your connection and try again.'); } }} />;
 }
 
 function Login({ onSignedIn }) {
@@ -212,7 +209,7 @@ function DevicesCard() {
   const reload = useCallback(() => db.listDevices().then(setDevices), []);
   useEffect(() => { reload(); let t; const off = db.subscribe(() => { clearTimeout(t); t = setTimeout(reload, 300); }); return () => { clearTimeout(t); off && off(); }; }, [reload]);
   const assign = async (d, patch) => { setDevices(ds => ds.map(x => x.id === d.id ? { ...x, ...patch } : x)); await db.saveDevice({ ...d, ...patch }); reload(); };
-  const remove = async (d) => { if (!window.confirm(`Remove device ${d.code || ''}? It will be blocked until re-registered.`)) return; await db.removeDevice(d.id); reload(); };
+  const remove = async (d) => { if (!window.confirm(`Remove device ${d.code || ''}? It will be blocked until re-registered.`)) return; const ok = await db.removeDevice(d.id); if (!ok) window.alert('Could not remove the device — please try again.'); reload(); };
   const pending = devices.filter(d => !d.profile).length;
   return (
     <Card className="p-4">
@@ -312,15 +309,15 @@ function MistakesPanel({ mistakes, reload }) {
     setBusy(true);
     const payload = { ...form, person: form.person.join(', '), description: form.description.trim() };
     try {
-      if (editId) await db.updateMistake(editId, payload); else await db.addMistake(payload);
+      if (editId) { const ok = await db.updateMistake(editId, payload); if (!ok) window.alert('Couldn’t save changes — check your connection and try again.'); } else await db.addMistake(payload);
       closeForm(); reload();
     }
     catch (e) { const msg = (e && (e.message || e.error_description || e.hint)) || 'Unknown error'; setErr('Could not save: ' + msg + (e && e.code ? ` (${e.code})` : '')); }
     finally { setBusy(false); }
   };
-  const setStatus = async (m, status) => { await db.updateMistake(m.id, { status }); reload(); };
-  const saveNote = async (m, ceo_note) => { await db.updateMistake(m.id, { ceo_note }); reload(); };
-  const remove = async (m) => { if (!window.confirm('Delete this mistake entry? This cannot be undone.')) return; await db.deleteMistake(m.id); reload(); };
+  const setStatus = async (m, status) => { const ok = await db.updateMistake(m.id, { status }); if (!ok) window.alert('Couldn’t update status — check your connection and try again.'); reload(); };
+  const saveNote = async (m, ceo_note) => { const ok = await db.updateMistake(m.id, { ceo_note }); if (!ok) window.alert('Couldn’t save the note — check your connection and try again.'); reload(); };
+  const remove = async (m) => { if (!window.confirm('Delete this mistake entry? This cannot be undone.')) return; const ok = await db.deleteMistake(m.id); if (!ok) window.alert('Could not delete — please try again.'); reload(); };
 
   const namesOf = m => (m.person || '').split(',').map(s => s.trim()).filter(Boolean);
   const filtered = mistakes.filter(m => (fStatus === 'all' || (fStatus === 'reviewed' ? m.status === 'reviewed' : m.status !== 'reviewed')) && (fPerson === 'all' || namesOf(m).includes(fPerson)));

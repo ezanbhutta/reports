@@ -11,22 +11,55 @@ import { db } from './store.js';
 const _live = new Map();
 export function useLive(key, fetcher, tables, initial = []) {
   const [data, setData] = useState(() => (_live.has(key) ? _live.get(key) : initial));
+  const [error, setError] = useState(null);
   const ref = useRef(); ref.current = { fetcher, tables };
-  const refresh = useCallback(async () => { const d = await ref.current.fetcher(); _live.set(key, d); setData(d); return d; }, [key]);
+  const refresh = useCallback(async () => {
+    try {
+      const d = await ref.current.fetcher();
+      _live.set(key, d); setData(d); setError(null);
+      try { window.dispatchEvent(new CustomEvent('sl:livestatus', { detail: { ok: true } })); } catch {}
+      return d;
+    } catch (e) {
+      setError(e || new Error('refresh failed'));   // surface instead of an unhandled rejection / silently stale data
+      try { window.dispatchEvent(new CustomEvent('sl:livestatus', { detail: { ok: false } })); } catch {}
+      return undefined;
+    }
+  }, [key]);
   useEffect(() => {
-    let alive = true, timer;
+    let alive = true, timer, lastFocus = 0;
     refresh();
     const off = db.subscribe((table) => {
       const tb = ref.current.tables;
       if (tb && table && !tb.includes(table)) return;
       clearTimeout(timer); timer = setTimeout(() => { if (alive) refresh(); }, 250);
     });
-    const onFocus = () => refresh();
+    const onFocus = () => { const now = Date.now(); if (now - lastFocus < 1500) return; lastFocus = now; refresh(); }; // throttle focus storms
+    const onRetry = () => { if (alive) refresh(); };
     window.addEventListener('focus', onFocus);
-    return () => { alive = false; clearTimeout(timer); off && off(); window.removeEventListener('focus', onFocus); };
+    window.addEventListener('sl:retry', onRetry);
+    return () => { alive = false; clearTimeout(timer); off && off(); window.removeEventListener('focus', onFocus); window.removeEventListener('sl:retry', onRetry); };
   }, [key, refresh]);
   const set = useCallback((upd) => setData(prev => { const next = typeof upd === 'function' ? upd(prev) : upd; _live.set(key, next); return next; }), [key]);
-  return [data, refresh, set];
+  return [data, refresh, set, error];
+}
+
+// Small global banner shown when a live-data refresh fails (offline / server error),
+// so the console never silently shows stale numbers. "Retry" re-runs every live query.
+export function ConnectionToast() {
+  const [down, setDown] = useState(false);
+  useEffect(() => {
+    const on = e => setDown(!(e && e.detail && e.detail.ok));
+    window.addEventListener('sl:livestatus', on);
+    return () => window.removeEventListener('sl:livestatus', on);
+  }, []);
+  if (!down) return null;
+  return (
+    <div role="status" style={{ position: 'fixed', left: '50%', bottom: 18, transform: 'translateX(-50%)', zIndex: 95, display: 'inline-flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 12, background: C.ink, color: '#fff', fontSize: 12.5, fontWeight: 600, boxShadow: '0 14px 34px rgba(22,10,51,.32)' }}>
+      <span style={{ width: 8, height: 8, borderRadius: 9, background: C.amber, flex: '0 0 auto' }} />
+      Couldn’t refresh — check your connection.
+      <button type="button" onClick={() => { setDown(false); try { window.dispatchEvent(new Event('sl:retry')); } catch {} }} style={{ border: 'none', background: 'rgba(255,255,255,.16)', color: '#fff', fontWeight: 700, fontSize: 12, padding: '5px 10px', borderRadius: 8, cursor: 'pointer' }}>Retry</button>
+    </div>
+  );
 }
 
 // Official HaseebMadeIt mark (served from /public/favicon.svg). Never substitute another logo.
@@ -157,10 +190,11 @@ export const Modal = ({ title, subtitle, onClose, children, width = 420 }) => (
 export function ConfirmDelete({ what = 'this report', onConfirm, onClose }) {
   const [step, setStep] = useState(1);
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(false);
   const next = async () => {
     if (step === 1) { setStep(2); return; }
-    setBusy(true);
-    try { await onConfirm(); } catch { /* caller surfaces errors */ }
+    setBusy(true); setErr(false);
+    try { await onConfirm(); } catch { setBusy(false); setErr(true); return; }   // keep the dialog open so the failure is visible
     setBusy(false); onClose();
   };
   return (
@@ -173,6 +207,7 @@ export function ConfirmDelete({ what = 'this report', onConfirm, onClose }) {
             : 'This cannot be undone. The report and all of its activity will be permanently deleted.'}
         </p>
       </div>
+      {err && <div style={{ marginTop: 12, fontSize: 12, color: C.coral, fontWeight: 700 }}>Couldn’t delete — check your connection and try again.</div>}
       <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
         <Btn variant="ghost" onClick={onClose} disabled={busy} style={{ flex: 1 }}>Cancel</Btn>
         <Btn onClick={next} disabled={busy} className="lift" style={{ flex: 1, background: C.coral, color: '#fff', boxShadow: '0 8px 20px rgba(239,68,68,.28)' }}>

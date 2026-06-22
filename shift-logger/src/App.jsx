@@ -1,6 +1,7 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import CsrApp from './CsrApp.jsx';
 import DeviceGate from './DeviceGate.jsx';
+import { ConnectionToast } from './ui.jsx';
 
 // CSR app is the default and ships in the main bundle. The CEO console lives at
 // #ceo (a separate, unlinked, password-protected route) and is lazy-loaded, so
@@ -18,6 +19,12 @@ export default function App() {
   // The CEO console is reachable from anywhere. The CSR (staff) app is wrapped in
   // the per-device lock; the device gate hands CsrApp the profile this laptop is
   // registered to.
-  if (isCeo) return <Suspense fallback={null}><CeoApp /></Suspense>;
-  return <DeviceGate>{boundProfile => <CsrApp boundProfile={boundProfile} />}</DeviceGate>;
+  return (
+    <>
+      <ConnectionToast />
+      {isCeo
+        ? <Suspense fallback={null}><CeoApp /></Suspense>
+        : <DeviceGate>{boundProfile => <CsrApp boundProfile={boundProfile} />}</DeviceGate>}
+    </>
+  );
 }
