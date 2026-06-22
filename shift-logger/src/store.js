@@ -184,6 +184,24 @@ async function client() {
   return sb;
 }
 
+// PostgREST caps a plain .select() at 1000 rows. The console loads every action
+// and groups them by report on the client, so a silent cap makes the NEWEST
+// actions — and the reports they belong to — look empty once the team passes
+// 1000 total logged actions. Page through in 1000-row chunks so the full set is
+// always returned. (Reports are far fewer, which is why they kept showing while
+// their actions vanished.)
+async function fetchAll(table, orderCol = 'created_at') {
+  const c = await client();
+  const size = 1000; const out = [];
+  for (let from = 0; ; from += size) {
+    const { data, error } = await c.from(table).select('*').order(orderCol, { ascending: false }).range(from, from + size - 1);
+    if (error || !data || !data.length) break;
+    out.push(...data);
+    if (data.length < size) break;
+  }
+  return out;
+}
+
 const supaDb = {
   // ── Manager auth (Supabase Auth) — the session unlocks manager-only data via RLS ──
   async signIn(email, password) {
@@ -283,14 +301,10 @@ const supaDb = {
     if (error) { try { await c.from('reports').update({ note_seen_by: by, note_seen_at: new Date().toISOString() }).eq('id', id); } catch {} }
   },
   async listReports() {
-    const c = await client();
-    const { data } = await c.from('reports').select('*').order('start_at', { ascending: false });
-    return data || [];
+    return fetchAll('reports', 'start_at');
   },
   async allActions() {
-    const c = await client();
-    const { data } = await c.from('actions').select('*');
-    return data || [];
+    return fetchAll('actions', 'created_at');
   },
   async logAccess(event, detail) {
     // Security events must never be silently lost. If the cloud insert fails
