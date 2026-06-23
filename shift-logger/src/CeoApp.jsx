@@ -160,6 +160,15 @@ function Login({ onSignedIn }) {
   );
 }
 
+// Top-level so it isn't recreated on every Authed render (an inline component would remount the
+// whole nav on each realtime update — restarting transitions and dropping keyboard focus).
+function Tab({ icon: Icon, label, badge, active, onClick }) {
+  return (
+    <button type="button" onClick={onClick} className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-all"
+      style={active ? { background: C.violet, color: '#fff', boxShadow: '0 6px 16px rgba(114,41,255,.28)' } : { background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }}><Icon size={14} />{label}
+      {badge > 0 && <span className="mono" style={{ marginLeft: 1, minWidth: 16, height: 16, padding: '0 4px', borderRadius: 9, fontSize: 10, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: active ? 'rgba(255,255,255,.25)' : C.coral, color: '#fff' }}>{badge}</span>}</button>
+  );
+}
 function Authed({ user, onSignOut }) {
   const [view, setView] = useState('live');
   const [secLog] = useLive('secLog', () => db.listAccessLog(), ['security_log']);
@@ -168,10 +177,6 @@ function Authed({ user, onSignOut }) {
   const unseen = secLog.filter(e => e.event === 'failed' && (e.created_at || '') > seenAt).length;
   const openMistakes = mistakes.filter(m => m.status !== 'reviewed').length;
   const markSeen = useCallback(() => { const now = new Date().toISOString(); localStorage.setItem(SEEN_KEY, now); setSeenAt(now); }, []);
-  const Tab = ({ id, icon: Icon, label, badge }) => { const on = view === id; return (
-    <button onClick={() => setView(id)} className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-all"
-      style={on ? { background: C.violet, color: '#fff', boxShadow: '0 6px 16px rgba(114,41,255,.28)' } : { background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }}><Icon size={14} />{label}
-      {badge > 0 && <span className="mono" style={{ marginLeft: 1, minWidth: 16, height: 16, padding: '0 4px', borderRadius: 9, fontSize: 10, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: on ? 'rgba(255,255,255,.25)' : C.coral, color: '#fff' }}>{badge}</span>}</button>); };
   return (
     <div style={{ minHeight: '100vh' }}>
       <div className="glass" style={{ position: 'sticky', top: 0, zIndex: 30, borderRadius: 0, borderLeft: 'none', borderRight: 'none', borderTop: 'none', backdropFilter: 'none', WebkitBackdropFilter: 'none', background: 'rgba(255,255,255,.92)' }}>
@@ -181,7 +186,7 @@ function Authed({ user, onSignOut }) {
             <div><div className="disp" style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>CEO Console <span style={{ fontSize: 11, fontWeight: 700, color: C.mint }}>· <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 9, background: C.mint, boxShadow: `0 0 0 3px ${C.mintBg}` }} /> live</span></div>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.18em', textTransform: 'uppercase', color: C.dim }}>HaseebMadeIt · Operations</div></div>
           </div>
-          <div className="flex items-center gap-2"><Tab id="live" icon={BarChart3} label="Live" /><Tab id="mistakes" icon={ClipboardList} label="Mistakes" badge={openMistakes} /><Tab id="roster" icon={Users} label="Roster" /><Tab id="security" icon={ShieldAlert} label="Security" badge={unseen} />
+          <div className="flex items-center gap-2"><Tab icon={BarChart3} label="Live" active={view === 'live'} onClick={() => setView('live')} /><Tab icon={ClipboardList} label="Mistakes" badge={openMistakes} active={view === 'mistakes'} onClick={() => setView('mistakes')} /><Tab icon={Users} label="Roster" active={view === 'roster'} onClick={() => setView('roster')} /><Tab icon={ShieldAlert} label="Security" badge={unseen} active={view === 'security'} onClick={() => setView('security')} />
             <button onClick={onSignOut} title={user && user.email ? `Signed in as ${user.email}` : 'Sign out'} className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-all" style={{ background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }}><LogOut size={14} />Sign out</button></div>
         </div>
       </div>
@@ -1050,15 +1055,9 @@ function Console() {
 }
 
 // Drill-down list behind each KPI card — open / submitted / actions / needs-attention.
-function StatPanel({ kind, label, reports, actions, flags, idle, repMap, byReport, onOpen, onOpenAction, onClose }) {
-  const meta = {
-    open: { title: 'Open now', sub: 'Reports in progress' },
-    submitted: { title: 'Submitted reports', sub: label },
-    actions: { title: 'Actions logged', sub: `${actions.length} across ${reports.length} ${reports.length === 1 ? 'report' : 'reports'} · ${label}` },
-    attention: { title: 'Needs attention', sub: `${flags.length} flagged · ${idle.length} idle` },
-  }[kind];
-  const empty = t => <div style={{ color: C.dim, fontSize: 13, padding: '22px 4px', textAlign: 'center' }}>{t}</div>;
-  const Row = ({ r }) => (
+// Module-scope (not redefined per render) so list rows don't remount on every parent update.
+function StatRow({ r, onOpen, byReport }) {
+  return (
     <div onClick={() => onOpen(r.id)} className="glass-soft lift rounded-xl" style={{ padding: '11px 13px', marginBottom: 8, cursor: 'pointer' }}>
       <div className="flex items-center justify-between gap-2" style={{ flexWrap: 'wrap' }}>
         <div className="flex items-center gap-2" style={{ minWidth: 0 }}>
@@ -1071,12 +1070,30 @@ function StatPanel({ kind, label, reports, actions, flags, idle, repMap, byRepor
       <div style={{ fontSize: 10.5, color: C.dim, marginTop: 5 }}>{r.date} · {timePKT(r.start_at)}{r.finish_at ? '–' + timePKT(r.finish_at) : ''}</div>
     </div>
   );
+}
+function RosterActions({ c, setEdit, persist, roster }) {
+  return (
+    <div className="flex gap-0.5">
+      <button type="button" onClick={() => setEdit(c)} className="rounded-lg p-1.5" style={{ color: C.dim, background: 'transparent', border: 'none', cursor: 'pointer' }}><Pencil size={14} /></button>
+      <button type="button" onClick={() => persist(roster.map(r => r.id === c.id ? { ...r, active: !r.active } : r))} className="rounded-lg p-1.5" style={{ color: c.active ? C.dim : C.mint, background: 'transparent', border: 'none', cursor: 'pointer' }}>{c.active ? <Archive size={14} /> : <ArchiveRestore size={14} />}</button>
+      <button type="button" onClick={() => persist(roster.filter(r => r.id !== c.id))} className="rounded-lg p-1.5" style={{ color: C.coral, background: 'transparent', border: 'none', cursor: 'pointer' }}><Trash2 size={14} /></button>
+    </div>
+  );
+}
+function StatPanel({ kind, label, reports, actions, flags, idle, repMap, byReport, onOpen, onOpenAction, onClose }) {
+  const meta = {
+    open: { title: 'Open now', sub: 'Reports in progress' },
+    submitted: { title: 'Submitted reports', sub: label },
+    actions: { title: 'Actions logged', sub: `${actions.length} across ${reports.length} ${reports.length === 1 ? 'report' : 'reports'} · ${label}` },
+    attention: { title: 'Needs attention', sub: `${flags.length} flagged · ${idle.length} idle` },
+  }[kind];
+  const empty = t => <div style={{ color: C.dim, fontSize: 13, padding: '22px 4px', textAlign: 'center' }}>{t}</div>;
 
   let body;
   if (kind === 'open' || kind === 'submitted') {
     const st = kind === 'open' ? 'open' : 'submitted';
     const list = reports.filter(r => r.status === st).sort((a, b) => (b.start_at || '').localeCompare(a.start_at || ''));
-    body = list.length ? list.map(r => <Row key={r.id} r={r} />) : empty(kind === 'open' ? 'No open reports right now.' : 'No submitted reports for this filter.');
+    body = list.length ? list.map(r => <StatRow key={r.id} r={r} onOpen={onOpen} byReport={byReport} />) : empty(kind === 'open' ? 'No open reports right now.' : 'No submitted reports for this filter.');
   } else if (kind === 'actions') {
     const list = [...actions].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
     body = list.length ? list.map(a => { const r = repMap[a.report_id]; return (
@@ -1207,14 +1224,6 @@ function RosterManager() {
   const editing = edit && roster.some(r => r.id === edit.id);
   const editDesigner = edit && isDesigner(edit);
 
-  const Actions = ({ c }) => (
-    <div className="flex gap-0.5">
-      <button onClick={() => setEdit(c)} className="rounded-lg p-1.5" style={{ color: C.dim, background: 'transparent', border: 'none', cursor: 'pointer' }}><Pencil size={14} /></button>
-      <button onClick={() => persist(roster.map(r => r.id === c.id ? { ...r, active: !r.active } : r))} className="rounded-lg p-1.5" style={{ color: c.active ? C.dim : C.mint, background: 'transparent', border: 'none', cursor: 'pointer' }}>{c.active ? <Archive size={14} /> : <ArchiveRestore size={14} />}</button>
-      <button onClick={() => persist(roster.filter(r => r.id !== c.id))} className="rounded-lg p-1.5" style={{ color: C.coral, background: 'transparent', border: 'none', cursor: 'pointer' }}><Trash2 size={14} /></button>
-    </div>
-  );
-
   return (
     <>
       <div className="mb-4 flex items-center justify-between">
@@ -1227,7 +1236,7 @@ function RosterManager() {
             <div className="mb-3 flex items-start justify-between">
               <div><div style={{ fontWeight: 800, color: C.ink }}>{c.name || 'Unnamed'}</div>
                 <div className="mt-1 flex items-center gap-1.5 flex-wrap"><Pill color={C.cyan}>CSR</Pill>{c.profile && <Pill color={C.violet}>{c.profile}</Pill>}{!c.active && <Pill color={C.coral}>Archived</Pill>}</div></div>
-              <Actions c={c} />
+              <RosterActions c={c} setEdit={setEdit} persist={persist} roster={roster} />
             </div>
             <div className="flex items-center justify-between">
               <span className="text-[10px] uppercase tracking-wider" style={{ color: C.dim }}>Shift</span>
@@ -1248,7 +1257,7 @@ function RosterManager() {
             <div className="mb-3 flex items-start justify-between">
               <div><div style={{ fontWeight: 800, color: C.ink }}>{c.name || 'Unnamed'}</div>
                 <div className="mt-1 flex items-center gap-1.5 flex-wrap"><Pill color={C.violet}>Designer</Pill>{!c.active && <Pill color={C.coral}>Archived</Pill>}</div></div>
-              <Actions c={c} />
+              <RosterActions c={c} setEdit={setEdit} persist={persist} roster={roster} />
             </div>
             <div className="flex items-center justify-between">
               <span className="text-[10px] uppercase tracking-wider" style={{ color: C.dim }}>Role</span>
