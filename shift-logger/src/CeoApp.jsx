@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock, Download, ChevronLeft, ChevronRight, CalendarDays, ShieldAlert, ShieldCheck, Monitor, Loader2, Laptop, LogOut, MapPin, Info } from 'lucide-react';
+import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock, Download, ChevronLeft, ChevronRight, CalendarDays, ShieldAlert, ShieldCheck, Monitor, Loader2, Laptop, LogOut, MapPin, Info, Search } from 'lucide-react';
 import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, GROUPS, isDesigner, MISTAKE_CATEGORIES } from './config.js';
 import { db, todayPKT, timePKT, addDays, BACKEND } from './store.js';
 import { Btn, Card, StatCard, Pill, Select, Chip, SectionHeader, Modal, Label, Field, actionSummary, Logo, TrendChart, ConfirmDelete, useLive } from './ui.jsx';
@@ -169,14 +169,123 @@ function Tab({ icon: Icon, label, badge, active, onClick }) {
       {badge > 0 && <span className="mono" style={{ marginLeft: 1, minWidth: 16, height: 16, padding: '0 4px', borderRadius: 9, fontSize: 10, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: active ? 'rgba(255,255,255,.25)' : C.coral, color: '#fff' }}>{badge}</span>}</button>
   );
 }
+// Universal spotlight search — reports, activities (client/project/any detail), and issues/mistakes,
+// by any term including dates (YYYY-MM-DD). Results are grouped; clicking one expands it inline,
+// so you never scroll the console to find something. Fetches across ALL history on open.
+function GlobalSearch({ onClose }) {
+  const [q, setQ] = useState('');
+  const [data, setData] = useState(null);
+  const [sel, setSel] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    Promise.all([db.listReports().catch(() => []), db.allActions().catch(() => []), db.listMistakes().catch(() => [])])
+      .then(([reports, actions, mistakes]) => { if (alive) setData({ reports, actions, mistakes }); });
+    return () => { alive = false; };
+  }, []);
+  const repMap = useMemo(() => Object.fromEntries((data ? data.reports : []).map(r => [r.id, r])), [data]);
+  const ql = q.trim().toLowerCase();
+  const res = useMemo(() => {
+    if (!data || ql.length < 2) return null;
+    const terms = ql.split(/\s+/).filter(Boolean);
+    const hit = parts => { const h = parts.filter(Boolean).join(' · ').toLowerCase(); return terms.every(t => h.includes(t)); };
+    const reports = data.reports.filter(r => hit([r.csr_name, r.profile, r.shift, r.date, r.status, r.note_for_next]));
+    const actions = data.actions.filter(a => {
+      const def = ACTION_BY_KEY[a.type];
+      const dv = a.details ? Object.values(a.details).map(v => Array.isArray(v) ? v.join(' ') : v).filter(v => v != null && v !== '').join(' ') : '';
+      return hit([def ? def.label : a.type, a.client, dv, dayPKT(a.created_at)]);
+    });
+    const mistakes = data.mistakes.filter(m => hit([m.person, m.category, m.description, m.client, m.project, m.shift, m.profile, m.status, m.ceo_note, m.happened_on]));
+    return { reports, actions, mistakes, total: reports.length + actions.length + mistakes.length };
+  }, [data, ql]);
+  const hd = t => <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.1em', color: C.dim, margin: '12px 2px 6px' }}>{t}</div>;
+  const rowStyle = { display: 'block', width: '100%', textAlign: 'left', border: '1px solid var(--border)', padding: '9px 12px', marginBottom: 6, cursor: 'pointer', background: '#fff' };
+
+  return (
+    <Modal onClose={onClose} width={580}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid rgba(124,41,255,.1)', paddingBottom: 12 }}>
+        <Search size={18} style={{ color: C.violet, flex: '0 0 auto' }} />
+        <input autoFocus value={q} onChange={e => { setQ(e.target.value); setSel(null); }} aria-label="Universal search"
+          placeholder="Search reports, clients, projects, dates (2026-06-22), people, issues…"
+          style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 15, color: C.ink, fontWeight: 600 }} />
+        {q && <button type="button" onClick={() => { setQ(''); setSel(null); }} style={{ border: 'none', background: 'rgba(124,41,255,.08)', width: 26, height: 26, borderRadius: 8, color: C.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}><X size={14} /></button>}
+      </div>
+      <div className="scroll-y" style={{ maxHeight: '62vh', overflowY: 'auto', paddingRight: 4, marginTop: 4 }}>
+        {!data && <div style={{ color: C.dim, fontSize: 12.5, padding: '18px 2px', display: 'flex', alignItems: 'center', gap: 8 }}><Loader2 size={14} className="animate-spin" /> Loading everything…</div>}
+        {data && ql.length < 2 && <div style={{ color: C.dim, fontSize: 12.5, padding: '18px 2px', lineHeight: 1.6 }}>Type at least 2 characters. Try a <b style={{ color: C.violetDim }}>client</b> or <b style={{ color: C.violetDim }}>project</b> name, a person, a date like <b style={{ color: C.violetDim }}>2026-06-22</b>, or words from an issue.</div>}
+        {res && res.total === 0 && <div style={{ color: C.dim, fontSize: 12.5, padding: '18px 2px' }}>No matches for “{q}”.</div>}
+
+        {sel && (
+          <div>
+            <button type="button" onClick={() => setSel(null)} style={{ border: 'none', background: 'rgba(124,41,255,.08)', color: C.violetDim, fontWeight: 700, fontSize: 11.5, padding: '5px 10px', borderRadius: 8, cursor: 'pointer', marginBottom: 10, display: 'inline-flex', alignItems: 'center', gap: 5 }}><ChevronLeft size={13} /> Back to results</button>
+            {sel.k === 'report' && (() => { const r = sel.r; const acts = data.actions.filter(a => a.report_id === r.id).sort((a, b) => (a.created_at || '').localeCompare(b.created_at || '')); return (
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 16, color: C.ink }}>{r.csr_name}</div>
+                <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>{r.profile} · {r.shift} · {r.date} · <span style={{ color: r.status === 'open' ? C.mint : C.dim, fontWeight: 700 }}>{r.status}</span></div>
+                {r.note_for_next && <div className="glass-soft rounded-xl" style={{ padding: '9px 12px', fontSize: 12, color: C.ink, marginBottom: 10 }}><b style={{ color: C.violetDim }}>Note for next:</b> {r.note_for_next}</div>}
+                {hd('Timeline · ' + acts.length)}
+                {acts.length === 0 && <div style={{ color: C.dim, fontSize: 12 }}>No activities logged.</div>}
+                {acts.map(a => <div key={a.id} className="glass-soft rounded-xl" style={{ padding: '8px 11px', marginBottom: 6 }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><span style={{ fontSize: 12.5, fontWeight: 700, color: C.ink }}>{ACTION_BY_KEY[a.type]?.label || a.type}{a.client ? ' · ' + a.client : ''}</span><span style={{ fontSize: 10.5, color: C.dim, whiteSpace: 'nowrap' }}>{timePKT(a.created_at)}</span></div>{actionSummary(a) && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>{actionSummary(a)}</div>}</div>)}
+              </div>); })()}
+            {sel.k === 'action' && (() => { const a = sel.a; const r = repMap[a.report_id]; const det = actionDetails(a); return (
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 16, color: C.ink }}>{ACTION_BY_KEY[a.type]?.label || a.type}</div>
+                <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>{[a.client, dayPKT(a.created_at) + ' · ' + timePKT(a.created_at), r ? `${r.csr_name} (${r.profile} · ${r.shift})` : ''].filter(Boolean).join(' · ')}</div>
+                {det.length === 0 ? <div style={{ color: C.dim, fontSize: 12 }}>No extra details.</div> : <div style={{ display: 'grid', gap: 6 }}>{det.map(([l, v], i) => <div key={i} className="glass-soft rounded-xl" style={{ padding: '7px 11px', display: 'flex', gap: 10 }}><span style={{ color: C.dim, fontWeight: 800, fontSize: 10, minWidth: 84, textTransform: 'uppercase', letterSpacing: '.04em' }}>{l}</span><span style={{ color: C.ink, fontSize: 12.5, wordBreak: 'break-word' }}>{v}</span></div>)}</div>}
+              </div>); })()}
+            {sel.k === 'mistake' && (() => { const m = sel.m; return (
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 16, color: C.ink }}>{m.person}</div>
+                <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>{[m.category, m.severity, m.status].filter(Boolean).join(' · ')}</div>
+                {m.description && <div className="glass-soft rounded-xl" style={{ padding: '9px 12px', fontSize: 12.5, color: C.ink, marginBottom: 8 }}>{m.description}</div>}
+                <div style={{ fontSize: 11.5, color: C.muted, display: 'grid', gap: 3 }}>
+                  {(m.client || m.project) && <div>{[m.client, m.project].filter(Boolean).join(' · ')}</div>}
+                  {(m.happened_on || m.happened_time) && <div>When: {[m.happened_on, m.happened_time].filter(Boolean).join(' · ')}</div>}
+                  {(m.shift || m.profile) && <div>{[m.shift, m.profile].filter(Boolean).join(' · ')}</div>}
+                  {m.ceo_note && <div><b style={{ color: C.violetDim }}>CEO note:</b> {m.ceo_note}</div>}
+                </div>
+              </div>); })()}
+          </div>
+        )}
+
+        {!sel && res && res.total > 0 && (
+          <div>
+            {res.reports.length > 0 && <>{hd('Reports · ' + res.reports.length)}
+              {res.reports.slice(0, 6).map(r => <button type="button" key={r.id} onClick={() => setSel({ k: 'report', r })} className="lift rounded-xl" style={rowStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>{r.status === 'open' && <span style={{ width: 7, height: 7, borderRadius: 9, background: C.mint, flex: '0 0 auto' }} />}<span style={{ fontWeight: 800, fontSize: 13, color: C.ink }}>{r.csr_name}</span><span style={{ fontSize: 11.5, color: C.muted }}>{r.profile} · {r.shift} · {r.date}</span></div>
+              </button>)}
+              {res.reports.length > 6 && <div style={{ fontSize: 11, color: C.dim, margin: '2px 2px 4px' }}>+{res.reports.length - 6} more — refine your search</div>}</>}
+            {res.actions.length > 0 && <>{hd('Activities · ' + res.actions.length)}
+              {res.actions.slice(0, 10).map(a => { const r = repMap[a.report_id]; return <button type="button" key={a.id} onClick={() => setSel({ k: 'action', a })} className="lift rounded-xl" style={rowStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><span style={{ width: 8, height: 8, borderRadius: 9, flex: '0 0 auto', background: groupColor(ACTION_BY_KEY[a.type]?.group) }} /><span style={{ fontWeight: 700, fontSize: 12.5, color: C.ink }}>{ACTION_BY_KEY[a.type]?.label || a.type}</span>{a.client && <span style={{ fontSize: 12, color: C.muted }}>· {a.client}</span>}<span style={{ marginLeft: 'auto', fontSize: 10.5, color: C.dim, whiteSpace: 'nowrap' }}>{dayPKT(a.created_at)}</span></div>
+                {(actionSummary(a) || r) && <div className="truncate" style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>{[actionSummary(a), r ? r.csr_name : ''].filter(Boolean).join(' · ')}</div>}
+              </button>; })}
+              {res.actions.length > 10 && <div style={{ fontSize: 11, color: C.dim, margin: '2px 2px 4px' }}>+{res.actions.length - 10} more — refine your search</div>}</>}
+            {res.mistakes.length > 0 && <>{hd('Issues / mistakes · ' + res.mistakes.length)}
+              {res.mistakes.slice(0, 6).map(m => <button type="button" key={m.id} onClick={() => setSel({ k: 'mistake', m })} className="lift rounded-xl" style={rowStyle}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}><span style={{ fontWeight: 800, fontSize: 12.5, color: C.ink }}>{m.person}</span>{m.category && <Pill color={C.violet}>{m.category}</Pill>}<span style={{ marginLeft: 'auto', fontSize: 10.5, color: C.dim, whiteSpace: 'nowrap' }}>{m.happened_on || ''}</span></div>
+                {m.description && <div className="truncate" style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>{m.description}</div>}
+              </button>)}
+              {res.mistakes.length > 6 && <div style={{ fontSize: 11, color: C.dim, margin: '2px 2px 4px' }}>+{res.mistakes.length - 6} more — refine your search</div>}</>}
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
 function Authed({ user, onSignOut }) {
   const [view, setView] = useState('live');
+  const [searchOpen, setSearchOpen] = useState(false);
   const [secLog] = useLive('secLog', () => db.listAccessLog(), ['security_log']);
   const [mistakes, reloadMistakes] = useLive('mistakes', () => db.listMistakes(), ['mistakes']);
   const [seenAt, setSeenAt] = useState(() => localStorage.getItem(SEEN_KEY) || '');
   const unseen = secLog.filter(e => e.event === 'failed' && (e.created_at || '') > seenAt).length;
   const openMistakes = mistakes.filter(m => m.status !== 'reviewed').length;
   const markSeen = useCallback(() => { const now = new Date().toISOString(); localStorage.setItem(SEEN_KEY, now); setSeenAt(now); }, []);
+  useEffect(() => {   // ⌘K / Ctrl-K opens universal search from anywhere in the console
+    const onKey = e => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setSearchOpen(true); } };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   return (
     <div style={{ minHeight: '100vh' }}>
       <div className="glass" style={{ position: 'sticky', top: 0, zIndex: 30, borderRadius: 0, borderLeft: 'none', borderRight: 'none', borderTop: 'none', backdropFilter: 'none', WebkitBackdropFilter: 'none', background: 'rgba(255,255,255,.92)' }}>
@@ -186,7 +295,7 @@ function Authed({ user, onSignOut }) {
             <div><div className="disp" style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>CEO Console <span style={{ fontSize: 11, fontWeight: 700, color: C.mint }}>· <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 9, background: C.mint, boxShadow: `0 0 0 3px ${C.mintBg}` }} /> live</span></div>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.18em', textTransform: 'uppercase', color: C.dim }}>HaseebMadeIt · Operations</div></div>
           </div>
-          <div className="flex items-center gap-2"><Tab icon={BarChart3} label="Live" active={view === 'live'} onClick={() => setView('live')} /><Tab icon={ClipboardList} label="Mistakes" badge={openMistakes} active={view === 'mistakes'} onClick={() => setView('mistakes')} /><Tab icon={Users} label="Roster" active={view === 'roster'} onClick={() => setView('roster')} /><Tab icon={ShieldAlert} label="Security" badge={unseen} active={view === 'security'} onClick={() => setView('security')} />
+          <div className="flex items-center gap-2"><button type="button" onClick={() => setSearchOpen(true)} title="Search reports, clients, projects, dates, issues (Ctrl/⌘ + K)" className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-all" style={{ background: 'rgba(255,255,255,.6)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }}><Search size={14} /><span className="hidden md:inline">Search…</span></button><Tab icon={BarChart3} label="Live" active={view === 'live'} onClick={() => setView('live')} /><Tab icon={ClipboardList} label="Mistakes" badge={openMistakes} active={view === 'mistakes'} onClick={() => setView('mistakes')} /><Tab icon={Users} label="Roster" active={view === 'roster'} onClick={() => setView('roster')} /><Tab icon={ShieldAlert} label="Security" badge={unseen} active={view === 'security'} onClick={() => setView('security')} />
             <button onClick={onSignOut} title={user && user.email ? `Signed in as ${user.email}` : 'Sign out'} className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-all" style={{ background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }}><LogOut size={14} />Sign out</button></div>
         </div>
       </div>
@@ -203,6 +312,7 @@ function Authed({ user, onSignOut }) {
         )}
         {view === 'live' ? <Console /> : view === 'roster' ? <RosterManager /> : view === 'mistakes' ? <MistakesPanel mistakes={mistakes} reload={reloadMistakes} /> : <SecurityPanel log={secLog} seenAt={seenAt} onSeen={markSeen} />}
       </main>
+      {searchOpen && <GlobalSearch onClose={() => setSearchOpen(false)} />}
     </div>
   );
 }
