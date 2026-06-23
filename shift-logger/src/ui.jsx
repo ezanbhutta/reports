@@ -173,14 +173,18 @@ export const SectionHeader = ({ eyebrow, title, right, color = C.violet }) => (
 
 export function Modal({ title, subtitle, onClose, children, width = 420 }) {
   const panelRef = useRef(null);
+  const closeRef = useRef(onClose); closeRef.current = onClose;   // keep Escape current without re-running the effect
   const titleId = useId();
   useEffect(() => {
     const prev = document.activeElement;
-    const onKey = e => { if (e.key === 'Escape' && onClose) onClose(); };
+    const onKey = e => { if (e.key === 'Escape' && closeRef.current) closeRef.current(); };
     document.addEventListener('keydown', onKey);
-    const t = setTimeout(() => { try { panelRef.current && panelRef.current.focus(); } catch {} }, 0);   // move focus into the dialog
-    return () => { document.removeEventListener('keydown', onKey); clearTimeout(t); try { prev && prev.focus && prev.focus(); } catch {} };  // restore focus on close
-  }, [onClose]);
+    // Move focus into the dialog once on open — but never steal it from a field that's
+    // already focused (e.g. an autoFocus input). MUST run only on mount: depending on
+    // onClose (a new inline fn each render) would re-focus the panel on every keystroke.
+    const t = setTimeout(() => { try { const p = panelRef.current; if (p && !p.contains(document.activeElement)) p.focus(); } catch {} }, 0);
+    return () => { document.removeEventListener('keydown', onKey); clearTimeout(t); try { prev && prev.focus && prev.focus(); } catch {} };
+  }, []);   // eslint-disable-line react-hooks/exhaustive-deps -- intentionally once-per-open
   return (
     <div onClick={onClose} className="scrim" style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, zIndex: 50 }}>
       <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby={title !== undefined ? titleId : undefined} tabIndex={-1}
