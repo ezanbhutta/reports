@@ -315,10 +315,11 @@ const supaDb = {
   },
   async ackNote(id, by, shift) {
     const c = await client();
-    // note_seen_* live on a SUBMITTED report, which the "update while open" policy
-    // blocks — a SECURITY DEFINER function records the ack per shift, so a note
-    // targeting two shifts keeps popping until each of them has read it.
-    const { error } = await c.rpc('ack_note', { p_id: id, p_by: by, p_shift: shift || '' });
+    // Acks live on a SUBMITTED report, which the "update while open" policy blocks — a
+    // SECURITY DEFINER function records them. Try the per-shift (3-arg) function; if the DB
+    // hasn't been migrated yet, fall back to the older 2-arg one so the ack still persists.
+    let { error } = await c.rpc('ack_note', { p_id: id, p_by: by, p_shift: shift || '' });
+    if (error) ({ error } = await c.rpc('ack_note', { p_id: id, p_by: by }));
     if (error) { try { await c.from('reports').update({ note_seen_by: by, note_seen_at: new Date().toISOString() }).eq('id', id); } catch {} }
   },
   async listReports() {

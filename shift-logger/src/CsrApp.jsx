@@ -12,7 +12,13 @@ const MOD_K = IS_MAC ? '⌘K' : 'Ctrl K';
 const projectOf = a => (a.type === 'order_assigned' ? a.client : (a.details && a.details.project)) || '';
 // A handoff note is "seen" for a shift only once THAT shift acknowledges it — a note
 // targeting two shifts must be read by both (not hidden the moment the first one reads it).
-const noteSeenFor = (h, sh) => !!(h && Array.isArray(h.note_seen_shifts) && sh && h.note_seen_shifts.includes(sh));
+// Falls back to the legacy single-flag field when the per-shift column isn't deployed yet,
+// so an acknowledgement still sticks across reloads.
+const noteSeenFor = (h, sh) => {
+  if (!h) return false;
+  if (Array.isArray(h.note_seen_shifts)) return sh ? h.note_seen_shifts.includes(sh) : h.note_seen_shifts.length > 0;
+  return !!h.note_seen_by;
+};
 const QUICK = ['inquiry', 'client_conversation', 'followup_client', 'shared', 'revision_assigned', 'meeting', 'new_order'];
 const getRecent = () => { try { return JSON.parse(localStorage.getItem('sl_recent_actions')) || []; } catch { return []; } };
 const bumpRecent = k => { const r = [k, ...getRecent().filter(x => x !== k)].slice(0, 8); localStorage.setItem('sl_recent_actions', JSON.stringify(r)); };
