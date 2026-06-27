@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Check, Clock, Sunrise, Sunset, Moon, Zap, ArrowRightLeft, ShieldCheck, RotateCcw, StickyNote, X, Trash2, Laptop } from 'lucide-react';
+import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Check, Clock, Sunrise, Sunset, Moon, Zap, ArrowRightLeft, ShieldCheck, RotateCcw, StickyNote, X, Trash2, Laptop, AlertTriangle } from 'lucide-react';
 import { C, SHIFTS, PROFILES, ACTIONS, ACTION_BY_KEY, GROUPS, CHECKLIST, KPI_LABEL, isDesigner } from './config.js';
 import { db, todayPKT, timePKT } from './store.js';
 import { Btn, Card, Pill, Modal, Label, Field, actionSummary, Logo, ConfirmDelete, useLive } from './ui.jsx';
@@ -59,6 +59,7 @@ export default function CsrApp({ boundProfile }) {
   const [name, setName] = useState(''); const [shift, setShift] = useState(currentShift()); const [profile, setProfile] = useState('');
   const [resumable, setResumable] = useState(null); // an unsubmitted report for the picked name+profile
   const [cachedResume, setCachedResume] = useState(null); // locally-cached unsubmitted report, offered on login
+  const [ceoCloseNote, setCeoCloseNote] = useState(null); // reports the CEO closed while open → one-time heads-up
   const [handoffSeen, setHandoffSeen] = useState(false); // has the incoming note been acknowledged?
   const [showHandoff, setShowHandoff] = useState(false); // incoming-note modal open
   const [noteDraft, setNoteDraft] = useState('');        // outgoing note for the next shift
@@ -142,6 +143,7 @@ export default function CsrApp({ boundProfile }) {
     db.listActions(rep.id).then(a => { if (Array.isArray(a)) setActions(a); }); // load prior entries when resuming
     // incoming note for THIS shift — pop it and require acknowledgement
     db.latestNoteForProfile(profile, rep.id, rep.shift).then(h => { setHandoff(h); setHandoffSeen(noteSeenFor(h, rep.shift)); setShowHandoff(!!h && !noteSeenFor(h, rep.shift)); });
+    notifyCeoCloses(name, profile);   // one-time heads-up if the CEO closed a previous report of theirs
   }
   function ackHandoff() { const sh = report ? report.shift : shift; setHandoffSeen(true); setShowHandoff(false); if (handoff) db.ackNote(handoff.id, name, sh); } // mark read for THIS shift; the other targeted shift must still read it
 
@@ -155,8 +157,17 @@ export default function CsrApp({ boundProfile }) {
     db.listActions(rep.id).then(a => { if (Array.isArray(a)) setActions(prev => [...prev.filter(x => typeof x.id === 'string' && x.id.startsWith('tmp_')), ...a]); }).catch(() => {});
     db.getReport(rep.id).then(r => { if (!r || r.status !== 'open') { clearActive(); setReport(null); setActions([]); setName(''); setProfile(''); setView('login'); } }).catch(() => {});
     db.latestNoteForProfile(rep.profile, rep.id, rep.shift).then(h => { setHandoff(h); setHandoffSeen(noteSeenFor(h, rep.shift)); setShowHandoff(!!h && !noteSeenFor(h, rep.shift)); }).catch(() => {});
+    notifyCeoCloses(rep.csr_name, rep.profile);
   }
   function dismissCached() { clearActive(); setCachedResume(null); }
+  // One-time heads-up: any of THIS person+profile's reports the CEO closed while they were still open.
+  function notifyCeoCloses(csr, prof) {
+    Promise.resolve(db.pendingCeoClosesFor(csr, prof)).then(list => { if (Array.isArray(list) && list.length) setCeoCloseNote(list); }).catch(() => {});
+  }
+  function dismissCeoCloseNote() {
+    (ceoCloseNote || []).forEach(r => { try { db.markCeoCloseSeen(r.id); } catch {} });   // mark seen so it never shows again
+    setCeoCloseNote(null);
+  }
 
   function openForm(action, prefill, editId) { setPicker(false); setForm({ action, values: prefill || {}, editId }); }
   function saveForm() {
@@ -470,6 +481,16 @@ export default function CsrApp({ boundProfile }) {
         {!locked && <button onClick={() => setDel(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, margin: '12px auto 0', background: 'none', border: 'none', cursor: 'pointer', color: C.coral, fontSize: 12, fontWeight: 700 }}><Trash2 size={13} /> Wrong report? Delete it</button>}
       </div>
 
+      {ceoCloseNote && ceoCloseNote.length > 0 && !showHandoff && <Modal title="Heads up from management" onClose={dismissCeoCloseNote} width={400}>
+        <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 12, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.amberBg, color: C.amber }}><AlertTriangle size={20} /></div>
+          <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.5, margin: 0 }}>{ceoCloseNote.length === 1 ? 'A report you left open was closed by the CEO because it was still open.' : 'Reports you left open were closed by the CEO because they were still open.'} Please remember to <b style={{ color: C.ink }}>wrap up and submit</b> your report at the end of every shift — be attentive.</p>
+        </div>
+        <div style={{ display: 'grid', gap: 6 }}>
+          {ceoCloseNote.map(r => <div key={r.id} className="glass-soft rounded-xl" style={{ padding: '8px 12px', fontSize: 12.5, color: C.ink }}><b>{r.profile}</b> · {r.date} · {r.shift}</div>)}
+        </div>
+        <Btn onClick={dismissCeoCloseNote} className="lift" style={{ width: '100%', marginTop: 16 }}>Got it</Btn>
+      </Modal>}
       {showHandoff && handoff && <Modal title="Note from the last shift" subtitle={`for ${report.profile} · left by ${handoff.csr_name}`} onClose={() => setShowHandoff(false)} width={400}>
         <div className="glass-soft rounded-xl" style={{ padding: 13, fontSize: 13.5, color: C.ink, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{handoff.note_for_next}</div>
         <Btn variant="ok" onClick={ackHandoff} className="lift" style={{ width: '100%', marginTop: 14 }}>Noted ✓</Btn>

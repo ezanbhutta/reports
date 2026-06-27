@@ -32,6 +32,8 @@ create table if not exists reports (
 );
 -- add to existing installs too (no-op if already present)
 alter table reports add column if not exists note_seen_shifts jsonb default '[]'::jsonb;
+alter table reports add column if not exists closed_by_ceo timestamptz;             -- set when the CEO closes a still-open report
+alter table reports add column if not exists ceo_close_seen boolean default false;  -- has that CSR been shown the one-time heads-up?
 create index if not exists reports_profile_idx on reports (profile, status);
 create index if not exists reports_date_idx on reports (date);
 -- One open report per CSR+profile. Close older duplicates first so the unique index can be built
@@ -128,6 +130,18 @@ as $$
    where id = p_id;
 $$;
 grant execute on function ack_note(uuid, text, text) to anon, authenticated;
+
+-- Lets a CSR mark the "CEO closed my open report" heads-up as seen (one-time), even though the
+-- report is submitted (which the row-level update policy would otherwise block).
+create or replace function mark_ceo_close_seen(p_id uuid)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update reports set ceo_close_seen = true where id = p_id;
+$$;
+grant execute on function mark_ceo_close_seen(uuid) to anon, authenticated;
 
 -- ── Access security log ──
 -- Every wrong-password attempt on the CEO console is recorded here so the CEO

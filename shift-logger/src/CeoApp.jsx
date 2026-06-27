@@ -1159,7 +1159,7 @@ function Console() {
       {panel && <StatPanel kind={panel} label={label} reports={filtered} actions={acts} flags={flags} idle={idle} repMap={repMap} byReport={byReport}
         onOpen={id => { setPanel(null); setDrill(id); }} onOpenAction={a => { setPanel(null); setAct(a); }} onClose={() => setPanel(null)} />}
       {act && <ActionDetail action={act} report={repMap[act.report_id]} onClose={go => { const rid = act.report_id; setAct(null); if (go === 'report') setDrill(rid); }} />}
-      {drill && <DrillDrawer report={repById(drill)} actions={byReport[drill] || []} onClose={() => setDrill(null)} onDelete={async (id) => { await db.deleteReport(id); setDrill(null); load(); }} />}
+      {drill && <DrillDrawer report={repById(drill)} actions={byReport[drill] || []} onClose={() => setDrill(null)} onDelete={async (id) => { await db.deleteReport(id); setDrill(null); load(); }} onCloseReport={async (id) => { try { await db.closeReportByCeo(id); } catch { window.alert('Could not close the report — please try again.'); } setDrill(null); load(); }} />}
     </>
   );
 }
@@ -1272,7 +1272,7 @@ function ActionDetail({ action, report, onClose }) {
   );
 }
 
-function DrillDrawer({ report, actions, onClose, onDelete }) {
+function DrillDrawer({ report, actions, onClose, onDelete, onCloseReport }) {
   const [del, setDel] = useState(false);
   const [acts, setActs] = useState(actions || []);
   // Always show the report's COMPLETE timeline (not just the windowed slice the list was built from).
@@ -1310,9 +1310,15 @@ function DrillDrawer({ report, actions, onClose, onDelete }) {
               </div>}
             </div>); })}
           {report.note_for_next && <div className="mt-3 glass-soft rounded-xl" style={{ padding: 12 }}><div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', color: C.violetDim, marginBottom: 4 }}>Note for next shift</div><div style={{ fontSize: 12.5, color: C.ink }}>{report.note_for_next}</div></div>}
-          {onDelete && <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid rgba(124,41,255,.1)' }}>
-            <button onClick={() => setDel(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%', padding: 10, borderRadius: 12, border: `1px solid ${C.coral}`, background: C.coralBg, color: C.coral, fontSize: 13, fontWeight: 800, cursor: 'pointer' }}><Trash2 size={14} /> Delete report</button>
-            <div style={{ fontSize: 10.5, color: C.dim, textAlign: 'center', marginTop: 6 }}>Removes this report and its activity from the console (e.g. a wrong-profile report).</div>
+          {(onDelete || (report.status === 'open' && onCloseReport)) && <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid rgba(124,41,255,.1)', display: 'grid', gap: 12 }}>
+            {report.status === 'open' && onCloseReport && <div>
+              <button type="button" onClick={() => { if (window.confirm(`Close ${report.csr_name}'s ${report.profile} report (${report.date})? It will be marked submitted, and they'll get a one-time reminder the next time they log in.`)) onCloseReport(report.id); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%', padding: 10, borderRadius: 12, border: `1px solid ${C.amber}`, background: C.amberBg, color: C.amber, fontSize: 13, fontWeight: 800, cursor: 'pointer' }}><Lock size={14} /> Close report</button>
+              <div style={{ fontSize: 10.5, color: C.dim, textAlign: 'center', marginTop: 6 }}>Use when they forgot to wrap up. Marks it submitted; they're reminded on next login.</div>
+            </div>}
+            {onDelete && <div>
+              <button type="button" onClick={() => setDel(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%', padding: 10, borderRadius: 12, border: `1px solid ${C.coral}`, background: C.coralBg, color: C.coral, fontSize: 13, fontWeight: 800, cursor: 'pointer' }}><Trash2 size={14} /> Delete report</button>
+              <div style={{ fontSize: 10.5, color: C.dim, textAlign: 'center', marginTop: 6 }}>Removes this report and its activity from the console (e.g. a wrong-profile report).</div>
+            </div>}
           </div>}
         </div>
       </div>

@@ -88,6 +88,23 @@ const localDb = {
       finish_at: new Date().toISOString(), status: 'submitted' }; write(LS.reports, reports); }
     return reports[i];
   },
+  async closeReportByCeo(id) {
+    const reports = read(LS.reports, []);
+    const i = reports.findIndex(r => r.id === id && r.status === 'open');
+    if (i < 0) return null;
+    reports[i] = { ...reports[i], status: 'submitted', finish_at: new Date().toISOString(), closed_by_ceo: new Date().toISOString(), ceo_close_seen: false };
+    write(LS.reports, reports);
+    return reports[i];
+  },
+  async pendingCeoClosesFor(csr_name, profile) {
+    return read(LS.reports, []).filter(r => r.csr_name === csr_name && r.profile === profile && r.closed_by_ceo && !r.ceo_close_seen)
+      .sort((a, b) => (b.closed_by_ceo || '').localeCompare(a.closed_by_ceo || ''));
+  },
+  async markCeoCloseSeen(id) {
+    const reports = read(LS.reports, []);
+    const i = reports.findIndex(r => r.id === id);
+    if (i >= 0) { reports[i] = { ...reports[i], ceo_close_seen: true }; write(LS.reports, reports); }
+  },
   async updateReportNote(reportId, note_for_next, shifts) {
     const reports = read(LS.reports, []);
     const i = reports.findIndex(r => r.id === reportId);
@@ -292,6 +309,22 @@ const supaDb = {
     const c = await client();
     const { data } = await c.from('reports').update({ checklist, note_for_next, finish_at: new Date().toISOString(), status: 'submitted' }).eq('id', id).select().single();
     return data;
+  },
+  async closeReportByCeo(id) {
+    const c = await client();
+    const { data, error } = await c.from('reports').update({ status: 'submitted', finish_at: new Date().toISOString(), closed_by_ceo: new Date().toISOString(), ceo_close_seen: false }).eq('id', id).eq('status', 'open').select().maybeSingle();
+    if (error) throw error;
+    return data;
+  },
+  async pendingCeoClosesFor(csr_name, profile) {
+    const c = await client();
+    const { data } = await c.from('reports').select('*').eq('csr_name', csr_name).eq('profile', profile).not('closed_by_ceo', 'is', null).eq('ceo_close_seen', false).order('closed_by_ceo', { ascending: false });
+    return data || [];
+  },
+  async markCeoCloseSeen(id) {
+    const c = await client();
+    const { error } = await c.rpc('mark_ceo_close_seen', { p_id: id });
+    if (error) { try { await c.from('reports').update({ ceo_close_seen: true }).eq('id', id); } catch {} }
   },
   async updateReportNote(reportId, note_for_next, shifts) {
     const c = await client();
