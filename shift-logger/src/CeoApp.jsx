@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock, Download, ChevronLeft, ChevronRight, CalendarDays, ShieldAlert, ShieldCheck, Monitor, Loader2, Laptop, LogOut, MapPin, Info, Search } from 'lucide-react';
 import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, GROUPS, isDesigner, MISTAKE_CATEGORIES } from './config.js';
 import { db, todayPKT, timePKT, addDays, BACKEND } from './store.js';
-import { Btn, Card, StatCard, Pill, Select, Chip, SectionHeader, Modal, Label, Field, actionSummary, Logo, TrendChart, ConfirmDelete, useLive } from './ui.jsx';
+import { Btn, Card, StatCard, Pill, Select, Chip, SectionHeader, Modal, Label, Field, actionSummary, Logo, TrendChart, ConfirmDelete, CopyButton, useLive } from './ui.jsx';
 
 const uid = () => (crypto?.randomUUID ? crypto.randomUUID() : 'r_' + Math.random().toString(36).slice(2));
 const SHIFT_COLOR = { Morning: C.amber, Evening: C.cyan, Night: C.violet };
@@ -230,7 +230,7 @@ function GlobalSearch({ onClose }) {
               <div>
                 <div style={{ fontWeight: 800, fontSize: 16, color: C.ink }}>{ACTION_BY_KEY[a.type]?.label || a.type}</div>
                 <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>{[a.client, dayPKT(a.created_at) + ' · ' + timePKT(a.created_at), r ? `${r.csr_name} (${r.profile} · ${r.shift})` : ''].filter(Boolean).join(' · ')}</div>
-                {det.length === 0 ? <div style={{ color: C.dim, fontSize: 12 }}>No extra details.</div> : <div style={{ display: 'grid', gap: 6 }}>{det.map(([l, v], i) => <div key={i} className="glass-soft rounded-xl" style={{ padding: '7px 11px', display: 'flex', gap: 10 }}><span style={{ color: C.dim, fontWeight: 800, fontSize: 10, minWidth: 84, textTransform: 'uppercase', letterSpacing: '.04em' }}>{l}</span><span style={{ color: C.ink, fontSize: 12.5, wordBreak: 'break-word' }}>{v}</span></div>)}</div>}
+                {det.length === 0 ? <div style={{ color: C.dim, fontSize: 12 }}>No extra details.</div> : <div style={{ display: 'grid', gap: 6 }}>{det.map(([l, v], i) => <div key={i} className="glass-soft rounded-xl" style={{ padding: '7px 11px', display: 'flex', gap: 10, alignItems: 'center' }}><span style={{ color: C.dim, fontWeight: 800, fontSize: 10, minWidth: 84, textTransform: 'uppercase', letterSpacing: '.04em' }}>{l}</span><span style={{ color: C.ink, fontSize: 12.5, wordBreak: 'break-word', flex: 1, minWidth: 0 }}>{v}</span><CopyButton text={v} title={`Copy ${l.toLowerCase()}`} /></div>)}</div>}
               </div>); })()}
             {sel.k === 'mistake' && (() => { const m = sel.m; return (
               <div>
@@ -1259,9 +1259,10 @@ function ActionDetail({ action, report, onClose }) {
       {det.length === 0 ? <div style={{ color: C.dim, fontSize: 13 }}>No extra details were recorded for this action.</div> : (
         <div style={{ display: 'grid', gap: 8 }}>
           {det.map(([l, v], i) => (
-            <div key={i} className="glass-soft rounded-xl" style={{ padding: '9px 12px', display: 'flex', gap: 10 }}>
-              <span style={{ color: C.dim, fontWeight: 800, fontSize: 10.5, minWidth: 92, flex: '0 0 auto', textTransform: 'uppercase', letterSpacing: '.05em', paddingTop: 1 }}>{l}</span>
-              <span style={{ color: C.ink, fontSize: 12.5, wordBreak: 'break-word', lineHeight: 1.4 }}>{v}</span>
+            <div key={i} className="glass-soft rounded-xl" style={{ padding: '9px 12px', display: 'flex', gap: 10, alignItems: 'center' }}>
+              <span style={{ color: C.dim, fontWeight: 800, fontSize: 10.5, minWidth: 92, flex: '0 0 auto', textTransform: 'uppercase', letterSpacing: '.05em' }}>{l}</span>
+              <span style={{ color: C.ink, fontSize: 12.5, wordBreak: 'break-word', lineHeight: 1.4, flex: 1, minWidth: 0 }}>{v}</span>
+              <CopyButton text={v} title={`Copy ${l.toLowerCase()}`} />
             </div>))}
         </div>
       )}
@@ -1303,9 +1304,10 @@ function DrillDrawer({ report, actions, onClose, onDelete, onCloseReport }) {
               </div>
               {det.length > 0 && <div style={{ marginTop: 7, paddingLeft: 16, display: 'grid', gap: 4 }}>
                 {det.map(([l, v], i) => (
-                  <div key={i} style={{ display: 'flex', gap: 8, fontSize: 11.5, lineHeight: 1.35 }}>
+                  <div key={i} style={{ display: 'flex', gap: 8, fontSize: 11.5, lineHeight: 1.35, alignItems: 'center' }}>
                     <span style={{ color: C.dim, fontWeight: 700, minWidth: 86, flex: '0 0 auto' }}>{l}</span>
-                    <span style={{ color: C.ink, wordBreak: 'break-word' }}>{v}</span>
+                    <span style={{ color: C.ink, wordBreak: 'break-word', flex: 1, minWidth: 0 }}>{v}</span>
+                    <CopyButton text={v} size={11} title={`Copy ${l.toLowerCase()}`} />
                   </div>))}
               </div>}
             </div>); })}
