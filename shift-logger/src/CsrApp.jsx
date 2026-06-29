@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Check, Clock, Sunrise, Sunset, Moon, Zap, ArrowRightLeft, ShieldCheck, RotateCcw, StickyNote, X, Trash2, Laptop, AlertTriangle } from 'lucide-react';
 import { C, SHIFTS, PROFILES, ACTIONS, ACTION_BY_KEY, GROUPS, CHECKLIST, KPI_LABEL, isDesigner } from './config.js';
 import { db, todayPKT, timePKT } from './store.js';
-import { Btn, Card, Pill, Modal, Label, Field, actionSummary, Logo, ConfirmDelete, useLive } from './ui.jsx';
+import { Btn, Card, Pill, Modal, Label, Field, actionSummary, Logo, ConfirmDelete, CopyButton, useLive } from './ui.jsx';
 
 const groupColor = k => (GROUPS.find(g => g.key === k) || {}).color || C.violet;
 // Show the keyboard hint for the user's actual OS — never a Mac ⌘ on Windows/Linux.
@@ -444,7 +444,10 @@ export default function CsrApp({ boundProfile }) {
                   <div key={a.id} onClick={() => { if (failed) return retryAction(a); if (!locked) openForm(ACTION_BY_KEY[a.type], { ...a.details, client: a.client }, a.id); }}
                     className="glass-soft rounded-xl lift" style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 13px', marginBottom: 8, cursor: (locked && !failed) ? 'default' : 'pointer', borderLeft: `3px solid ${failed ? C.coral : col}`, background: failed ? C.coralBg : undefined }}>
                     <div style={{ minWidth: 0, flex: 1 }}>
-                      <div className="truncate" style={{ fontSize: 13.5, fontWeight: 800, color: C.ink }}>{proj || labelTxt}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 3, minWidth: 0 }}>
+                        <span className="truncate" style={{ fontSize: 13.5, fontWeight: 800, color: C.ink, minWidth: 0 }}>{proj || labelTxt}</span>
+                        {proj && !failed && <CopyButton text={proj} title="Copy project name" />}
+                      </div>
                       <div className="truncate" style={{ fontSize: 11.5, color: failed ? C.coral : C.muted, fontWeight: failed ? 700 : 400 }}>{failed ? 'Not saved — tap to retry' : (sub || '—')}</div>
                     </div>
                     {failed

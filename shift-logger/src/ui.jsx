@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useId } from 'react';
-import { X, AlertTriangle } from 'lucide-react';
+import { X, AlertTriangle, Copy, Check } from 'lucide-react';
 import { C } from './config.js';
 import { db } from './store.js';
 
@@ -67,6 +67,35 @@ export const Logo = ({ size = 30, className = '', style }) => (
   <img src="/favicon.svg" width={size} height={size} alt="HaseebMadeIt" className={className}
     style={{ display: 'block', borderRadius: Math.round(size * 0.26), filter: 'drop-shadow(0 6px 14px rgba(114,41,255,.30))', ...style }} />
 );
+
+// Small, subtle "copy to clipboard" button. Sits at low opacity (so it never
+// competes with the text it sits beside) and brightens on hover/focus; flips to a
+// green check for a moment after a successful copy. Stops click propagation so it
+// never triggers the row it lives in (edit form, drill-down, action detail, …).
+export function CopyButton({ text, title = 'Copy', size = 12, style }) {
+  const [done, setDone] = useState(false);
+  const t = useRef(null);
+  useEffect(() => () => clearTimeout(t.current), []);
+  if (text == null || String(text).trim() === '') return null;
+  const copy = async (e) => {
+    e.stopPropagation(); e.preventDefault();
+    const s = String(text);
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(s);
+      else throw new Error('no clipboard api');
+    } catch {
+      // Fallback for non-secure contexts / older browsers (clipboard API is HTTPS-only).
+      try { const ta = document.createElement('textarea'); ta.value = s; ta.style.position = 'fixed'; ta.style.top = '-1000px'; ta.setAttribute('readonly', ''); document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); } catch {}
+    }
+    setDone(true); clearTimeout(t.current); t.current = setTimeout(() => setDone(false), 1100);
+  };
+  return (
+    <button type="button" onClick={copy} title={done ? 'Copied!' : title} aria-label={title}
+      className="copy-btn" style={{ flex: '0 0 auto', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: size + 12, height: size + 12, borderRadius: 7, border: 'none', padding: 0, cursor: 'pointer', background: 'transparent', color: done ? C.mint : C.dim, ...style }}>
+      {done ? <Check size={size} strokeWidth={2.6} /> : <Copy size={size} />}
+    </button>
+  );
+}
 
 export const Btn = ({ children, onClick, variant = 'solid', disabled, style, className = '', ...p }) => {
   const base = 'rounded-xl font-bold transition-all';

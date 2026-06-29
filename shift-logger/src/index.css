@@ -58,6 +58,11 @@ input, select, textarea, button { font-family: inherit; }
 }
 .lift { transition: transform .16s cubic-bezier(.2,.7,.3,1), box-shadow .16s ease; }
 .lift:hover { transform: translateY(-1px); box-shadow: 0 1px 2px rgba(22,10,51,.04), 0 8px 20px rgba(22,10,51,.08); }
+/* Subtle inline copy button: faint by default, full + tinted on hover/focus.
+   Lifts to half-opacity when its surrounding card/row is hovered, as a hint. */
+.copy-btn { opacity: .38; transition: opacity .14s ease, background-color .14s ease, color .14s ease; }
+.copy-btn:hover, .copy-btn:focus-visible { opacity: 1; background: rgba(124,41,255,.10); color: #5E1FD8; }
+.lift:hover .copy-btn, .glass-soft:hover .copy-btn { opacity: .7; }
 .gi { /* input */
   background: #fff;
   border: 1px solid var(--border);
