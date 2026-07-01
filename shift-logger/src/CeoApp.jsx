@@ -695,7 +695,7 @@ function Console() {
   // doesn't re-download every action on each realtime tick. 'All time' still loads everything.
   const winKey = win ? `${win.s}_${win.e}` : 'all';
   const [allActions, reloadActions] = useLive('actions:' + winKey, () => db.actionsInWindow(win), ['actions']);
-  const [drill, setDrill] = useState(null); const [panel, setPanel] = useState(null); const [act, setAct] = useState(null);
+  const [drill, setDrill] = useState(null); const [panel, setPanel] = useState(null); const [act, setAct] = useState(null); const [actFrom, setActFrom] = useState(null);
   const [exporting, setExporting] = useState(false);
   const load = useCallback(() => { reloadReports(); reloadActions(); }, [reloadReports, reloadActions]);
   const filtered = useMemo(() => reports.filter(r => (fShift === 'all' || r.shift === fShift) && (fProfile === 'all' || r.profile === fProfile) && (fCSR === 'all' || r.csr_name === fCSR) && inWin(r.date, win)), [reports, fShift, fProfile, fCSR, win]);
@@ -1157,8 +1157,11 @@ function Console() {
       )}
 
       {panel && <StatPanel kind={panel} label={label} reports={filtered} actions={acts} flags={flags} idle={idle} repMap={repMap} byReport={byReport}
-        onOpen={id => { setPanel(null); setDrill(id); }} onOpenAction={a => { setPanel(null); setAct(a); }} onClose={() => setPanel(null)} />}
-      {act && <ActionDetail action={act} report={repMap[act.report_id]} onClose={go => { const rid = act.report_id; setAct(null); if (go === 'report') setDrill(rid); }} />}
+        onOpen={id => { setPanel(null); setDrill(id); }} onOpenAction={a => { setActFrom(panel); setPanel(null); setAct(a); }} onClose={() => setPanel(null)} />}
+      {act && <ActionDetail action={act} report={repMap[act.report_id]}
+        onBack={actFrom ? () => { setAct(null); setPanel(actFrom); setActFrom(null); } : null}
+        backLabel={actFrom === 'attention' ? 'Needs attention' : 'Actions logged'}
+        onClose={go => { const rid = act.report_id; setAct(null); setActFrom(null); if (go === 'report') setDrill(rid); }} />}
       {drill && <DrillDrawer report={repById(drill)} actions={byReport[drill] || []} onClose={() => setDrill(null)} onDelete={async (id) => { await db.deleteReport(id); setDrill(null); load(); }} onCloseReport={async (id) => { try { await db.closeReportByCeo(id); } catch { window.alert('Could not close the report — please try again.'); } setDrill(null); load(); }} />}
     </>
   );
@@ -1246,12 +1249,13 @@ function StatPanel({ kind, label, reports, actions, flags, idle, repMap, byRepor
 }
 
 // Single-action detail — shows ONLY the clicked action (not the whole report's timeline).
-function ActionDetail({ action, report, onClose }) {
+function ActionDetail({ action, report, onClose, onBack, backLabel }) {
   if (!action) return null;
   const def = ACTION_BY_KEY[action.type];
   const det = actionDetails(action);
   return (
     <Modal title={def?.label || action.type} subtitle={action.client || undefined} onClose={() => onClose()} width={460}>
+      {onBack && <button type="button" onClick={onBack} className="lift" style={{ border: 'none', background: 'rgba(124,41,255,.08)', color: C.violetDim, fontWeight: 700, fontSize: 11.5, padding: '6px 11px', borderRadius: 8, cursor: 'pointer', marginBottom: 12, display: 'inline-flex', alignItems: 'center', gap: 5 }}><ChevronLeft size={14} /> Back to {backLabel}</button>}
       <div className="flex items-center gap-3" style={{ fontSize: 12, color: C.muted, marginBottom: 14, flexWrap: 'wrap' }}>
         <span className="flex items-center gap-1"><Clock size={13} /> {timePKT(action.created_at)}</span>
         {report && <span><b style={{ color: C.violetDim, fontWeight: 700 }}>{report.csr_name}</b> · {report.profile} · {report.shift}</span>}
