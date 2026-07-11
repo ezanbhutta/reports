@@ -23,7 +23,7 @@ export const SHIFTS = [
 
 export const PROFILES = [
   'Abdul Haseeb', 'Brand Identity Co', 'Eikon Designs', 'Alee Studioz', 'Carpicon',
-  'Dygram Designs', 'Storm Design', 'WeDesignz', 'Grid Designs', 'X Studioz',
+  'Dygram Designs', 'WeDesignz', 'Grid Designs', 'X Studioz',
 ];
 
 // Default roster (editable in-app by managers). profile optional — picked at login.
