@@ -85,20 +85,38 @@ select.gi {
 .scroll-y::-webkit-scrollbar-thumb { background: rgba(124,41,255,.28); border-radius: 8px; }
 .scroll-y::-webkit-scrollbar-thumb:hover { background: rgba(124,41,255,.45); }
 .scroll-y::-webkit-scrollbar-track { background: transparent; }
-/* Standing red caution card — a slow BREATHING glow (urgent, never anxious).
-   A hairline red ring + soft bloom that swells gently; also respects users who
-   prefer reduced motion (steady glow instead). */
+/* ── Attention system ───────────────────────────────────────────── */
+/* Breathing glow for the alert card (urgent, never anxious) */
 @keyframes glowRed {
-  0%, 100% { box-shadow: 0 0 0 1px rgba(239,68,68,.30), 0 6px 22px rgba(239,68,68,.14); }
-  50%      { box-shadow: 0 0 0 1px rgba(239,68,68,.52), 0 10px 34px rgba(239,68,68,.30); }
+  0%, 100% { box-shadow: 0 10px 30px rgba(190,18,60,.22); }
+  50%      { box-shadow: 0 14px 44px rgba(190,18,60,.42); }
 }
 .glow-red { animation: glowRed 2.8s ease-in-out infinite; }
-@media (prefers-reduced-motion: reduce) {
-  .glow-red { animation: none; box-shadow: 0 0 0 1px rgba(239,68,68,.45), 0 8px 28px rgba(239,68,68,.22); }
+/* Alert card: a slow-orbiting "energy ring" of light around a deep-crimson core */
+.alert-frame { position: relative; border-radius: 18px; overflow: hidden; background: #47101d; }
+.alert-frame::before {
+  content: ''; position: absolute; top: 50%; left: 50%;
+  width: 250%; height: 0; padding-top: 250%; margin: -125% 0 0 -125%;
+  background: conic-gradient(rgba(255,255,255,0) 0deg, rgba(255,133,133,.95) 55deg, rgba(255,255,255,0) 120deg,
+              rgba(255,255,255,0) 190deg, rgba(255,133,133,.55) 250deg, rgba(255,255,255,0) 320deg);
+  animation: ringSpin 5.5s linear infinite;
 }
-/* Tactile press feedback for tap targets (top-tier micro-interaction) */
+@keyframes ringSpin { to { transform: rotate(360deg); } }
+.alert-core { position: relative; margin: 1.6px; border-radius: 16.4px; background: radial-gradient(140% 120% at 85% -10%, #6B1023 0%, #3A0A15 48%, #2A0710 100%); }
+/* Sticky attention rail on desktop — always in sight while they work */
+@media (min-width: 1024px) { .rail-sticky { position: sticky; top: 74px; } }
+/* Page-load choreography — content rises in a staggered sequence */
+@keyframes riseIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.reveal { opacity: 0; animation: riseIn .5s cubic-bezier(.2,.7,.3,1) forwards; }
+.d1 { animation-delay: .05s; } .d2 { animation-delay: .12s; } .d3 { animation-delay: .2s; } .d4 { animation-delay: .28s; }
+/* Tactile press feedback for tap targets */
 .press { transition: transform .1s ease; }
 .press:active { transform: scale(.96); }
+@media (prefers-reduced-motion: reduce) {
+  .glow-red { animation: none; box-shadow: 0 10px 30px rgba(190,18,60,.3); }
+  .alert-frame::before { animation: none; }
+  .reveal { animation: none; opacity: 1; }
+}
 @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
 .pop { animation: pop .18s ease both; }
 /* Single-pass ticker — each item shown once, scrolls right→left then loops */
