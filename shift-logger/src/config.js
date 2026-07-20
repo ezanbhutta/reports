@@ -224,6 +224,17 @@ export const REMINDER_SNOOZE_MINUTES = 5;
 // then. Once this time has passed, the floor is inert (pure rule delays apply).
 export const REMINDERS_START_AT = '2026-07-21T10:00:00+05:00';
 export const REMINDERS = {
+  // New inquiry → 25 min later, send the prospect their 1st follow-up. "Order
+  // taken" opens the New order form prefilled and resolves once it's saved.
+  inquiry: {
+    title: r => `Send the 1st follow-up to ${r.client || 'the client'}`,
+    delayMinutes: 25,
+    buttons: [
+      { key: 'in_discussion', label: 'In discussion', kind: 'resolve', variant: 'subtle' },
+      { key: 'followed_up',   label: 'Followed up',   kind: 'resolve', variant: 'solid' },
+      { key: 'order_taken',   label: 'Order taken',   kind: 'form', form: 'new_order', variant: 'ok' },
+    ],
+  },
   // Order completed → 30 min later, ask the client for a Public Review.
   // Auto-clears if a "Review received" for the same client + profile lands first.
   order_completed: {
