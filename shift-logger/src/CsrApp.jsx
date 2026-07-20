@@ -46,7 +46,7 @@ const DEFAULT_REM_BUTTONS = [
 // shared elements with "Other" spelled out, completion type, or the ★ rating).
 const reminderNote = d => d.designer ? 'Designer: ' + d.designer
   : (Array.isArray(d.elements) && d.elements.length) ? d.elements.map(e => e === 'Other' && d.other_text ? d.other_text : e).join(', ')
-  : (d.stage || d.update_type || d.completion || (d.rating ? '★ ' + d.rating : ''));
+  : (d.stage || d.update_type || d.completion || d.agenda || (d.rating ? '★ ' + d.rating : ''));
 // Rule titles may be static text or a function of the reminder row (to name the item/client).
 const remTitle = (rule, r) => typeof rule.title === 'function' ? rule.title(r) : (rule.title || 'Follow up');
 function LiveClock() {
