@@ -249,7 +249,7 @@ export default function CsrApp({ boundProfile }) {
       project: projectOf(a),
       note: reminderNote(d),
       csr_name: report.csr_name,
-      due_at: new Date(Math.max(Date.now() + (rule.delayMinutes || 720) * 60000, new Date(REMINDERS_START_AT).getTime())).toISOString(),
+      due_at: new Date(Math.max(Date.now() + (rule.delayMinutes ?? 720) * 60000, new Date(REMINDERS_START_AT).getTime())).toISOString(),
     });
   }
   // Logging an activity can auto-clear pending reminders it satisfies — e.g. a "Review
