@@ -537,7 +537,7 @@ export default function CsrApp({ boundProfile }) {
         </div>
       </Header>
 
-      <div style={{ maxWidth: 1160, padding: '22px 20px 64px' }}>
+      <div className="mx-auto" style={{ maxWidth: 1160, padding: '22px 20px 64px' }}>
         {/* greeting + identity + live attention summary */}
         <div className="mb-5 reveal">
           <h1 className="disp" style={{ fontSize: 24, fontWeight: 700, color: C.ink, margin: 0 }}>{greeting()}, {report.csr_name.split(' ')[0]}</h1>
@@ -563,30 +563,28 @@ export default function CsrApp({ boundProfile }) {
           </div>
         )}
 
-        {/* client alerts — deep-crimson card with a slow orbiting light ring; unmissable until Solved */}
+        {/* client alerts — the original light caution card: calm white surface, red accents, breathing glow */}
         {remAlerts.length > 0 && (
-          <div className={`alert-frame glow-red reveal d1 order-2${remNormal.length > 0 ? '' : ' md:col-span-2'}`} style={{ marginBottom: 16 }}>
-            <div className="alert-core" style={{ color: '#fff' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 16px 11px' }}>
-                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 9, background: 'rgba(255,255,255,.2)', color: '#fff', flex: '0 0 auto' }}><AlertTriangle size={15} /></span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 800, fontSize: 14, letterSpacing: '-.01em' }}>Handle with care</div>
-                  <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,.8)' }}>Visible to every shift until marked Solved</div>
-                </div>
-                <span className="mono" style={{ fontSize: 12, fontWeight: 800, color: '#C21F36', background: '#fff', borderRadius: 9, padding: '2px 9px', flex: '0 0 auto' }}>{remAlerts.length}</span>
+          <div className={`glow-red reveal d1 rounded-2xl order-2${remNormal.length > 0 ? '' : ' md:col-span-2'}`} style={{ marginBottom: 16, background: '#fff', border: `1px solid ${C.coral}55`, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: `linear-gradient(180deg, ${C.coralBg}, rgba(253,233,233,.35))` }}>
+              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 9, background: C.coral, color: '#fff', flex: '0 0 auto', boxShadow: '0 6px 14px rgba(239,68,68,.35)' }}><AlertTriangle size={15} /></span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 800, fontSize: 14, color: C.coral }}>Handle with care</div>
+                <div style={{ fontSize: 10.5, color: C.muted }}>Visible to every shift until marked Solved</div>
               </div>
-              {remAlerts.map(r => { const rule = REMINDERS[r.action_type] || {}; return (
-                <div key={r.id} className="pop" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,.18)' }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 800, lineHeight: 1.35 }}>{remTitle(rule, r)}</div>
-                    {r.note && <div style={{ fontSize: 12, color: 'rgba(255,255,255,.92)', marginTop: 2, lineHeight: 1.45 }}>{r.note}</div>}
-                    <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,.72)', marginTop: 3 }}>{[r.project && 'Project: ' + r.project, 'By ' + (r.csr_name || '—'), agoHours(r.created_at)].filter(Boolean).join(' · ')}</div>
-                  </div>
-                  {(rule.buttons || []).map(b => (
-                    <Btn key={b.key} className="press" title={b.hint} onClick={() => resolveRem(r, b.key, b.label)} style={{ padding: '8px 15px', fontSize: 12, flex: '0 0 auto', background: '#fff', color: '#C21F36', boxShadow: '0 8px 20px rgba(150,20,40,.35)' }}><Check size={13} />{b.label}</Btn>
-                  ))}
-                </div>); })}
+              <span className="mono" style={{ fontSize: 12, fontWeight: 800, color: '#fff', background: C.coral, borderRadius: 9, padding: '2px 9px', flex: '0 0 auto' }}>{remAlerts.length}</span>
             </div>
+            {remAlerts.map(r => { const rule = REMINDERS[r.action_type] || {}; return (
+              <div key={r.id} className="pop" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderTop: '1px solid rgba(239,68,68,.10)' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 800, color: C.ink, lineHeight: 1.35 }}>{remTitle(rule, r)}</div>
+                  {r.note && <div style={{ fontSize: 12, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>{r.note}</div>}
+                  <div style={{ fontSize: 10.5, color: C.dim, marginTop: 3 }}>{[r.project && 'Project: ' + r.project, 'By ' + (r.csr_name || '—'), agoHours(r.created_at)].filter(Boolean).join(' · ')}</div>
+                </div>
+                {(rule.buttons || []).map(b => (
+                  <Btn key={b.key} className="press" variant={b.variant || 'ok'} title={b.hint} onClick={() => resolveRem(r, b.key, b.label)} style={{ padding: '8px 15px', fontSize: 12, flex: '0 0 auto' }}><Check size={13} />{b.label}</Btn>
+                ))}
+              </div>); })}
           </div>
         )}
 
@@ -931,7 +929,7 @@ function Brand({ small }) {
 }
 function Header({ children }) {
   return <div className="glass" style={{ position: 'sticky', top: 0, zIndex: 20, borderLeft: 'none', borderRight: 'none', borderTop: 'none', borderRadius: 0, backdropFilter: 'none', WebkitBackdropFilter: 'none', background: 'rgba(255,255,255,.92)' }}>
-    <div className="flex items-center justify-between" style={{ maxWidth: 1160, padding: '12px 20px' }}>{children}</div>
+    <div className="mx-auto flex items-center justify-between" style={{ maxWidth: 1160, padding: '12px 20px' }}>{children}</div>
   </div>;
 }
 function Shell({ children, center }) {
