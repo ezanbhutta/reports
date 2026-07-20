@@ -279,7 +279,8 @@ export function Field({ field, value, onChange }) {
       {type === 'date' && <input type="date" className="gi" value={value || ''} onChange={e => onChange(e.target.value)} />}
       {type === 'select' && (
         <select className="gi" value={value || ''} onChange={e => onChange(e.target.value)}>
-          <option value="">Select…</option>{options.map(o => <option key={o} value={o}>{o}</option>)}
+          {/* keep a legacy value (stored before this field became a dropdown) selectable when editing */}
+          <option value="">Select…</option>{(value && !options.includes(value) ? [...options, value] : options).map(o => <option key={o} value={o}>{o}</option>)}
         </select>
       )}
       {type === 'segment' && (
