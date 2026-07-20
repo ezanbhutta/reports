@@ -87,22 +87,12 @@ select.gi {
 .scroll-y::-webkit-scrollbar-track { background: transparent; }
 /* ── Attention system ───────────────────────────────────────────── */
 /* Breathing glow for the alert card (urgent, never anxious) */
+/* Breathing glow for the alert card — hairline red ring + soft bloom that swells gently */
 @keyframes glowRed {
-  0%, 100% { box-shadow: 0 10px 30px rgba(218,44,68,.25); }
-  50%      { box-shadow: 0 14px 44px rgba(218,44,68,.45); }
+  0%, 100% { box-shadow: 0 0 0 1px rgba(239,68,68,.30), 0 6px 22px rgba(239,68,68,.14); }
+  50%      { box-shadow: 0 0 0 1px rgba(239,68,68,.52), 0 10px 34px rgba(239,68,68,.30); }
 }
 .glow-red { animation: glowRed 2.8s ease-in-out infinite; }
-/* Alert card: a slow-orbiting light around a vivid rose-red core */
-.alert-frame { position: relative; border-radius: 18px; overflow: hidden; background: #F3B6BE; }
-.alert-frame::before {
-  content: ''; position: absolute; top: 50%; left: 50%;
-  width: 250%; height: 0; padding-top: 250%; margin: -125% 0 0 -125%;
-  background: conic-gradient(rgba(255,255,255,0) 0deg, rgba(255,255,255,.95) 55deg, rgba(255,255,255,0) 120deg,
-              rgba(255,255,255,0) 190deg, rgba(255,255,255,.6) 250deg, rgba(255,255,255,0) 320deg);
-  animation: ringSpin 5.5s linear infinite;
-}
-@keyframes ringSpin { to { transform: rotate(360deg); } }
-.alert-core { position: relative; margin: 1.6px; border-radius: 16.4px; background: radial-gradient(140% 120% at 85% -10%, #F1546A 0%, #DA2C44 48%, #C21F36 100%); }
 /* Sticky attention zone on very wide screens — always in sight while they work */
 @media (min-width: 1280px) { .rail-sticky { position: sticky; top: 74px; } }
 /* Page-load choreography — content rises in a staggered sequence */
@@ -113,8 +103,7 @@ select.gi {
 .press { transition: transform .1s ease; }
 .press:active { transform: scale(.96); }
 @media (prefers-reduced-motion: reduce) {
-  .glow-red { animation: none; box-shadow: 0 10px 30px rgba(190,18,60,.3); }
-  .alert-frame::before { animation: none; }
+  .glow-red { animation: none; box-shadow: 0 0 0 1px rgba(239,68,68,.45), 0 8px 28px rgba(239,68,68,.22); }
   .reveal { animation: none; opacity: 1; }
 }
 @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
