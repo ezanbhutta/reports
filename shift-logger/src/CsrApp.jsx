@@ -55,6 +55,20 @@ const remTitle = (rule, r) => typeof rule.title === 'function' ? rule.title(r) :
 const rulesFor = type => Object.entries(REMINDERS).filter(([key, rule]) => !rule.chained && (rule.on || key) === type);
 // The action definition behind a reminder row (rule keys may alias another activity via `on`).
 const remActionDef = r => ACTION_BY_KEY[r.action_type] || ACTION_BY_KEY[(REMINDERS[r.action_type] || {}).on];
+// Overdue ring — a progress ring that fills as a due reminder ages (full ≈ 4h overdue,
+// amber → red), with the activity's group colour at its centre. Ambient urgency at a glance.
+function OverdueRing({ due, color }) {
+  const frac = Math.min(Math.max((Date.now() - new Date(due).getTime()) / (240 * 60000), 0), 1);
+  const R = 8, CIRC = 2 * Math.PI * R;
+  return (
+    <svg width="22" height="22" viewBox="0 0 22 22" style={{ flex: '0 0 auto', marginTop: 1 }} aria-hidden="true">
+      <circle cx="11" cy="11" r={R} fill="none" stroke="rgba(124,41,255,.14)" strokeWidth="2.4" />
+      <circle cx="11" cy="11" r={R} fill="none" stroke={frac >= 1 ? C.coral : C.amber} strokeWidth="2.4" strokeLinecap="round"
+        strokeDasharray={`${Math.max(frac * CIRC, 0.8)} ${CIRC}`} transform="rotate(-90 11 11)" />
+      <circle cx="11" cy="11" r="3.4" fill={color} />
+    </svg>
+  );
+}
 function LiveClock() {
   const fmt = () => new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Karachi', hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }).format(new Date());
   const [t, setT] = useState(fmt());
@@ -172,6 +186,7 @@ export default function CsrApp({ boundProfile }) {
   const [showAllRem, setShowAllRem] = useState(false);
   // Forgiving interactions: every resolve/snooze offers a 5s Undo via a bottom toast.
   const [remToast, setRemToast] = useState(null);   // { text, undo }
+  const railRef = useRef(null);                     // the attention rail — header bell scrolls to it
   const toastTimer = useRef();
   useEffect(() => () => clearTimeout(toastTimer.current), []);
   function showRemToast(text, undo) {
@@ -502,21 +517,36 @@ export default function CsrApp({ boundProfile }) {
       )}
       <Header>
         <Brand small />
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {dueReminders.length > 0 && (
+            <button type="button" className="press" title="Jump to what needs you"
+              onClick={() => railRef.current && railRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 12, border: 'none', cursor: 'pointer', background: remAlerts.length ? C.coralBg : C.amberBg, color: remAlerts.length ? C.coral : C.amber, fontWeight: 800, fontSize: 12 }}>
+              <BellRing size={13} /><span className="mono">{dueReminders.length}</span>
+            </button>
+          )}
           <Btn variant="ghost" onClick={() => setView('teamlog')} style={{ padding: '8px 13px', fontSize: 12 }}><ClipboardList size={13} />Past reports</Btn>
           <Btn variant="ghost" onClick={() => { clearActive(); setReport(null); setActions([]); setName(''); setProfile(''); setView('login'); }} style={{ padding: '8px 13px', fontSize: 12 }}><LogOut size={13} />Switch</Btn>
         </div>
       </Header>
 
-      <div className="mx-auto" style={{ maxWidth: 760, padding: '22px 20px 64px' }}>
-        {/* greeting + identity */}
-        <div className="mb-5">
+      <div className="mx-auto" style={{ maxWidth: 1160, padding: '22px 20px 64px' }}>
+        {/* greeting + identity + live attention summary */}
+        <div className="mb-5 reveal">
           <h1 className="disp" style={{ fontSize: 24, fontWeight: 700, color: C.ink, margin: 0 }}>{greeting()}, {report.csr_name.split(' ')[0]}</h1>
-          <p style={{ fontSize: 13, color: C.muted, marginTop: 3 }}>Logging for <b style={{ color: C.violetDim }}>{report.profile}</b> · {report.shift} shift · in since {timePKT(report.start_at)} PKT</p>
+          <p style={{ fontSize: 13, color: C.muted, marginTop: 3 }}>
+            Logging for <b style={{ color: C.violetDim }}>{report.profile}</b> · {report.shift} shift · in since {timePKT(report.start_at)} PKT
+            {remAlerts.length > 0 && <> · <b style={{ color: C.coral }}>{remAlerts.length} client alert{remAlerts.length > 1 ? 's' : ''}</b></>}
+            {remNormal.length > 0 && <> · <b style={{ color: C.amber }}>{remNormal.length} reminder{remNormal.length > 1 ? 's' : ''} waiting</b></>}
+          </p>
         </div>
 
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_350px]" style={{ gap: 20, alignItems: 'start' }}>
+          {/* ── Attention rail: alerts · hand-off · reminders — always in sight, never in the way ── */}
+          <div ref={railRef} className="lg:order-2 rail-sticky" style={{ minWidth: 0, scrollMarginTop: 74 }}>
+
         {handoff && !handoffSeen && (
-          <div onClick={() => setShowHandoff(true)} className="lift" style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 16, padding: '12px 14px', borderRadius: 14, cursor: 'pointer', background: C.amberBg, border: `1px solid ${C.amber}55` }}>
+          <div onClick={() => setShowHandoff(true)} className="lift reveal d1" style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 16, padding: '12px 14px', borderRadius: 14, cursor: 'pointer', background: C.amberBg, border: `1px solid ${C.amber}55` }}>
             <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 9, background: C.amber, color: '#fff', flex: '0 0 auto' }}><StickyNote size={16} /></span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 800, fontSize: 13, color: C.ink }}>Unread note from the last shift</div>
@@ -526,35 +556,37 @@ export default function CsrApp({ boundProfile }) {
           </div>
         )}
 
-        {/* standing red caution — frustrated/disputed clients; breathes until marked Solved */}
+        {/* client alerts — deep-crimson card with a slow orbiting light ring; unmissable until Solved */}
         {remAlerts.length > 0 && (
-          <div className="glow-red pop rounded-2xl" style={{ marginBottom: 16, background: '#fff', border: `1px solid ${C.coral}55`, overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: `linear-gradient(180deg, ${C.coralBg}, rgba(253,233,233,.35))` }}>
-              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 9, background: C.coral, color: '#fff', flex: '0 0 auto', boxShadow: '0 6px 14px rgba(239,68,68,.35)' }}><AlertTriangle size={15} /></span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 800, fontSize: 14, color: C.coral }}>Handle with care</div>
-                <div style={{ fontSize: 11, color: C.muted }}>Stays here until marked Solved — every shift sees it.</div>
-              </div>
-              <span className="mono" style={{ fontSize: 12, fontWeight: 800, color: '#fff', background: C.coral, borderRadius: 9, padding: '2px 9px', flex: '0 0 auto' }}>{remAlerts.length}</span>
-            </div>
-            {remAlerts.map(r => { const rule = REMINDERS[r.action_type] || {}; return (
-              <div key={r.id} className="pop" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderTop: '1px solid rgba(239,68,68,.10)' }}>
+          <div className="alert-frame glow-red reveal d1" style={{ marginBottom: 16 }}>
+            <div className="alert-core" style={{ color: '#fff' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 16px 11px' }}>
+                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 9, background: 'rgba(255,255,255,.14)', color: '#FF9B9B', flex: '0 0 auto' }}><AlertTriangle size={15} /></span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 800, color: C.ink, lineHeight: 1.35 }}>{remTitle(rule, r)}</div>
-                  {r.note && <div style={{ fontSize: 12, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>{r.note}</div>}
-                  <div style={{ fontSize: 10.5, color: C.dim, marginTop: 3 }}>{[r.project && 'Project: ' + r.project, 'By ' + (r.csr_name || '—'), agoHours(r.created_at)].filter(Boolean).join(' · ')}</div>
+                  <div style={{ fontWeight: 800, fontSize: 14, letterSpacing: '-.01em' }}>Handle with care</div>
+                  <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,.62)' }}>Visible to every shift until marked Solved</div>
                 </div>
-                {(rule.buttons || []).map(b => (
-                  <Btn key={b.key} className="press" variant={b.variant || 'ok'} title={b.hint} onClick={() => resolveRem(r, b.key, b.label)} style={{ padding: '8px 15px', fontSize: 12, flex: '0 0 auto' }}><Check size={13} />{b.label}</Btn>
-                ))}
-              </div>); })}
+                <span className="mono" style={{ fontSize: 12, fontWeight: 800, color: '#3A0A15', background: '#FF9B9B', borderRadius: 9, padding: '2px 9px', flex: '0 0 auto' }}>{remAlerts.length}</span>
+              </div>
+              {remAlerts.map(r => { const rule = REMINDERS[r.action_type] || {}; return (
+                <div key={r.id} className="pop" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,.09)' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 800, lineHeight: 1.35 }}>{remTitle(rule, r)}</div>
+                    {r.note && <div style={{ fontSize: 12, color: 'rgba(255,255,255,.78)', marginTop: 2, lineHeight: 1.45 }}>{r.note}</div>}
+                    <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,.5)', marginTop: 3 }}>{[r.project && 'Project: ' + r.project, 'By ' + (r.csr_name || '—'), agoHours(r.created_at)].filter(Boolean).join(' · ')}</div>
+                  </div>
+                  {(rule.buttons || []).map(b => (
+                    <Btn key={b.key} className="press" title={b.hint} onClick={() => resolveRem(r, b.key, b.label)} style={{ padding: '8px 15px', fontSize: 12, flex: '0 0 auto', background: '#fff', color: '#B91C3C', boxShadow: '0 8px 20px rgba(0,0,0,.3)' }}><Check size={13} />{b.label}</Btn>
+                  ))}
+                </div>); })}
+            </div>
           </div>
         )}
 
         {/* reminders — an inbox: flush rows, overdue timing, 3 visible + expand, undo on every action */}
         {!locked && remNormal.length > 0 && (
-          <Card strong className="pop" style={{ marginBottom: 16, overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: '1px solid rgba(124,41,255,.10)' }}>
+          <Card strong className="reveal d2" style={{ marginBottom: 16, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: '1px solid rgba(124,41,255,.10)', background: 'linear-gradient(180deg, rgba(245,158,11,.09), rgba(245,158,11,0))' }}>
               <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 9, background: C.amberBg, color: C.amber, flex: '0 0 auto' }}><BellRing size={15} /></span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <span style={{ fontWeight: 800, fontSize: 14.5, color: C.ink }}>Reminders</span>
@@ -562,17 +594,17 @@ export default function CsrApp({ boundProfile }) {
               </div>
               <span style={{ fontSize: 10.5, color: C.dim, flex: '0 0 auto' }}>stay until resolved</span>
             </div>
-            {(showAllRem ? remNormal : remNormal.slice(0, 3)).map(r => { const rule = REMINDERS[r.action_type] || {}; const def = remActionDef(r); const col = groupColor(def?.group); const sub = [def?.label, r.client, r.project && 'Project: ' + r.project, r.note].filter(Boolean).join(' · '); return (
-              <div key={r.id} className="pop" style={{ padding: '12px 16px', borderTop: '1px solid rgba(124,41,255,.07)' }}>
+            {(showAllRem ? remNormal : remNormal.slice(0, 3)).map((r, ri) => { const rule = REMINDERS[r.action_type] || {}; const def = remActionDef(r); const col = groupColor(def?.group); const sub = [def?.label, r.client, r.project && 'Project: ' + r.project, r.note].filter(Boolean).join(' · '); return (
+              <div key={r.id} className={`reveal d${(ri % 3) + 2}`} style={{ padding: '12px 16px', borderTop: '1px solid rgba(124,41,255,.07)' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: 9, background: col, flex: '0 0 auto', marginTop: 5 }} />
+                  <OverdueRing due={r.due_at} color={col} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 800, color: C.ink, lineHeight: 1.35 }}>{remTitle(rule, r)}</div>
                     {sub && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>{sub}</div>}
                     <div style={{ fontSize: 10.5, color: C.dim, marginTop: 3 }}>{['By ' + (r.csr_name || '—'), agoHours(r.created_at), dueAgo(r.due_at)].join(' · ')}</div>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 6, marginTop: 9, paddingLeft: 17, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 6, marginTop: 9, paddingLeft: 31, flexWrap: 'wrap' }}>
                   <Btn className="press" variant="ghost" onClick={() => snoozeRem(r)} title={`Back in ${REMINDER_SNOOZE_MINUTES} min`} style={{ padding: '6px 11px', fontSize: 11.5 }}><Clock size={12} />Snooze</Btn>
                   <div style={{ flex: 1 }} />
                   {(rule.buttons || DEFAULT_REM_BUTTONS).map(b => (
@@ -588,9 +620,22 @@ export default function CsrApp({ boundProfile }) {
           </Card>
         )}
 
+        {/* all clear — the state worth earning */}
+        {!locked && remAlerts.length === 0 && remNormal.length === 0 && !(handoff && !handoffSeen) && (
+          <Card className="p-5 reveal d2" style={{ marginBottom: 16, textAlign: 'center' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, borderRadius: 12, background: C.mintBg, color: C.mint, marginBottom: 8 }}><Check size={18} strokeWidth={2.6} /></span>
+            <div style={{ fontWeight: 800, fontSize: 13.5, color: C.ink }}>All caught up</div>
+            <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>Nothing needs your attention on {report.profile} right now.</div>
+          </Card>
+        )}
+        </div>
+
+        {/* ── Main work area ── */}
+        <div className="lg:order-1" style={{ minWidth: 0 }}>
+
         {/* primary action */}
         {!locked ? (
-          <Card strong className="p-5" style={{ marginBottom: 16 }}>
+          <Card strong className="p-5 reveal d2" style={{ marginBottom: 16 }}>
             <button onClick={() => setPicker(true)} className="lift w-full rounded-2xl"
               style={{ display: 'flex', alignItems: 'center', gap: 13, padding: '15px 18px', cursor: 'pointer', background: `linear-gradient(135deg, ${C.glow}, ${C.violet})`, color: '#fff', border: 'none', boxShadow: '0 12px 28px rgba(114,41,255,.32)' }}>
               <span className="flex items-center justify-center rounded-xl" style={{ width: 36, height: 36, background: 'rgba(255,255,255,.22)', flex: '0 0 auto' }}><Plus size={20} strokeWidth={2.6} /></span>
@@ -607,13 +652,13 @@ export default function CsrApp({ boundProfile }) {
             </div>
           </Card>
         ) : (
-          <Card className="p-5" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10, color: C.mint, fontWeight: 700, fontSize: 13.5 }}>
+          <Card className="p-5 reveal d2" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10, color: C.mint, fontWeight: 700, fontSize: 13.5 }}>
             <Check size={17} /> Report submitted &amp; locked — no more edits.
           </Card>
         )}
 
         {/* metric strip — static Total + scrolling ticker of every activity */}
-        <div className="glass rounded-2xl" style={{ display: 'flex', alignItems: 'stretch', marginBottom: 16, overflow: 'hidden' }}>
+        <div className="glass rounded-2xl reveal d3" style={{ display: 'flex', alignItems: 'stretch', marginBottom: 16, overflow: 'hidden' }}>
           <div style={{ flex: '0 0 auto', padding: '13px 24px', textAlign: 'center', borderRight: '1px solid rgba(124,41,255,.12)' }}>
             <div className="mono" style={{ fontSize: 22, fontWeight: 800, lineHeight: 1, color: C.violet }}>{actions.length}</div>
             <div style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: C.dim, marginTop: 5 }}>Total</div>
@@ -633,7 +678,7 @@ export default function CsrApp({ boundProfile }) {
         </div>
 
         {/* timeline */}
-        <Card className="p-5">
+        <Card className="p-5 reveal d4">
           <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
             <div style={{ fontWeight: 800, fontSize: 15, color: C.ink }}>Today's timeline</div>
             <span style={{ fontSize: 11, color: C.dim }}>{actions.length} {actions.length === 1 ? 'entry' : 'entries'}{!locked && actions.length > 0 ? ' · tap to edit or delete' : ''}</span>
@@ -644,7 +689,7 @@ export default function CsrApp({ boundProfile }) {
               <div style={{ fontSize: 12, marginTop: 2 }}>Tap <b style={{ color: C.violetDim }}>Log an activity</b> to add your first one.</div>
             </div>
           )}
-          <div className="scroll-y" style={{ maxHeight: 320, overflowY: 'auto', paddingRight: 6 }}>
+          <div className="scroll-y" style={{ maxHeight: 460, overflowY: 'auto', paddingRight: 6 }}>
             {tlGroups.map((g, gi) => (
               <div key={gi}>
                 <div className="flex items-center gap-2" style={{ margin: gi ? '14px 0 8px' : '2px 0 8px' }}>
@@ -694,6 +739,8 @@ export default function CsrApp({ boundProfile }) {
 
         {!locked && <Btn variant="ok" onClick={tryWrapUp} className="lift" style={{ width: '100%', marginTop: 14, padding: 13, fontSize: 14, textAlign: 'center' }}>Wrap up &amp; submit my report</Btn>}
         {!locked && <button onClick={() => setDel(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, margin: '12px auto 0', background: 'none', border: 'none', cursor: 'pointer', color: C.coral, fontSize: 12, fontWeight: 700 }}><Trash2 size={13} /> Wrong report? Delete it</button>}
+        </div>
+        </div>
       </div>
 
       {ceoCloseNote && ceoCloseNote.length > 0 && !showHandoff && <Modal title="Heads up from management" onClose={dismissCeoCloseNote} width={400}>
