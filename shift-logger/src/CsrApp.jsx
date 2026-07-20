@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Check, Clock, Sunrise, Sunset, Moon, Zap, ArrowRightLeft, ShieldCheck, RotateCcw, StickyNote, X, Trash2, Laptop, AlertTriangle, BellRing } from 'lucide-react';
-import { C, SHIFTS, PROFILES, ACTIONS, ACTION_BY_KEY, GROUPS, CHECKLIST, KPI_LABEL, isDesigner, REMINDERS, REMINDER_SNOOZE_MINUTES, REMINDERS_START_AT } from './config.js';
+import { C, SHIFTS, PROFILES, ACTIONS, ACTION_BY_KEY, GROUPS, CHECKLIST, KPI_LABEL, isDesigner, REMINDERS, REMINDER_SNOOZE_MINUTES } from './config.js';
 import { db, todayPKT, timePKT } from './store.js';
 import { Btn, Card, Pill, Modal, Label, Field, actionSummary, Logo, ConfirmDelete, CopyButton, useLive } from './ui.jsx';
 
@@ -268,7 +268,7 @@ export default function CsrApp({ boundProfile }) {
         project: projectOf(a),
         note: rule.note ? rule.note(a) : reminderNote(d),
         csr_name: report.csr_name,
-        due_at: new Date(Math.max(Date.now() + delayM * 60000, new Date(REMINDERS_START_AT).getTime())).toISOString(),
+        due_at: new Date(Date.now() + delayM * 60000).toISOString(),
       });
     });
   }
@@ -326,7 +326,7 @@ export default function CsrApp({ boundProfile }) {
         action_id: r.action_id, profile: r.profile, action_type: b.next,
         client: r.client || '', project: r.project || '', note: r.note || '',
         csr_name: r.csr_name || '',
-        due_at: new Date(Math.max(Date.now() + delayM * 60000, new Date(REMINDERS_START_AT).getTime())).toISOString(),
+        due_at: new Date(Date.now() + delayM * 60000).toISOString(),
       });
     }
     showRemToast(next ? `${b.label} — next follow-up booked` : b.label, () => {
