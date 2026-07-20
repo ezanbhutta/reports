@@ -537,7 +537,7 @@ export default function CsrApp({ boundProfile }) {
         </div>
       </Header>
 
-      <div className="mx-auto" style={{ maxWidth: 1160, padding: '22px 20px 64px' }}>
+      <div className="mx-auto" style={{ maxWidth: 1000, padding: '22px 20px 64px' }}>
         {/* greeting + identity + live attention summary */}
         <div className="mb-5 reveal">
           <h1 className="disp" style={{ fontSize: 24, fontWeight: 700, color: C.ink, margin: 0 }}>{greeting()}, {report.csr_name.split(' ')[0]}</h1>
@@ -548,9 +548,8 @@ export default function CsrApp({ boundProfile }) {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_640px]" style={{ gap: 20, alignItems: 'start' }}>
-          {/* ── Attention zone: reminders left · alerts at their right; either alone takes the full spot ── */}
-          <div ref={railRef} className="xl:order-2 rail-sticky grid grid-cols-1 md:grid-cols-2" style={{ minWidth: 0, scrollMarginTop: 74, gap: '0 16px', alignItems: 'start', alignContent: 'start' }}>
+        {/* ── Attention row: reminders left · alerts at their right; either alone spans the row ── */}
+        <div ref={railRef} className="grid grid-cols-1 md:grid-cols-2" style={{ scrollMarginTop: 74, gap: '0 16px', alignItems: 'start' }}>
 
         {handoff && !handoffSeen && (
           <div onClick={() => setShowHandoff(true)} className="lift reveal d1 md:col-span-2" style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 16, padding: '12px 14px', borderRadius: 14, cursor: 'pointer', background: C.amberBg, border: `1px solid ${C.amber}55` }}>
@@ -634,9 +633,6 @@ export default function CsrApp({ boundProfile }) {
           </Card>
         )}
         </div>
-
-        {/* ── Main work area — on the left ── */}
-        <div className="xl:order-1" style={{ minWidth: 0 }}>
 
         {/* primary action */}
         {!locked ? (
@@ -744,8 +740,6 @@ export default function CsrApp({ boundProfile }) {
 
         {!locked && <Btn variant="ok" onClick={tryWrapUp} className="lift" style={{ width: '100%', marginTop: 14, padding: 13, fontSize: 14, textAlign: 'center' }}>Wrap up &amp; submit my report</Btn>}
         {!locked && <button onClick={() => setDel(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, margin: '12px auto 0', background: 'none', border: 'none', cursor: 'pointer', color: C.coral, fontSize: 12, fontWeight: 700 }}><Trash2 size={13} /> Wrong report? Delete it</button>}
-        </div>
-        </div>
       </div>
 
       {ceoCloseNote && ceoCloseNote.length > 0 && !showHandoff && <Modal title="Heads up from management" onClose={dismissCeoCloseNote} width={400}>
@@ -929,7 +923,7 @@ function Brand({ small }) {
 }
 function Header({ children }) {
   return <div className="glass" style={{ position: 'sticky', top: 0, zIndex: 20, borderLeft: 'none', borderRight: 'none', borderTop: 'none', borderRadius: 0, backdropFilter: 'none', WebkitBackdropFilter: 'none', background: 'rgba(255,255,255,.92)' }}>
-    <div className="mx-auto flex items-center justify-between" style={{ maxWidth: 1160, padding: '12px 20px' }}>{children}</div>
+    <div className="mx-auto flex items-center justify-between" style={{ maxWidth: 1000, padding: '12px 20px' }}>{children}</div>
   </div>;
 }
 function Shell({ children, center }) {
