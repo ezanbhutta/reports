@@ -239,10 +239,6 @@ export const parseRemindTime = v => {
 //   alert    — renders as a standing RED caution box (not a normal reminder
 //              card): no snooze, only its buttons dismiss it.
 export const REMINDER_SNOOZE_MINUTES = 5;
-// Launch floor: no rule-booked reminder falls due before this moment (PKT) — one
-// booked earlier is floored to it, so the system's first pop-ups start exactly
-// then. Once this time has passed, the floor is inert (pure rule delays apply).
-export const REMINDERS_START_AT = '2026-07-21T10:00:00+05:00';
 export const REMINDERS = {
   // New inquiry → 25 min later, send the prospect their 1st follow-up.
   inquiry: {
