@@ -46,7 +46,7 @@ const DEFAULT_REM_BUTTONS = [
 // shared elements with "Other" spelled out, completion type, or the ★ rating).
 const reminderNote = d => d.designer ? 'Designer: ' + d.designer
   : (Array.isArray(d.elements) && d.elements.length) ? d.elements.map(e => e === 'Other' && d.other_text ? d.other_text : e).join(', ')
-  : (d.stage || d.update_type || d.completion || d.agenda || (d.rating ? '★ ' + d.rating : ''));
+  : (d.stage || d.update_type || d.completion || d.agenda || d.service || (d.rating ? '★ ' + d.rating : ''));
 // Rule titles may be static text or a function of the reminder row (to name the item/client).
 const remTitle = (rule, r) => typeof rule.title === 'function' ? rule.title(r) : (rule.title || 'Follow up');
 function LiveClock() {
@@ -271,10 +271,10 @@ export default function CsrApp({ boundProfile }) {
       note: rule.note ? rule.note(a) : reminderNote(details),
     });
   }
-  function snoozeRem(r) {
-    const until = new Date(Date.now() + REMINDER_SNOOZE_MINUTES * 60000).toISOString();
+  function snoozeRem(r, minutes = REMINDER_SNOOZE_MINUTES) {
+    const until = new Date(Date.now() + minutes * 60000).toISOString();
     setReminders(prev => (prev || []).map(x => x.id === r.id ? { ...x, snoozed_until: until } : x));   // optimistic
-    db.snoozeReminder(r.id, REMINDER_SNOOZE_MINUTES);
+    db.snoozeReminder(r.id, minutes);
   }
   function resolveRem(r, resolution) {
     setReminders(prev => (prev || []).filter(x => x.id !== r.id));   // optimistic — gone for good
@@ -479,7 +479,7 @@ export default function CsrApp({ boundProfile }) {
                   <Btn variant="ghost" onClick={() => snoozeRem(r)} title={`Back in ${REMINDER_SNOOZE_MINUTES} min`} style={{ padding: '7px 12px', fontSize: 12 }}><Clock size={13} />Snooze</Btn>
                   <div style={{ flex: 1 }} />
                   {(rule.buttons || DEFAULT_REM_BUTTONS).map(b => (
-                    <Btn key={b.key} variant={b.variant || 'subtle'} onClick={() => resolveRem(r, b.key)} style={{ padding: '7px 12px', fontSize: 12 }}>{b.variant === 'ok' && <Check size={13} />}{b.label}</Btn>
+                    <Btn key={b.key} variant={b.variant || 'subtle'} title={b.hint} onClick={() => b.kind === 'snooze' ? snoozeRem(r, b.minutes) : resolveRem(r, b.key)} style={{ padding: '7px 12px', fontSize: 12 }}>{b.variant === 'ok' && <Check size={13} />}{b.label}</Btn>
                   ))}
                 </div>
               </div>); })}

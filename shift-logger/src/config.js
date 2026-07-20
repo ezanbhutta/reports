@@ -216,6 +216,8 @@ export const ACTION_BY_KEY = Object.fromEntries(ACTIONS.map(a => [a.key, a]));
 //              the reminder is resolved, the reminder clears itself (not needed).
 //   buttons  — the resolve buttons, in order; each closes the reminder with its
 //              key recorded as the resolution (visible in the CEO ledger).
+//              kind 'snooze' + minutes instead re-books it that far out (e.g.
+//              "Next shift" = remind again in 8 hours). hint = hover tooltip.
 export const REMINDER_SNOOZE_MINUTES = 5;
 // Launch floor: no rule-booked reminder falls due before this moment (PKT) — one
 // booked earlier is floored to it, so the system's first pop-ups start exactly
@@ -244,6 +246,16 @@ export const REMINDERS = {
       { key: 'in_discussion', label: 'In discussion', kind: 'resolve', variant: 'subtle' },
       { key: 'followed_up',   label: 'Followed up',   kind: 'resolve', variant: 'solid' },
       { key: 'order_taken',   label: 'Order taken',   kind: 'resolve', variant: 'ok' },
+    ],
+  },
+  // New order → immediately nudge to assign it to a designer. "Next shift"
+  // pushes the reminder 8 hours (they'll assign on the following shift).
+  new_order: {
+    title: r => `Assign ${r.client ? r.client + '’s' : 'the new'} order to a designer`,
+    delayMinutes: 0,
+    buttons: [
+      { key: 'next_shift', label: 'Next shift', kind: 'snooze', minutes: 8 * 60, variant: 'subtle', hint: 'Will assign in the next shift — reminds again in 8 hours' },
+      { key: 'assigned',   label: 'Assigned',   kind: 'resolve', variant: 'ok', hint: 'Order assigned to a designer' },
     ],
   },
   // Order completed → 30 min later, ask the client for a Public Review.
