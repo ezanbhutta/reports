@@ -42,6 +42,13 @@ const DEFAULT_REM_BUTTONS = [
   { key: 'already_done', label: 'Already done', kind: 'resolve', variant: 'subtle' },
   { key: 'completed', label: 'Done', kind: 'resolve', variant: 'ok' },
 ];
+// The context a reminder carries about its source entry (designer, delivered stage,
+// shared elements with "Other" spelled out, completion type, or the ★ rating).
+const reminderNote = d => d.designer ? 'Designer: ' + d.designer
+  : (Array.isArray(d.elements) && d.elements.length) ? d.elements.map(e => e === 'Other' && d.other_text ? d.other_text : e).join(', ')
+  : (d.stage || d.update_type || d.completion || (d.rating ? '★ ' + d.rating : ''));
+// Rule titles may be static text or a function of the reminder row (to name the item/client).
+const remTitle = (rule, r) => typeof rule.title === 'function' ? rule.title(r) : (rule.title || 'Follow up');
 function LiveClock() {
   const fmt = () => new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Karachi', hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }).format(new Date());
   const [t, setT] = useState(fmt());
@@ -240,7 +247,7 @@ export default function CsrApp({ boundProfile }) {
       action_id: a.id, profile: report.profile, action_type: a.type,
       client: a.type === 'order_assigned' ? '' : (a.client || ''),
       project: projectOf(a),
-      note: d.designer ? 'Designer: ' + d.designer : (d.stage || d.update_type || d.completion || (d.rating ? '★ ' + d.rating : '')),
+      note: reminderNote(d),
       csr_name: report.csr_name,
       due_at: new Date(Math.max(Date.now() + (rule.delayMinutes || 720) * 60000, new Date(REMINDERS_START_AT).getTime())).toISOString(),
     });
@@ -278,7 +285,7 @@ export default function CsrApp({ boundProfile }) {
     db.syncReminderForAction(actionId, {
       client: typeKey === 'order_assigned' ? '' : (client || ''),
       project: projectOf(a),
-      note: details.designer ? 'Designer: ' + details.designer : (details.stage || details.update_type || details.completion || (details.rating ? '★ ' + details.rating : '')),
+      note: reminderNote(details),
     });
   }
   function snoozeRem(r) {
@@ -482,7 +489,7 @@ export default function CsrApp({ boundProfile }) {
             </div>
             {dueReminders.map(r => { const rule = REMINDERS[r.action_type] || {}; const col = groupColor(ACTION_BY_KEY[r.action_type]?.group); const sub = [ACTION_BY_KEY[r.action_type]?.label, r.client, r.project && 'Project: ' + r.project, r.note].filter(Boolean).join(' · '); return (
               <div key={r.id} className="glass-soft rounded-xl" style={{ padding: '11px 13px', marginTop: 9, borderLeft: `3px solid ${col}` }}>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: C.ink }}>{rule.title || 'Follow up'}</div>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: C.ink }}>{remTitle(rule, r)}</div>
                 {sub && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>{sub}</div>}
                 <div style={{ fontSize: 10.5, color: C.dim, marginTop: 2 }}>Logged by {r.csr_name || '—'} · {agoHours(r.created_at)}</div>
                 <div style={{ display: 'flex', gap: 7, marginTop: 9, flexWrap: 'wrap' }}>

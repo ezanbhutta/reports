@@ -247,6 +247,26 @@ export const REMINDERS = {
       { key: 'msg_sent', label: 'Msg sent', kind: 'resolve', variant: 'ok' },
     ],
   },
+  // A deliverable went out (formal delivery) → 15h later, follow up on that
+  // specific item with that client. Title is built from the reminder itself
+  // (the item lives in its note, captured at booking).
+  project_delivered: {
+    title: r => `Follow up on the ${(r.note || 'delivery').toLowerCase()} delivered to ${r.client || 'the client'}`,
+    delayMinutes: 15 * 60,
+    buttons: [
+      { key: 'responded',   label: 'Responded',   kind: 'resolve', variant: 'subtle' },
+      { key: 'followed_up', label: 'Followed up', kind: 'resolve', variant: 'ok' },
+    ],
+  },
+  // Anything shared in chat → same 15h follow-up on the shared items.
+  shared: {
+    title: r => `Follow up on the ${r.note ? r.note.toLowerCase() : 'items'} shared with ${r.client || 'the client'}`,
+    delayMinutes: 15 * 60,
+    buttons: [
+      { key: 'responded',   label: 'Responded',   kind: 'resolve', variant: 'subtle' },
+      { key: 'followed_up', label: 'Followed up', kind: 'resolve', variant: 'ok' },
+    ],
+  },
 };
 
 // End-of-shift checklist

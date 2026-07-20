@@ -460,7 +460,7 @@ function RemindersPanel({ reminders, reload }) {
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-                  <span style={{ fontWeight: 800, fontSize: 13.5, color: C.ink }}>{rule.title || 'Follow up'}</span>
+                  <span style={{ fontWeight: 800, fontSize: 13.5, color: C.ink }}>{typeof rule.title === 'function' ? rule.title(r) : (rule.title || 'Follow up')}</span>
                   <Pill color={C.violet}>{r.profile || '—'}</Pill>
                   <Pill color={meta.color}>{meta.label(r)}</Pill>
                 </div>
