@@ -150,7 +150,6 @@ export default function CsrApp({ boundProfile }) {
   // ── Reminders: profile-scoped follow-throughs from earlier activity (any shift, any person) ──
   const [reminders, , setReminders] = useLive(report ? 'reminders:' + report.profile : 'reminders:none',
     () => (report ? db.listReminders(report.profile) : Promise.resolve([])), ['reminders']);
-  const [remForForm, setRemForForm] = useState(null); // { id, resolution, form } — reminder being satisfied via an opened form
   const [remTick, setRemTick] = useState(0);
   // Due-ness depends on the wall clock, not just DB events — re-evaluate every 30s so
   // reminders surface while the app sits open and snoozed ones come back on time.
@@ -195,7 +194,7 @@ export default function CsrApp({ boundProfile }) {
     setCeoCloseNote(null);
   }
 
-  function openForm(action, prefill, editId) { setPicker(false); setRemForForm(null); setForm({ action, values: prefill || {}, editId }); }
+  function openForm(action, prefill, editId) { setPicker(false); setForm({ action, values: prefill || {}, editId }); }
   function saveForm() {
     const { action, values, editId } = form;
     const miss = action.fields.filter(f => f.required && (!f.showIf || f.showIf(values)) && !(Array.isArray(values[f.name]) ? values[f.name].length : values[f.name]));
@@ -217,22 +216,16 @@ export default function CsrApp({ boundProfile }) {
       const payload = { type: action.key, client, details };
       const temp = { id: 'tmp_' + Math.random().toString(36).slice(2), report_id: report.id, ...payload, created_at: now, updated_at: now };
       setActions(prev => [temp, ...prev]);                                                                                     // show immediately
-      const viaReminder = remForForm && remForForm.form === action.key ? remForForm : null;   // this save satisfies that reminder
-      setRemForForm(null);
-      persistAction(temp.id, payload, viaReminder);
+      persistAction(temp.id, payload);
     }
   }
 
   // Persist an optimistic action; if it never saves, mark the row so the CSR can retry — never a silent loss.
-  function persistAction(tempId, payload, viaReminder) {
+  function persistAction(tempId, payload) {
     Promise.resolve(db.addAction(report.id, payload))
       .then(saved => {
         setActions(prev => prev.map(x => x.id === tempId ? (saved && saved.id ? saved : { ...x, _failed: true, _payload: payload }) : x));
-        if (saved && saved.id) {
-          scheduleReminder(saved);
-          autoClearReminders(saved);
-          if (viaReminder) resolveRem({ id: viaReminder.id }, viaReminder.resolution);   // e.g. "Review given" → saved the review → reminder resolved
-        }
+        if (saved && saved.id) { scheduleReminder(saved); autoClearReminders(saved); }
       })
       .catch(() => setActions(prev => prev.map(x => x.id === tempId ? { ...x, _failed: true, _payload: payload } : x)));
   }
@@ -243,13 +236,15 @@ export default function CsrApp({ boundProfile }) {
     if (!rule || !report) return;
     if (rule.when && !rule.when(a)) return;   // rule condition (e.g. the rating threshold) not met
     const d = a.details || {};
+    // Delay and note may depend on the logged entry (e.g. which follow-up attempt it was).
+    const delayM = (typeof rule.delayMinutes === 'function' ? rule.delayMinutes(a) : rule.delayMinutes) ?? 720;
     db.addReminder({
       action_id: a.id, profile: report.profile, action_type: a.type,
       client: a.type === 'order_assigned' ? '' : (a.client || ''),
       project: projectOf(a),
-      note: reminderNote(d),
+      note: rule.note ? rule.note(a) : reminderNote(d),
       csr_name: report.csr_name,
-      due_at: new Date(Math.max(Date.now() + (rule.delayMinutes ?? 720) * 60000, new Date(REMINDERS_START_AT).getTime())).toISOString(),
+      due_at: new Date(Math.max(Date.now() + delayM * 60000, new Date(REMINDERS_START_AT).getTime())).toISOString(),
     });
   }
   // Logging an activity can auto-clear pending reminders it satisfies — e.g. a "Review
@@ -260,18 +255,6 @@ export default function CsrApp({ boundProfile }) {
     Object.entries(REMINDERS).forEach(([type, rule]) => {
       if (rule.cancelOn === a.type) db.cancelRemindersFor(report.profile, type, a.client, report.csr_name);
     });
-  }
-  // A reminder button: kind 'form' opens that activity prefilled with the reminder's
-  // client/project (resolving the reminder once the entry saves); others resolve outright.
-  function remAction(r, b) {
-    if (b.kind === 'form') {
-      const def = ACTION_BY_KEY[b.form];
-      if (!def) return;
-      openForm(def, { client: r.client || '', project: r.project || '' });
-      setRemForForm({ id: r.id, resolution: b.key, form: b.form });
-      return;
-    }
-    resolveRem(r, b.key);
   }
   // Keep a pending reminder in step when its source entry is edited — and re-evaluate a
   // conditional rule: threshold newly met → book one (addReminder skips entries that ever
@@ -285,7 +268,7 @@ export default function CsrApp({ boundProfile }) {
     db.syncReminderForAction(actionId, {
       client: typeKey === 'order_assigned' ? '' : (client || ''),
       project: projectOf(a),
-      note: reminderNote(details),
+      note: rule.note ? rule.note(a) : reminderNote(details),
     });
   }
   function snoozeRem(r) {
@@ -496,7 +479,7 @@ export default function CsrApp({ boundProfile }) {
                   <Btn variant="ghost" onClick={() => snoozeRem(r)} title={`Back in ${REMINDER_SNOOZE_MINUTES} min`} style={{ padding: '7px 12px', fontSize: 12 }}><Clock size={13} />Snooze</Btn>
                   <div style={{ flex: 1 }} />
                   {(rule.buttons || DEFAULT_REM_BUTTONS).map(b => (
-                    <Btn key={b.key} variant={b.variant || 'subtle'} onClick={() => remAction(r, b)} style={{ padding: '7px 12px', fontSize: 12 }}>{b.variant === 'ok' && <Check size={13} />}{b.label}</Btn>
+                    <Btn key={b.key} variant={b.variant || 'subtle'} onClick={() => resolveRem(r, b.key)} style={{ padding: '7px 12px', fontSize: 12 }}>{b.variant === 'ok' && <Check size={13} />}{b.label}</Btn>
                   ))}
                 </div>
               </div>); })}
@@ -629,7 +612,7 @@ export default function CsrApp({ boundProfile }) {
 
       {picker && <CommandPalette onClose={() => setPicker(false)} onPick={openForm} />}
 
-      {form && <Modal title={form.action.label} subtitle={form.editId ? 'Edit entry' : 'New entry'} onClose={() => { setForm(null); setRemForForm(null); }} width={400}>
+      {form && <Modal title={form.action.label} subtitle={form.editId ? 'Edit entry' : 'New entry'} onClose={() => setForm(null)} width={400}>
         {form.action.fields.filter(f => !f.showIf || f.showIf(form.values))
           .slice().sort((a, b) => (b.name === 'project') - (a.name === 'project')) // Project Name first, everywhere
           .map(f0 => { const f = f0.name === 'project' ? { ...f0, label: 'Project Name' } : f0;
@@ -645,7 +628,7 @@ export default function CsrApp({ boundProfile }) {
         {form.error && <div style={{ color: C.coral, fontSize: 12, marginTop: 10 }}>{form.error}</div>}
         <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
           {form.editId && <Btn variant="ghost" onClick={requestDeleteEntry} style={{ color: C.coral }}><Trash2 size={15} />Delete</Btn>}
-          <Btn variant="ghost" onClick={() => { setForm(null); setRemForForm(null); }} style={{ flex: 1 }}>Cancel</Btn>
+          <Btn variant="ghost" onClick={() => setForm(null)} style={{ flex: 1 }}>Cancel</Btn>
           <Btn variant="ok" onClick={saveForm} className="lift" style={{ flex: 1 }}>{form.editId ? 'Save' : 'Add'}</Btn>
         </div>
       </Modal>}

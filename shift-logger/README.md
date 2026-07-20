@@ -45,11 +45,12 @@ tabs in the same browser — great for a demo).
 ## Notes
 - **One profile per report.** A CSR covering two profiles files two reports.
 - **Reminders.** Rule-based follow-throughs, always scoped to the **profile** (any shift, any person) and persistent until resolved (Snooze = 5 min). Rules live in `src/config.js` (`REMINDERS`: per-rule delay, condition, auto-clear activity, buttons). Requires re-running `supabase/schema.sql` once (adds the `reminders` table).
-  1. **Order completed** → 30 min later: ask the client for a **Public Review** — auto-cleared if a **Review received** for the same client + profile is logged first. Buttons: **No need** · **Msg sent** · **Review given** (opens the Review received form prefilled and resolves on save).
+  1. **Order completed** → 30 min later: ask the client for a **Public Review** — auto-cleared if a **Review received** for the same client + profile is logged first. Buttons: **No need** · **Msg sent** · **Review given**.
   2. **Review received with a 4.7–5.0 average** → exactly 24 h later: ask that client for a **Private Review** (shows client + project + the ★ average). Buttons: **Msg sent**.
   3. **Project delivered** or **Shared to client (chat)** → 15 h later: follow up on **that specific item** (draft/files/shared elements) with **that client** — the reminder names both. Buttons: **Responded** (client already replied) · **Followed up**.
   4. **Files Assigned to Designer** → **immediately**: suggest an upsell to that client (the CSR knows what to offer). Buttons: **No need** · **Upsell done**.
   5. **New inquiry** → 25 min later: send the prospect their **1st follow-up** (shows what they wanted). Buttons: **In discussion** · **Followed up** · **Order taken**.
+  6. **Lead follow-up chain** — logging the **1st** → 12 h later remind the **2nd**; the **2nd** → 24 h later remind the **3rd**; the **3rd** → 48 h later remind the **4th & last**. A "4th+" entry books nothing. Buttons: **In discussion** · **Followed up** · **Order taken**.
 - **Hand-off note** routes by profile — the next CSR on that profile sees it at login and taps *Noted*.
 - **No edits after submit** — enforced in the app and by an RLS policy.
 - **Manager login uses Supabase Auth** (email + password) — no password or hash is shipped in the app bundle. Create manager accounts in Supabase (**Authentication → Users → Add user**, tick *Auto Confirm*) and disable public sign-ups.

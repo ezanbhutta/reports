@@ -214,10 +214,8 @@ export const ACTION_BY_KEY = Object.fromEntries(ACTIONS.map(a => [a.key, a]));
 //              booked when it returns true (re-checked if the entry is edited).
 //   cancelOn — if THAT activity is logged for the same client + profile before
 //              the reminder is resolved, the reminder clears itself (not needed).
-//   buttons  — the resolve buttons, in order. kind 'resolve' closes the
-//              reminder outright; kind 'form' opens that activity's form
-//              prefilled with the reminder's client/project and closes the
-//              reminder once the entry is saved.
+//   buttons  — the resolve buttons, in order; each closes the reminder with its
+//              key recorded as the resolution (visible in the CEO ledger).
 export const REMINDER_SNOOZE_MINUTES = 5;
 // Launch floor: no rule-booked reminder falls due before this moment (PKT) — one
 // booked earlier is floored to it, so the system's first pop-ups start exactly
@@ -234,6 +232,20 @@ export const REMINDERS = {
       { key: 'order_taken',   label: 'Order taken',   kind: 'resolve', variant: 'ok' },
     ],
   },
+  // Lead follow-up chain: 1st done → +12h remind the 2nd · 2nd done → +24h
+  // remind the 3rd · 3rd done → +48h remind the 4th & last. A "4th+" entry
+  // books nothing (the chain ends there).
+  lead_followup: {
+    title: r => `Send the ${r.note || 'next follow-up'} to ${r.client || 'the lead'}`,
+    when: a => ['1st', '2nd', '3rd'].includes(a.details && a.details.attempt),
+    delayMinutes: a => ({ '1st': 12 * 60, '2nd': 24 * 60, '3rd': 48 * 60 })[a.details.attempt],
+    note: a => ({ '1st': '2nd follow-up', '2nd': '3rd follow-up', '3rd': '4th & last follow-up' })[a.details.attempt],
+    buttons: [
+      { key: 'in_discussion', label: 'In discussion', kind: 'resolve', variant: 'subtle' },
+      { key: 'followed_up',   label: 'Followed up',   kind: 'resolve', variant: 'solid' },
+      { key: 'order_taken',   label: 'Order taken',   kind: 'resolve', variant: 'ok' },
+    ],
+  },
   // Order completed → 30 min later, ask the client for a Public Review.
   // Auto-clears if a "Review received" for the same client + profile lands first.
   order_completed: {
@@ -243,7 +255,7 @@ export const REMINDERS = {
     buttons: [
       { key: 'no_need',      label: 'No need',      kind: 'resolve', variant: 'subtle' },
       { key: 'msg_sent',     label: 'Msg sent',     kind: 'resolve', variant: 'solid' },
-      { key: 'review_given', label: 'Review given', kind: 'form', form: 'review_received', variant: 'ok' },
+      { key: 'review_given', label: 'Review given', kind: 'resolve', variant: 'ok' },
     ],
   },
   // Public review received with a 4.7–5.0 average → exactly 24h later, ask that
