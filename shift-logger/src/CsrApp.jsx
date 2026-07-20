@@ -45,9 +45,12 @@ const DEFAULT_REM_BUTTONS = [
 ];
 // The context a reminder carries about its source entry (designer, delivered stage,
 // shared elements with "Other" spelled out, completion type, or the ★ rating).
-const reminderNote = d => d.designer ? 'Designer: ' + d.designer
-  : (Array.isArray(d.elements) && d.elements.length) ? d.elements.map(e => e === 'Other' && d.other_text ? d.other_text : e).join(', ')
-  : (d.stage || d.update_type || d.completion || d.what || d.reason || d.agenda || d.service || d.scope || (d.rating ? '★ ' + d.rating : ''));
+const reminderNote = d => {
+  const svc = Array.isArray(d.service) ? d.service.map(s => s === 'Other' && d.service_other ? d.service_other : s).join(', ') : d.service;
+  return d.designer ? 'Designer: ' + d.designer
+    : (Array.isArray(d.elements) && d.elements.length) ? d.elements.map(e => e === 'Other' && d.other_text ? d.other_text : e).join(', ')
+    : (d.stage || d.update_type || d.completion || d.what || d.reason || d.agenda || svc || d.scope || (d.rating ? '★ ' + d.rating : ''));
+};
 // Rule titles may be static text or a function of the reminder row (to name the item/client).
 const remTitle = (rule, r) => typeof rule.title === 'function' ? rule.title(r) : (rule.title || 'Follow up');
 // All rules an activity type triggers (a rule's key doubles as its trigger unless it sets
@@ -277,14 +280,16 @@ export default function CsrApp({ boundProfile }) {
       if (rule.when && !rule.when(a)) return;   // rule condition (e.g. the rating threshold) not met
       // Delay and note may depend on the logged entry (e.g. which follow-up attempt it was).
       const delayM = (typeof rule.delayMinutes === 'function' ? rule.delayMinutes(a) : rule.delayMinutes) ?? 720;
-      db.addReminder({
+      Promise.resolve(db.addReminder({
         action_id: a.id, profile: report.profile, action_type: key,
         client: a.type === 'order_assigned' ? '' : (a.client || ''),
         project: projectOf(a),
         note: rule.note ? rule.note(a) : reminderNote(d),
         csr_name: report.csr_name,
         due_at: new Date(Date.now() + delayM * 60000).toISOString(),
-      });
+      })).then(row => {   // surface instantly for the person who logged it — don't wait for realtime
+        if (row && row.id) setReminders(prev => (prev || []).some(x => x.id === row.id) ? prev : [...(prev || []), row]);
+      }).catch(() => {});
     });
   }
   // Logging an activity can auto-clear pending reminders it satisfies — e.g. a "Review
@@ -337,12 +342,14 @@ export default function CsrApp({ boundProfile }) {
     const next = REMINDERS[b.next];
     if (next) {
       const delayM = (typeof next.delayMinutes === 'function' ? next.delayMinutes(r) : next.delayMinutes) ?? 720;
-      db.addReminder({
+      Promise.resolve(db.addReminder({
         action_id: r.action_id, profile: r.profile, action_type: b.next,
         client: r.client || '', project: r.project || '', note: r.note || '',
         csr_name: r.csr_name || '',
         due_at: new Date(Date.now() + delayM * 60000).toISOString(),
-      });
+      })).then(row => {
+        if (row && row.id) setReminders(prev => (prev || []).some(x => x.id === row.id) ? prev : [...(prev || []), row]);
+      }).catch(() => {});
     }
     showRemToast(next ? `${b.label} — next follow-up booked` : b.label, () => {
       setReminders(prev => (prev || []).some(x => x.id === r.id) ? prev : [...(prev || []), r]);
@@ -561,22 +568,22 @@ export default function CsrApp({ boundProfile }) {
           <div className="alert-frame glow-red reveal d1" style={{ marginBottom: 16 }}>
             <div className="alert-core" style={{ color: '#fff' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 16px 11px' }}>
-                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 9, background: 'rgba(255,255,255,.14)', color: '#FF9B9B', flex: '0 0 auto' }}><AlertTriangle size={15} /></span>
+                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 9, background: 'rgba(255,255,255,.2)', color: '#fff', flex: '0 0 auto' }}><AlertTriangle size={15} /></span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 800, fontSize: 14, letterSpacing: '-.01em' }}>Handle with care</div>
-                  <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,.62)' }}>Visible to every shift until marked Solved</div>
+                  <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,.8)' }}>Visible to every shift until marked Solved</div>
                 </div>
-                <span className="mono" style={{ fontSize: 12, fontWeight: 800, color: '#3A0A15', background: '#FF9B9B', borderRadius: 9, padding: '2px 9px', flex: '0 0 auto' }}>{remAlerts.length}</span>
+                <span className="mono" style={{ fontSize: 12, fontWeight: 800, color: '#C21F36', background: '#fff', borderRadius: 9, padding: '2px 9px', flex: '0 0 auto' }}>{remAlerts.length}</span>
               </div>
               {remAlerts.map(r => { const rule = REMINDERS[r.action_type] || {}; return (
-                <div key={r.id} className="pop" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,.09)' }}>
+                <div key={r.id} className="pop" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,.18)' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13.5, fontWeight: 800, lineHeight: 1.35 }}>{remTitle(rule, r)}</div>
-                    {r.note && <div style={{ fontSize: 12, color: 'rgba(255,255,255,.78)', marginTop: 2, lineHeight: 1.45 }}>{r.note}</div>}
-                    <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,.5)', marginTop: 3 }}>{[r.project && 'Project: ' + r.project, 'By ' + (r.csr_name || '—'), agoHours(r.created_at)].filter(Boolean).join(' · ')}</div>
+                    {r.note && <div style={{ fontSize: 12, color: 'rgba(255,255,255,.92)', marginTop: 2, lineHeight: 1.45 }}>{r.note}</div>}
+                    <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,.72)', marginTop: 3 }}>{[r.project && 'Project: ' + r.project, 'By ' + (r.csr_name || '—'), agoHours(r.created_at)].filter(Boolean).join(' · ')}</div>
                   </div>
                   {(rule.buttons || []).map(b => (
-                    <Btn key={b.key} className="press" title={b.hint} onClick={() => resolveRem(r, b.key, b.label)} style={{ padding: '8px 15px', fontSize: 12, flex: '0 0 auto', background: '#fff', color: '#B91C3C', boxShadow: '0 8px 20px rgba(0,0,0,.3)' }}><Check size={13} />{b.label}</Btn>
+                    <Btn key={b.key} className="press" title={b.hint} onClick={() => resolveRem(r, b.key, b.label)} style={{ padding: '8px 15px', fontSize: 12, flex: '0 0 auto', background: '#fff', color: '#C21F36', boxShadow: '0 8px 20px rgba(150,20,40,.35)' }}><Check size={13} />{b.label}</Btn>
                   ))}
                 </div>); })}
             </div>

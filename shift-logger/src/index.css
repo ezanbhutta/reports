@@ -88,21 +88,21 @@ select.gi {
 /* ── Attention system ───────────────────────────────────────────── */
 /* Breathing glow for the alert card (urgent, never anxious) */
 @keyframes glowRed {
-  0%, 100% { box-shadow: 0 10px 30px rgba(190,18,60,.22); }
-  50%      { box-shadow: 0 14px 44px rgba(190,18,60,.42); }
+  0%, 100% { box-shadow: 0 10px 30px rgba(218,44,68,.25); }
+  50%      { box-shadow: 0 14px 44px rgba(218,44,68,.45); }
 }
 .glow-red { animation: glowRed 2.8s ease-in-out infinite; }
-/* Alert card: a slow-orbiting "energy ring" of light around a deep-crimson core */
-.alert-frame { position: relative; border-radius: 18px; overflow: hidden; background: #47101d; }
+/* Alert card: a slow-orbiting light around a vivid rose-red core */
+.alert-frame { position: relative; border-radius: 18px; overflow: hidden; background: #F3B6BE; }
 .alert-frame::before {
   content: ''; position: absolute; top: 50%; left: 50%;
   width: 250%; height: 0; padding-top: 250%; margin: -125% 0 0 -125%;
-  background: conic-gradient(rgba(255,255,255,0) 0deg, rgba(255,133,133,.95) 55deg, rgba(255,255,255,0) 120deg,
-              rgba(255,255,255,0) 190deg, rgba(255,133,133,.55) 250deg, rgba(255,255,255,0) 320deg);
+  background: conic-gradient(rgba(255,255,255,0) 0deg, rgba(255,255,255,.95) 55deg, rgba(255,255,255,0) 120deg,
+              rgba(255,255,255,0) 190deg, rgba(255,255,255,.6) 250deg, rgba(255,255,255,0) 320deg);
   animation: ringSpin 5.5s linear infinite;
 }
 @keyframes ringSpin { to { transform: rotate(360deg); } }
-.alert-core { position: relative; margin: 1.6px; border-radius: 16.4px; background: radial-gradient(140% 120% at 85% -10%, #6B1023 0%, #3A0A15 48%, #2A0710 100%); }
+.alert-core { position: relative; margin: 1.6px; border-radius: 16.4px; background: radial-gradient(140% 120% at 85% -10%, #F1546A 0%, #DA2C44 48%, #C21F36 100%); }
 /* Sticky attention rail on desktop — always in sight while they work */
 @media (min-width: 1024px) { .rail-sticky { position: sticky; top: 74px; } }
 /* Page-load choreography — content rises in a staggered sequence */
