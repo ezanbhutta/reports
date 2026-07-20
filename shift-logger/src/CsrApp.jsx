@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Check, Clock, Sunrise, Sunset, Moon, Zap, ArrowRightLeft, ShieldCheck, RotateCcw, StickyNote, X, Trash2, Laptop, AlertTriangle } from 'lucide-react';
-import { C, SHIFTS, PROFILES, ACTIONS, ACTION_BY_KEY, GROUPS, CHECKLIST, KPI_LABEL, isDesigner } from './config.js';
+import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Check, Clock, Sunrise, Sunset, Moon, Zap, ArrowRightLeft, ShieldCheck, RotateCcw, StickyNote, X, Trash2, Laptop, AlertTriangle, BellRing } from 'lucide-react';
+import { C, SHIFTS, PROFILES, ACTIONS, ACTION_BY_KEY, GROUPS, CHECKLIST, KPI_LABEL, isDesigner, REMINDERS, REMINDER_DELAY_HOURS, REMINDER_SNOOZE_MINUTES } from './config.js';
 import { db, todayPKT, timePKT } from './store.js';
 import { Btn, Card, Pill, Modal, Label, Field, actionSummary, Logo, ConfirmDelete, CopyButton, useLive } from './ui.jsx';
 
@@ -36,6 +36,7 @@ const currentShift = () => { const h = pktHour(); if (h >= 9 && h < 17) return '
 const greeting = () => { const h = pktHour(); return h >= 5 && h < 12 ? 'Good morning' : h >= 12 && h < 17 ? 'Good afternoon' : h >= 17 && h < 22 ? 'Good evening' : 'Working late'; };
 const SHIFT_ICON = { Morning: Sunrise, Evening: Sunset, Night: Moon };
 const hourLabel = iso => new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Karachi', hour: 'numeric', hour12: true }).format(new Date(iso));
+const agoHours = iso => { const h = Math.floor((Date.now() - new Date(iso).getTime()) / 36e5); return h < 1 ? 'less than an hour ago' : h + 'h ago'; };
 function LiveClock() {
   const fmt = () => new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Karachi', hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }).format(new Date());
   const [t, setT] = useState(fmt());
@@ -134,6 +135,18 @@ export default function CsrApp({ boundProfile }) {
   const counts = useMemo(() => { const m = {}; actions.forEach(a => m[a.type] = (m[a.type] || 0) + 1); return m; }, [actions]);
   const designerNames = useMemo(() => roster.filter(r => r.active && isDesigner(r)).map(r => r.name).sort((a, b) => a.localeCompare(b)), [roster]);
 
+  // ── Reminders: profile-scoped follow-throughs from earlier activity (any shift, any person) ──
+  const [reminders, , setReminders] = useLive(report ? 'reminders:' + report.profile : 'reminders:none',
+    () => (report ? db.listReminders(report.profile) : Promise.resolve([])), ['reminders']);
+  const [remTick, setRemTick] = useState(0);
+  // Due-ness depends on the wall clock, not just DB events — re-evaluate every 30s so
+  // reminders surface while the app sits open and snoozed ones come back on time.
+  useEffect(() => { const t = setInterval(() => setRemTick(x => x + 1), 30000); return () => clearInterval(t); }, []);
+  const dueReminders = useMemo(() => {
+    const now = Date.now();
+    return (reminders || []).filter(r => r.status === 'pending' && new Date(r.due_at).getTime() <= now && (!r.snoozed_until || new Date(r.snoozed_until).getTime() <= now));
+  }, [reminders, remTick]); // eslint-disable-line react-hooks/exhaustive-deps -- remTick forces the time-based re-check
+
   async function startReport() {
     if (!name || !profile) return;
     const existing = resumable || await Promise.resolve(db.openReportFor(name, profile)).catch(() => null); // resume instead of duplicating
@@ -180,7 +193,7 @@ export default function CsrApp({ boundProfile }) {
     setForm(null); // close the form instantly
     if (editId) {
       setActions(prev => prev.map(x => x.id === editId ? { ...x, client, details, updated_at: new Date().toISOString() } : x)); // optimistic
-      Promise.resolve(db.updateAction(editId, { client, details })).then(saved => { if (!saved) refresh(); }).catch(refresh);  // revert if it didn't persist
+      Promise.resolve(db.updateAction(editId, { client, details })).then(saved => { if (!saved) refresh(); else syncReminder(editId, action.key, client, details); }).catch(refresh);  // revert if it didn't persist
     } else {
       const now = new Date().toISOString();
       const payload = { type: action.key, client, details };
@@ -193,8 +206,43 @@ export default function CsrApp({ boundProfile }) {
   // Persist an optimistic action; if it never saves, mark the row so the CSR can retry — never a silent loss.
   function persistAction(tempId, payload) {
     Promise.resolve(db.addAction(report.id, payload))
-      .then(saved => setActions(prev => prev.map(x => x.id === tempId ? (saved && saved.id ? saved : { ...x, _failed: true, _payload: payload }) : x)))
+      .then(saved => {
+        setActions(prev => prev.map(x => x.id === tempId ? (saved && saved.id ? saved : { ...x, _failed: true, _payload: payload }) : x));
+        if (saved && saved.id) scheduleReminder(saved);
+      })
       .catch(() => setActions(prev => prev.map(x => x.id === tempId ? { ...x, _failed: true, _payload: payload } : x)));
+  }
+  // A qualifying activity books a follow-through reminder for THIS PROFILE 12h out — it
+  // pops for whoever is covering the profile then (any shift, any person) until resolved.
+  function scheduleReminder(a) {
+    if (!REMINDERS[a.type] || !report) return;
+    const d = a.details || {};
+    db.addReminder({
+      action_id: a.id, profile: report.profile, action_type: a.type,
+      client: a.type === 'order_assigned' ? '' : (a.client || ''),
+      project: projectOf(a),
+      note: d.designer ? 'Designer: ' + d.designer : (d.stage || d.update_type || ''),
+      csr_name: report.csr_name,
+      due_at: new Date(Date.now() + REMINDER_DELAY_HOURS * 3600 * 1000).toISOString(),
+    });
+  }
+  // Keep a pending reminder's display fields in step when the source entry is edited.
+  function syncReminder(actionId, typeKey, client, details) {
+    if (!REMINDERS[typeKey]) return;
+    db.syncReminderForAction(actionId, {
+      client: typeKey === 'order_assigned' ? '' : (client || ''),
+      project: projectOf({ type: typeKey, client, details }),
+      note: details.designer ? 'Designer: ' + details.designer : (details.stage || details.update_type || ''),
+    });
+  }
+  function snoozeRem(r) {
+    const until = new Date(Date.now() + REMINDER_SNOOZE_MINUTES * 60000).toISOString();
+    setReminders(prev => (prev || []).map(x => x.id === r.id ? { ...x, snoozed_until: until } : x));   // optimistic
+    db.snoozeReminder(r.id, REMINDER_SNOOZE_MINUTES);
+  }
+  function resolveRem(r, resolution) {
+    setReminders(prev => (prev || []).filter(x => x.id !== r.id));   // optimistic — gone for good
+    db.resolveReminder(r.id, resolution, report ? report.csr_name : '');
   }
   function retryAction(a) {
     if (!a || !a._payload || !report) return;
@@ -374,6 +422,31 @@ export default function CsrApp({ boundProfile }) {
             </div>
             <span style={{ fontSize: 11, fontWeight: 800, color: C.amber, whiteSpace: 'nowrap' }}>READ →</span>
           </div>
+        )}
+
+        {/* reminders — follow-throughs from earlier activity on this profile (stay until resolved) */}
+        {!locked && dueReminders.length > 0 && (
+          <Card strong className="p-5" style={{ marginBottom: 16, borderLeft: `3px solid ${C.amber}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 9, background: C.amberBg, color: C.amber, flex: '0 0 auto' }}><BellRing size={16} /></span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 800, fontSize: 15, color: C.ink }}>Reminders <span className="mono" style={{ marginLeft: 4, fontSize: 12, fontWeight: 800, color: '#fff', background: C.amber, borderRadius: 9, padding: '1px 8px' }}>{dueReminders.length}</span></div>
+                <div style={{ fontSize: 11.5, color: C.muted }}>From earlier activity on {report.profile} — they stay here until resolved.</div>
+              </div>
+            </div>
+            {dueReminders.map(r => { const rule = REMINDERS[r.action_type] || {}; const col = groupColor(ACTION_BY_KEY[r.action_type]?.group); const sub = [ACTION_BY_KEY[r.action_type]?.label, r.client, r.project && 'Project: ' + r.project, r.note].filter(Boolean).join(' · '); return (
+              <div key={r.id} className="glass-soft rounded-xl" style={{ padding: '11px 13px', marginTop: 9, borderLeft: `3px solid ${col}` }}>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: C.ink }}>{rule.title || 'Follow up'}</div>
+                {sub && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>{sub}</div>}
+                <div style={{ fontSize: 10.5, color: C.dim, marginTop: 2 }}>Logged by {r.csr_name || '—'} · {agoHours(r.created_at)}</div>
+                <div style={{ display: 'flex', gap: 7, marginTop: 9, flexWrap: 'wrap' }}>
+                  <Btn variant="ghost" onClick={() => snoozeRem(r)} style={{ padding: '7px 12px', fontSize: 12 }}><Clock size={13} />Snooze {REMINDER_SNOOZE_MINUTES} min</Btn>
+                  <div style={{ flex: 1 }} />
+                  <Btn variant="subtle" onClick={() => resolveRem(r, 'already_done')} style={{ padding: '7px 12px', fontSize: 12 }}>Already done</Btn>
+                  <Btn variant="ok" onClick={() => resolveRem(r, 'completed')} style={{ padding: '7px 12px', fontSize: 12 }}><Check size={13} />{rule.resolveLabel || 'Completed'}</Btn>
+                </div>
+              </div>); })}
+          </Card>
         )}
 
         {/* primary action */}

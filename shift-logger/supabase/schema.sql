@@ -242,3 +242,39 @@ drop policy if exists "mistakes manager read"  on mistakes;
 drop policy if exists "mistakes manager write" on mistakes;
 create policy "mistakes manager read"  on mistakes for select using (auth.role() = 'authenticated');
 create policy "mistakes manager write" on mistakes for all    using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+-- ── Reminders (profile-scoped follow-throughs) ──
+-- Logging certain activities schedules a reminder for the SAME PROFILE ~12h
+-- later; it pops on whoever holds that profile's open report then (usually the
+-- next shift) and stays until resolved. Snooze pushes snoozed_until forward;
+-- resolution records HOW it was closed ('already_done' vs 'completed').
+-- Deleting the source activity (or its whole report) removes the reminder via
+-- the FK cascade.
+create table if not exists reminders (
+  id            uuid primary key default gen_random_uuid(),
+  action_id     uuid references actions(id) on delete cascade,
+  profile       text not null,
+  action_type   text not null,             -- the activity that scheduled it (ACTIONS key)
+  client        text default '',
+  project       text default '',
+  note          text default '',           -- extra context (e.g. "Designer: X", delivery stage)
+  csr_name      text default '',           -- who logged the source activity
+  due_at        timestamptz not null,
+  snoozed_until timestamptz,
+  status        text default 'pending',    -- 'pending' | 'resolved'
+  resolution    text default '',           -- 'already_done' | 'completed'
+  resolved_by   text default '',
+  resolved_at   timestamptz,
+  created_at    timestamptz default now()
+);
+create index if not exists reminders_profile_idx on reminders (profile, status, due_at);
+do $$ begin alter publication supabase_realtime add table reminders; exception when duplicate_object then null; end $$;
+alter table reminders enable row level security;
+-- Same open posture as reports/actions: any CSR on the profile must be able to
+-- see, snooze, and resolve them (reminders are cross-shift by design).
+drop policy if exists "reminders read"   on reminders;
+drop policy if exists "reminders insert" on reminders;
+drop policy if exists "reminders update" on reminders;
+create policy "reminders read"   on reminders for select using (true);
+create policy "reminders insert" on reminders for insert with check (true);
+create policy "reminders update" on reminders for update using (true) with check (true);

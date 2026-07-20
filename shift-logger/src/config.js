@@ -198,6 +198,31 @@ export const ACTIONS = [
 
 export const ACTION_BY_KEY = Object.fromEntries(ACTIONS.map(a => [a.key, a]));
 
+// ── Reminder system ──────────────────────────────────────────────
+// Logging one of these activities schedules a follow-through reminder for the
+// SAME PROFILE, REMINDER_DELAY_HOURS later — it pops on whoever is covering
+// that profile then (usually the next shift), regardless of who is handling,
+// and stays until resolved. Snooze hides it for REMINDER_SNOOZE_MINUTES.
+// resolveLabel = the wording of the "done now" button for that scenario.
+export const REMINDER_DELAY_HOURS = 12;
+export const REMINDER_SNOOZE_MINUTES = 5;
+export const REMINDERS = {
+  inquiry:           { title: 'Follow up on this inquiry',                  resolveLabel: 'Completed' },
+  lead_followup:     { title: 'Time for the next lead follow-up',          resolveLabel: 'Completed' },
+  order_assigned:    { title: 'Check the order progress with the designer', resolveLabel: 'Completed' },
+  files_assigned:    { title: 'Check the files with the designer',          resolveLabel: 'Completed' },
+  revision_assigned: { title: 'Check the revision with the designer',       resolveLabel: 'Completed' },
+  project_delivered: { title: 'Chase the client’s feedback on the delivery', resolveLabel: 'Completed' },
+  followup_client:   { title: 'Follow up with this client again',           resolveLabel: 'Completed' },
+  followup_designer: { title: 'Follow up with the designer again',          resolveLabel: 'Completed' },
+  update_followup:   { title: 'Send the next update follow-up',             resolveLabel: 'Completed' },
+  offer:             { title: 'Follow up on the offer that was sent',       resolveLabel: 'Completed' },
+  review_request:    { title: 'Check if the review came through',           resolveLabel: 'Completed' },
+  frustrated:        { title: 'Check back on this frustrated client',       resolveLabel: 'Solved' },
+  disputed:          { title: 'Follow up on this dispute',                  resolveLabel: 'Solved' },
+  extension:         { title: 'Extension sent — check the delivery',        resolveLabel: 'Completed' },
+};
+
 // End-of-shift checklist
 export const CHECKLIST = [
   'CRM updated', 'ClickUp cleared', 'Portfolio updated', 'Briefs Created', 'Analytics checked', 'Checked orders one by one',
