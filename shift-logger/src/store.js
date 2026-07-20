@@ -178,7 +178,8 @@ const localDb = {
   },
   async addReminder(rem) {
     const list = read(LS.reminders, []);
-    if (rem.action_id && list.some(r => r.action_id === rem.action_id)) return null;   // one reminder per source entry — ever (edits must not resurrect a resolved one)
+    // One reminder per source entry PER RULE — ever (edits must not resurrect a resolved one).
+    if (rem.action_id && list.some(r => r.action_id === rem.action_id && r.action_type === rem.action_type)) return null;
     const row = { id: uid(), status: 'pending', snoozed_until: null, resolution: '', resolved_by: '', resolved_at: null, created_at: new Date().toISOString(), ...rem };
     list.push(row); write(LS.reminders, list);
     return row;
@@ -195,10 +196,10 @@ const localDb = {
     if (i >= 0) { list[i] = { ...list[i], status: 'resolved', resolution: resolution || 'completed', resolved_by: by || '', resolved_at: new Date().toISOString() }; write(LS.reminders, list); }
     return list[i];
   },
-  async syncReminderForAction(actionId, patch) {
+  async syncReminderForAction(actionId, patch, actionType) {
     const list = read(LS.reminders, []);
     let hit = false;
-    const next = list.map(r => (r.action_id === actionId && r.status === 'pending') ? (hit = true, { ...r, ...patch }) : r);
+    const next = list.map(r => (r.action_id === actionId && (!actionType || r.action_type === actionType) && r.status === 'pending') ? (hit = true, { ...r, ...patch }) : r);
     if (hit) write(LS.reminders, next);
   },
   async allReminders() {
@@ -213,10 +214,10 @@ const localDb = {
       ? (hit = true, { ...r, status: 'resolved', resolution: 'auto_cleared', resolved_by: by || '', resolved_at: new Date().toISOString() }) : r);
     if (hit) write(LS.reminders, next);
   },
-  async cancelRemindersForAction(actionId) {
+  async cancelRemindersForAction(actionId, actionType) {
     const list = read(LS.reminders, []);
     let hit = false;
-    const next = list.map(r => (r.action_id === actionId && r.status === 'pending')
+    const next = list.map(r => (r.action_id === actionId && (!actionType || r.action_type === actionType) && r.status === 'pending')
       ? (hit = true, { ...r, status: 'resolved', resolution: 'auto_cleared', resolved_at: new Date().toISOString() }) : r);
     if (hit) write(LS.reminders, next);
   },
@@ -485,8 +486,8 @@ const supaDb = {
   async addReminder(rem) {
     try {
       const c = await client();
-      // One reminder per source entry — ever (an edit must not resurrect a resolved one).
-      if (rem.action_id) { const { data: ex } = await c.from('reminders').select('id').eq('action_id', rem.action_id).limit(1); if (ex && ex.length) return null; }
+      // One reminder per source entry PER RULE — ever (an edit must not resurrect a resolved one).
+      if (rem.action_id) { const { data: ex } = await c.from('reminders').select('id').eq('action_id', rem.action_id).eq('action_type', rem.action_type).limit(1); if (ex && ex.length) return null; }
       const { data, error } = await c.from('reminders').insert(rem).select().single(); if (error) throw error; return data;
     } catch { return null; }
   },
@@ -496,8 +497,13 @@ const supaDb = {
   async resolveReminder(id, resolution, by) {
     try { const c = await client(); const { data } = await c.from('reminders').update({ status: 'resolved', resolution: resolution || 'completed', resolved_by: by || '', resolved_at: new Date().toISOString() }).eq('id', id).select().maybeSingle(); return data; } catch { return null; }
   },
-  async syncReminderForAction(actionId, patch) {
-    try { const c = await client(); await c.from('reminders').update(patch).eq('action_id', actionId).eq('status', 'pending'); } catch {}
+  async syncReminderForAction(actionId, patch, actionType) {
+    try {
+      const c = await client();
+      let q = c.from('reminders').update(patch).eq('action_id', actionId).eq('status', 'pending');
+      if (actionType) q = q.eq('action_type', actionType);
+      await q;
+    } catch {}
   },
   async cancelRemindersFor(profile, actionType, clientName, by) {
     // Same client + same profile logged the satisfying activity ⇒ the pending
@@ -511,8 +517,13 @@ const supaDb = {
         .eq('profile', profile).eq('action_type', actionType).eq('status', 'pending').ilike('client', cl);
     } catch {}
   },
-  async cancelRemindersForAction(actionId) {
-    try { const c = await client(); await c.from('reminders').update({ status: 'resolved', resolution: 'auto_cleared', resolved_at: new Date().toISOString() }).eq('action_id', actionId).eq('status', 'pending'); } catch {}
+  async cancelRemindersForAction(actionId, actionType) {
+    try {
+      const c = await client();
+      let q = c.from('reminders').update({ status: 'resolved', resolution: 'auto_cleared', resolved_at: new Date().toISOString() }).eq('action_id', actionId).eq('status', 'pending');
+      if (actionType) q = q.eq('action_type', actionType);
+      await q;
+    } catch {}
   },
   async allReminders() {
     // Every PENDING reminder must show (paged past the 1000-row cap); resolved is
