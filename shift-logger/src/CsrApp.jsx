@@ -234,12 +234,13 @@ export default function CsrApp({ boundProfile }) {
   function scheduleReminder(a) {
     const rule = REMINDERS[a.type];
     if (!rule || !report) return;
+    if (rule.when && !rule.when(a)) return;   // rule condition (e.g. the rating threshold) not met
     const d = a.details || {};
     db.addReminder({
       action_id: a.id, profile: report.profile, action_type: a.type,
       client: a.type === 'order_assigned' ? '' : (a.client || ''),
       project: projectOf(a),
-      note: d.designer ? 'Designer: ' + d.designer : (d.stage || d.update_type || d.completion || ''),
+      note: d.designer ? 'Designer: ' + d.designer : (d.stage || d.update_type || d.completion || (d.rating ? '★ ' + d.rating : '')),
       csr_name: report.csr_name,
       due_at: new Date(Date.now() + (rule.delayMinutes || 720) * 60000).toISOString(),
     });
@@ -265,13 +266,19 @@ export default function CsrApp({ boundProfile }) {
     }
     resolveRem(r, b.key);
   }
-  // Keep a pending reminder's display fields in step when the source entry is edited.
+  // Keep a pending reminder in step when its source entry is edited — and re-evaluate a
+  // conditional rule: threshold newly met → book one (addReminder skips entries that ever
+  // had a reminder); no longer met → clear the pending one.
   function syncReminder(actionId, typeKey, client, details) {
-    if (!REMINDERS[typeKey]) return;
+    const rule = REMINDERS[typeKey];
+    if (!rule) return;
+    const a = { id: actionId, type: typeKey, client, details };
+    if (rule.when && !rule.when(a)) { db.cancelRemindersForAction(actionId); return; }
+    if (rule.when) scheduleReminder(a);
     db.syncReminderForAction(actionId, {
       client: typeKey === 'order_assigned' ? '' : (client || ''),
-      project: projectOf({ type: typeKey, client, details }),
-      note: details.designer ? 'Designer: ' + details.designer : (details.stage || details.update_type || details.completion || ''),
+      project: projectOf(a),
+      note: details.designer ? 'Designer: ' + details.designer : (details.stage || details.update_type || details.completion || (details.rating ? '★ ' + details.rating : '')),
     });
   }
   function snoozeRem(r) {

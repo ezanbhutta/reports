@@ -44,7 +44,9 @@ tabs in the same browser — great for a demo).
 
 ## Notes
 - **One profile per report.** A CSR covering two profiles files two reports.
-- **Reminders.** Rule-based follow-throughs, always scoped to the **profile** (any shift, any person) and persistent until resolved (Snooze = 5 min). First rule: **Order completed** books a 30-minute reminder to ask the client for a **Public Review** — auto-cleared if a **Review received** for the same client + profile is logged first. Its buttons: **No need** · **Msg sent** · **Review given** (opens the Review received form prefilled and resolves on save). Rules live in `src/config.js` (`REMINDERS`: per-rule delay, auto-clear activity, buttons). Requires re-running `supabase/schema.sql` once (adds the `reminders` table).
+- **Reminders.** Rule-based follow-throughs, always scoped to the **profile** (any shift, any person) and persistent until resolved (Snooze = 5 min). Rules live in `src/config.js` (`REMINDERS`: per-rule delay, condition, auto-clear activity, buttons). Requires re-running `supabase/schema.sql` once (adds the `reminders` table).
+  1. **Order completed** → 30 min later: ask the client for a **Public Review** — auto-cleared if a **Review received** for the same client + profile is logged first. Buttons: **No need** · **Msg sent** · **Review given** (opens the Review received form prefilled and resolves on save).
+  2. **Review received with a 4.7–5.0 average** → exactly 24 h later: ask that client for a **Private Review** (shows client + project + the ★ average). Buttons: **Msg sent**.
 - **Hand-off note** routes by profile — the next CSR on that profile sees it at login and taps *Noted*.
 - **No edits after submit** — enforced in the app and by an RLS policy.
 - **Manager login uses Supabase Auth** (email + password) — no password or hash is shipped in the app bundle. Create manager accounts in Supabase (**Authentication → Users → Add user**, tick *Auto Confirm*) and disable public sign-ups.
