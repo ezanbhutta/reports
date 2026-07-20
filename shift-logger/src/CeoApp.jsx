@@ -51,8 +51,10 @@ function actionDetails(action) {
     if (f.name === 'client') return;
     let v = d[f.name];
     if (Array.isArray(v)) v = v.join(', ');
+    if (f.type === 'stars' && Number(v) > 0) v = '★'.repeat(Number(v)) + ' (' + v + '/5)';
     if (v != null && String(v).trim() !== '') out.push([f.label, String(v)]);
   });
+  if (d.rating) out.push(['Rating (avg)', '★ ' + d.rating + ' / 5']);
   return out;
 }
 

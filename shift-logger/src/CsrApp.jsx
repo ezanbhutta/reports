@@ -189,6 +189,11 @@ export default function CsrApp({ boundProfile }) {
     if (miss.length) return setForm({ ...form, error: 'Fill: ' + miss.map(m => m.label).join(', ') });
     const client = values.client || '';
     const details = { ...values }; delete details.client;
+    // Review received: the overall rating is the auto-computed average of the three star scores (format 0.0)
+    if (action.key === 'review_received') {
+      const rs = ['value_rating', 'quality_rating', 'communication_rating'].map(k => Number(values[k]) || 0).filter(n => n > 0);
+      details.rating = rs.length ? (rs.reduce((s, n) => s + n, 0) / rs.length).toFixed(1) : '';
+    }
     bumpRecent(action.key); bumpUsage(action.key);
     setForm(null); // close the form instantly
     if (editId) {
@@ -582,6 +587,12 @@ export default function CsrApp({ boundProfile }) {
             const ff = f.type === 'designer' ? { ...f, type: 'select', options: [...new Set([...designerNames, form.values[f.name]].filter(Boolean))] } : f;
           return <Field key={f.name} field={ff} value={form.values[f.name]}
             onChange={v => setForm(m => ({ ...m, values: { ...m.values, [f.name]: v }, error: null }))} />; })}
+        {form.action.key === 'review_received' && (() => { const rs = ['value_rating', 'quality_rating', 'communication_rating'].map(k => Number(form.values[k]) || 0).filter(n => n > 0); const avg = rs.length ? (rs.reduce((s, n) => s + n, 0) / rs.length).toFixed(1) : null; return (
+          <div className="glass-soft rounded-xl" style={{ marginTop: 13, padding: '10px 13px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.1em', color: C.dim }}>Rating · auto-calculated</span>
+            <span className="mono" style={{ fontSize: 19, fontWeight: 800, color: avg ? C.amber : C.dim }}>{avg ? '★ ' + avg : '—'}</span>
+          </div>
+        ); })()}
         {form.error && <div style={{ color: C.coral, fontSize: 12, marginTop: 10 }}>{form.error}</div>}
         <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
           {form.editId && <Btn variant="ghost" onClick={requestDeleteEntry} style={{ color: C.coral }}><Trash2 size={15} />Delete</Btn>}
