@@ -537,7 +537,7 @@ export default function CsrApp({ boundProfile }) {
         </div>
       </Header>
 
-      <div className="mx-auto" style={{ maxWidth: 1160, padding: '22px 20px 64px' }}>
+      <div style={{ maxWidth: 1160, padding: '22px 20px 64px' }}>
         {/* greeting + identity + live attention summary */}
         <div className="mb-5 reveal">
           <h1 className="disp" style={{ fontSize: 24, fontWeight: 700, color: C.ink, margin: 0 }}>{greeting()}, {report.csr_name.split(' ')[0]}</h1>
@@ -931,7 +931,7 @@ function Brand({ small }) {
 }
 function Header({ children }) {
   return <div className="glass" style={{ position: 'sticky', top: 0, zIndex: 20, borderLeft: 'none', borderRight: 'none', borderTop: 'none', borderRadius: 0, backdropFilter: 'none', WebkitBackdropFilter: 'none', background: 'rgba(255,255,255,.92)' }}>
-    <div className="mx-auto flex items-center justify-between" style={{ maxWidth: 760, padding: '12px 20px' }}>{children}</div>
+    <div className="flex items-center justify-between" style={{ maxWidth: 1160, padding: '12px 20px' }}>{children}</div>
   </div>;
 }
 function Shell({ children, center }) {
