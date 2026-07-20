@@ -174,6 +174,13 @@ export const ACTIONS = [
     fields: [ { name: 'client', label: 'Client name', type: 'text', required: true },
               { name: 'project', label: 'Project name', type: 'text' },
               { name: 'review_type', label: 'Review type', type: 'segment', options: ['Public review', 'Private review'], required: true } ] },
+  // The review a client actually left — three star scores; the average is auto-computed (0.0).
+  { key: 'review_received', label: 'Review received', group: 'followups',
+    fields: [ { name: 'client', label: 'Client name', type: 'text', required: true },
+              { name: 'project', label: 'Project name', type: 'text' },
+              { name: 'value_rating', label: 'Value of Delivery', type: 'stars', required: true },
+              { name: 'quality_rating', label: 'Quality of Delivery', type: 'stars', required: true },
+              { name: 'communication_rating', label: 'Seller Communication Level', type: 'stars', required: true } ] },
 
   { key: 'meeting', label: 'Meeting', group: 'meetings',
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
@@ -234,7 +241,7 @@ export const KPI_LABEL = {
   order_assigned: 'Orders assigned', files_assigned: 'Files assigned', order_completed: 'Completed',
   revision_assigned: 'Rev. assigned', project_delivered: 'Delivered', shared: 'Shared',
   followup_client: 'Follow-ups', followup_designer: 'Designer F/U', update_followup: 'Update F/U', upsell: 'Upsells', offer: 'Offers',
-  review_request: 'Reviews',
+  review_request: 'Reviews', review_received: 'Reviews received',
   meeting: 'Meetings', frustrated: 'Frustrated', disputed: 'Disputed', extension: 'Extensions', spam: 'Spam',
 };
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useId } from 'react';
-import { X, AlertTriangle, Copy, Check } from 'lucide-react';
+import { X, AlertTriangle, Copy, Check, Star } from 'lucide-react';
 import { C } from './config.js';
 import { db } from './store.js';
 
@@ -289,6 +289,16 @@ export function Field({ field, value, onChange }) {
             <button type="button" key={o} aria-pressed={on} onClick={() => onChange(o)} className="rounded-xl" style={{ flex: 1, padding: '9px 4px', fontSize: 12, fontWeight: 700, cursor: 'pointer', border: on ? 'none' : `1px solid ${C.surfaceLine}`, background: on ? C.violet : C.surface, color: on ? '#fff' : C.muted }}>{o}</button>); })}
         </div>
       )}
+      {type === 'stars' && (() => { const v = Number(value) || 0; return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+          {[1, 2, 3, 4, 5].map(n => (
+            <button type="button" key={n} aria-label={`${n} star${n > 1 ? 's' : ''}`} aria-pressed={n <= v} onClick={() => onChange(n)}
+              style={{ border: 'none', background: 'transparent', padding: 2, cursor: 'pointer', display: 'flex' }}>
+              <Star size={24} strokeWidth={1.5} fill={n <= v ? C.amber : 'transparent'} color={n <= v ? C.amber : C.surfaceLine} />
+            </button>))}
+          <span className="mono" style={{ marginLeft: 6, fontSize: 12.5, fontWeight: 800, color: v ? C.ink : C.dim }}>{v ? v + '/5' : '—'}</span>
+        </div>
+      ); })()}
       {type === 'multiselect' && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
           {options.map(o => { const arr = Array.isArray(value) ? value : []; const on = arr.includes(o); return (
@@ -303,5 +313,6 @@ export function Field({ field, value, onChange }) {
 export function actionSummary(action) {
   const d = action.details || {};
   if (Array.isArray(d.elements)) return d.elements.join(', ');
+  if (d.rating) return '★ ' + d.rating;
   return d.agenda || d.what || d.reason || d.stage || d.update_type || d.designer || d.service || d.scope || d.project || d.kind || d.note || (d.attempt ? d.attempt + ' follow-up' : '') || d.value || '';
 }
