@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock, Download, ChevronLeft, ChevronRight, CalendarDays, ShieldAlert, ShieldCheck, Monitor, Loader2, Laptop, LogOut, MapPin, Info, Search } from 'lucide-react';
-import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, GROUPS, isDesigner, MISTAKE_CATEGORIES } from './config.js';
+import { Lock, Users, BarChart3, Plus, Pencil, Trash2, Archive, ArchiveRestore, Filter, Activity, ClipboardList, AlertTriangle, X, Clock, Download, ChevronLeft, ChevronRight, CalendarDays, ShieldAlert, ShieldCheck, Monitor, Loader2, Laptop, LogOut, MapPin, Info, Search, BellRing } from 'lucide-react';
+import { C, SHIFTS, PROFILES, ACTION_BY_KEY, KPI_LABEL, GROUPS, isDesigner, MISTAKE_CATEGORIES, REMINDERS } from './config.js';
 import { db, todayPKT, timePKT, addDays, BACKEND } from './store.js';
 import { Btn, Card, StatCard, Pill, Select, Chip, SectionHeader, Modal, Label, Field, actionSummary, Logo, TrendChart, ConfirmDelete, CopyButton, useLive } from './ui.jsx';
 
@@ -277,6 +277,8 @@ function Authed({ user, onSignOut }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [secLog] = useLive('secLog', () => db.listAccessLog(), ['security_log']);
   const [mistakes, reloadMistakes] = useLive('mistakes', () => db.listMistakes(), ['mistakes']);
+  const [remindersAll, reloadReminders] = useLive('remindersAll', () => db.allReminders(), ['reminders']);
+  const dueRem = remindersAll.filter(r => r.status === 'pending' && new Date(r.due_at).getTime() <= Date.now() && (!r.snoozed_until || new Date(r.snoozed_until).getTime() <= Date.now())).length;
   const [seenAt, setSeenAt] = useState(() => localStorage.getItem(SEEN_KEY) || '');
   const unseen = secLog.filter(e => e.event === 'failed' && (e.created_at || '') > seenAt).length;
   const openMistakes = mistakes.filter(m => m.status !== 'reviewed').length;
@@ -295,7 +297,7 @@ function Authed({ user, onSignOut }) {
             <div><div className="disp" style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>CEO Console <span style={{ fontSize: 11, fontWeight: 700, color: C.mint }}>· <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 9, background: C.mint, boxShadow: `0 0 0 3px ${C.mintBg}` }} /> live</span></div>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.18em', textTransform: 'uppercase', color: C.dim }}>HaseebMadeIt · Operations</div></div>
           </div>
-          <div className="flex items-center gap-2"><button type="button" onClick={() => setSearchOpen(true)} title="Search reports, clients, projects, dates, issues (Ctrl/⌘ + K)" className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-all" style={{ background: 'rgba(255,255,255,.6)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }}><Search size={14} /><span className="hidden md:inline">Search…</span></button><Tab icon={BarChart3} label="Live" active={view === 'live'} onClick={() => setView('live')} /><Tab icon={ClipboardList} label="Mistakes" badge={openMistakes} active={view === 'mistakes'} onClick={() => setView('mistakes')} /><Tab icon={Users} label="Roster" active={view === 'roster'} onClick={() => setView('roster')} /><Tab icon={ShieldAlert} label="Security" badge={unseen} active={view === 'security'} onClick={() => setView('security')} />
+          <div className="flex items-center gap-2"><button type="button" onClick={() => setSearchOpen(true)} title="Search reports, clients, projects, dates, issues (Ctrl/⌘ + K)" className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-all" style={{ background: 'rgba(255,255,255,.6)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }}><Search size={14} /><span className="hidden md:inline">Search…</span></button><Tab icon={BarChart3} label="Live" active={view === 'live'} onClick={() => setView('live')} /><Tab icon={BellRing} label="Reminders" badge={dueRem} active={view === 'reminders'} onClick={() => setView('reminders')} /><Tab icon={ClipboardList} label="Mistakes" badge={openMistakes} active={view === 'mistakes'} onClick={() => setView('mistakes')} /><Tab icon={Users} label="Roster" active={view === 'roster'} onClick={() => setView('roster')} /><Tab icon={ShieldAlert} label="Security" badge={unseen} active={view === 'security'} onClick={() => setView('security')} />
             <button onClick={onSignOut} title={user && user.email ? `Signed in as ${user.email}` : 'Sign out'} className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-all" style={{ background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }}><LogOut size={14} />Sign out</button></div>
         </div>
       </div>
@@ -310,7 +312,7 @@ function Authed({ user, onSignOut }) {
             <span style={{ fontWeight: 800, fontSize: 13, whiteSpace: 'nowrap' }}>Review →</span>
           </div>
         )}
-        {view === 'live' ? <Console /> : view === 'roster' ? <RosterManager /> : view === 'mistakes' ? <MistakesPanel mistakes={mistakes} reload={reloadMistakes} /> : <SecurityPanel log={secLog} seenAt={seenAt} onSeen={markSeen} />}
+        {view === 'live' ? <Console /> : view === 'reminders' ? <RemindersPanel reminders={remindersAll} reload={reloadReminders} /> : view === 'roster' ? <RosterManager /> : view === 'mistakes' ? <MistakesPanel mistakes={mistakes} reload={reloadMistakes} /> : <SecurityPanel log={secLog} seenAt={seenAt} onSeen={markSeen} />}
       </main>
       {searchOpen && <GlobalSearch onClose={() => setSearchOpen(false)} />}
     </div>
@@ -396,6 +398,79 @@ function PeoplePicker({ people, value, onChange }) {
       </select>
       {selected.length > 1 && <div style={{ fontSize: 10.5, color: C.dim, marginTop: 5 }}>{selected.length} people selected</div>}
     </div>
+  );
+}
+
+// ── Reminders: the full follow-through ledger, on its own tab (kept OFF the Live page) ──
+function RemindersPanel({ reminders, reload }) {
+  const [, setTick] = useState(0);
+  // Due-ness moves with the wall clock, not just DB events — re-evaluate every 30s.
+  useEffect(() => { const t = setInterval(() => setTick(x => x + 1), 30000); return () => clearInterval(t); }, []);
+  const [fProfile, setFProfile] = useState('all');
+  const [fStatus, setFStatus] = useState('due');
+  const now = Date.now();
+  const stateOf = r => r.status !== 'pending' ? 'resolved'
+    : new Date(r.due_at).getTime() > now ? 'scheduled'
+    : (r.snoozed_until && new Date(r.snoozed_until).getTime() > now) ? 'snoozed' : 'due';
+  const withState = reminders.map(r => ({ r, s: stateOf(r) }));
+  const count = s => withState.filter(x => x.s === s).length;
+  const profiles = [...new Set(reminders.map(r => r.profile).filter(Boolean))].sort();
+  const filtered = withState.filter(({ r, s }) => (fProfile === 'all' || r.profile === fProfile) &&
+    (fStatus === 'all' || (fStatus === 'due' ? (s === 'due' || s === 'snoozed') : fStatus === 'scheduled' ? s === 'scheduled' : s === 'resolved')));
+  const orderKey = { due: 0, snoozed: 1, scheduled: 2, resolved: 3 };
+  const sorted = [...filtered].sort((a, b) => (orderKey[a.s] - orderKey[b.s]) ||
+    (a.s === 'resolved' ? (b.r.resolved_at || '').localeCompare(a.r.resolved_at || '') : (a.r.due_at || '').localeCompare(b.r.due_at || '')));
+  const inFmt = ms => { const m = Math.max(1, Math.round(ms / 60000)); if (m < 60) return m + 'm'; const h = Math.round(m / 60); return h < 24 ? h + 'h' : Math.round(h / 24) + 'd'; };
+  const resolveNow = async (r) => { if (!window.confirm('Mark this reminder resolved for the team?')) return; await db.resolveReminder(r.id, 'completed', 'CEO'); reload(); };
+  const STATE_META = {
+    due:       { color: C.coral,  label: r => 'overdue ' + inFmt(now - new Date(r.due_at).getTime()) },
+    snoozed:   { color: C.cyan,   label: r => 'snoozed · back in ' + inFmt(new Date(r.snoozed_until).getTime() - now) },
+    scheduled: { color: C.violet, label: r => 'due in ' + inFmt(new Date(r.due_at).getTime() - now) },
+    resolved:  { color: C.mint,   label: r => r.resolution === 'already_done' ? 'already done' : 'completed' },
+  };
+  return (
+    <>
+      <div className="mb-4">
+        <h2 className="disp text-lg font-bold" style={{ color: C.ink }}>Reminders</h2>
+        <p className="mt-1 text-xs" style={{ color: C.muted }}>Follow-throughs booked by logged activity — each belongs to a profile and pops for whoever covers it 12 hours later, staying until resolved. This is the full ledger across every profile.</p>
+      </div>
+
+      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <StatCard label="Due now" value={count('due')} sub="waiting on the profile" accent={count('due') ? C.coral : C.mint} icon={BellRing} />
+        <StatCard label="Snoozed" value={count('snoozed')} sub="back within minutes" accent={C.cyan} icon={Clock} />
+        <StatCard label="Scheduled" value={count('scheduled')} sub="not due yet" accent={C.violet} icon={CalendarDays} />
+        <StatCard label="Resolved" value={count('resolved')} sub="recent history" accent={C.mint} icon={ShieldCheck} />
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap" style={{ marginBottom: 14 }}>
+        {[['due', 'Due now'], ['scheduled', 'Scheduled'], ['resolved', 'Resolved'], ['all', 'All']].map(([s, lbl]) => <Chip key={s} active={fStatus === s} onClick={() => setFStatus(s)}>{lbl}</Chip>)}
+        <div style={{ flex: 1 }} />
+        <Select value={fProfile} onChange={e => setFProfile(e.target.value)}>
+          <option value="all">All profiles</option>
+          {profiles.map(p => <option key={p} value={p}>{p}</option>)}
+        </Select>
+      </div>
+
+      {sorted.length === 0
+        ? <Card className="p-5"><span style={{ color: C.dim, fontSize: 13 }}>{reminders.length === 0 ? 'No reminders yet — they appear as the team logs qualifying activity.' : 'Nothing matches this filter.'}</span></Card>
+        : sorted.map(({ r, s }) => { const meta = STATE_META[s]; const rule = REMINDERS[r.action_type] || {}; const sub = [ACTION_BY_KEY[r.action_type]?.label || r.action_type, r.client, r.project && 'Project: ' + r.project, r.note].filter(Boolean).join(' · '); return (
+          <div key={r.id} className="glass-soft rounded-xl" style={{ marginBottom: 8, padding: '12px 14px', borderLeft: `3px solid ${meta.color}` }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 800, fontSize: 13.5, color: C.ink }}>{rule.title || 'Follow up'}</span>
+                  <Pill color={C.violet}>{r.profile || '—'}</Pill>
+                  <Pill color={meta.color}>{meta.label(r)}</Pill>
+                </div>
+                {sub && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 3 }}>{sub}</div>}
+                <div style={{ fontSize: 10.5, color: C.dim, marginTop: 3 }}>
+                  Logged by {r.csr_name || '—'} · {ago(r.created_at)}{s === 'resolved' && r.resolved_by ? ` · resolved by ${r.resolved_by}${r.resolved_at ? ' · ' + ago(r.resolved_at) : ''}` : ''}
+                </div>
+              </div>
+              {s !== 'resolved' && <Btn variant="ghost" onClick={() => resolveNow(r)} style={{ padding: '7px 12px', fontSize: 12, flex: '0 0 auto' }}>Mark resolved</Btn>}
+            </div>
+          </div>); })}
+    </>
   );
 }
 
