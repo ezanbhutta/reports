@@ -103,8 +103,8 @@ select.gi {
 }
 @keyframes ringSpin { to { transform: rotate(360deg); } }
 .alert-core { position: relative; margin: 1.6px; border-radius: 16.4px; background: radial-gradient(140% 120% at 85% -10%, #F1546A 0%, #DA2C44 48%, #C21F36 100%); }
-/* Sticky attention rail on desktop — always in sight while they work */
-@media (min-width: 1024px) { .rail-sticky { position: sticky; top: 74px; } }
+/* Sticky attention zone on very wide screens — always in sight while they work */
+@media (min-width: 1280px) { .rail-sticky { position: sticky; top: 74px; } }
 /* Page-load choreography — content rises in a staggered sequence */
 @keyframes riseIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 .reveal { opacity: 0; animation: riseIn .5s cubic-bezier(.2,.7,.3,1) forwards; }
