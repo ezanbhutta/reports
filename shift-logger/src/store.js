@@ -30,7 +30,7 @@ export function addDays(ymd, n) {
 // localStorage backend
 // ════════════════════════════════════════════════════════════════
 const LS = {
-  reports: 'sl_reports_v1', actions: 'sl_actions_v1', roster: 'sl_roster_v1', security: 'sl_security_v1', devices: 'sl_devices_v1', mistakes: 'sl_mistakes_v1', auth: 'sl_local_auth',
+  reports: 'sl_reports_v1', actions: 'sl_actions_v1', roster: 'sl_roster_v1', security: 'sl_security_v1', devices: 'sl_devices_v1', mistakes: 'sl_mistakes_v1', reminders: 'sl_reminders_v1', auth: 'sl_local_auth',
 };
 const read = (k, fallback) => { try { return JSON.parse(localStorage.getItem(k)) ?? fallback; } catch { return fallback; } };
 const write = (k, v) => { localStorage.setItem(k, JSON.stringify(v)); ping(); };
@@ -56,8 +56,10 @@ const localDb = {
   },
   async getReport(id) { return read(LS.reports, []).find(r => r.id === id) || null; },
   async deleteReport(id) {
+    const gone = new Set(read(LS.actions, []).filter(a => a.report_id === id).map(a => a.id));
     write(LS.reports, read(LS.reports, []).filter(r => r.id !== id));
     write(LS.actions, read(LS.actions, []).filter(a => a.report_id !== id));
+    write(LS.reminders, read(LS.reminders, []).filter(r => !gone.has(r.action_id)));   // mirror the FK cascade
     return true;
   },
   async openReportFor(csr_name, profile) {
@@ -80,7 +82,11 @@ const localDb = {
     if (i >= 0) { actions[i] = { ...actions[i], ...patch, updated_at: new Date().toISOString() }; write(LS.actions, actions); }
     return actions[i];
   },
-  async deleteAction(actionId) { write(LS.actions, read(LS.actions, []).filter(a => a.id !== actionId)); return true; },
+  async deleteAction(actionId) {
+    write(LS.actions, read(LS.actions, []).filter(a => a.id !== actionId));
+    write(LS.reminders, read(LS.reminders, []).filter(r => r.action_id !== actionId));   // mirror the FK cascade
+    return true;
+  },
   async submitReport(reportId, { checklist, note_for_next }) {
     const reports = read(LS.reports, []);
     const i = reports.findIndex(r => r.id === reportId);
@@ -165,6 +171,35 @@ const localDb = {
     return list[i];
   },
   async deleteMistake(id) { write(LS.mistakes, read(LS.mistakes, []).filter(x => x.id !== id)); return true; },
+  // ── Reminders (profile-scoped follow-throughs; stay until resolved) ──
+  async listReminders(profile) {
+    return read(LS.reminders, []).filter(r => r.profile === profile && r.status === 'pending')
+      .sort((a, b) => (a.due_at || '').localeCompare(b.due_at || ''));
+  },
+  async addReminder(rem) {
+    const list = read(LS.reminders, []);
+    const row = { id: uid(), status: 'pending', snoozed_until: null, resolution: '', resolved_by: '', resolved_at: null, created_at: new Date().toISOString(), ...rem };
+    list.push(row); write(LS.reminders, list);
+    return row;
+  },
+  async snoozeReminder(id, minutes) {
+    const list = read(LS.reminders, []);
+    const i = list.findIndex(r => r.id === id);
+    if (i >= 0) { list[i] = { ...list[i], snoozed_until: new Date(Date.now() + (minutes || 5) * 60000).toISOString() }; write(LS.reminders, list); }
+    return list[i];
+  },
+  async resolveReminder(id, resolution, by) {
+    const list = read(LS.reminders, []);
+    const i = list.findIndex(r => r.id === id);
+    if (i >= 0) { list[i] = { ...list[i], status: 'resolved', resolution: resolution || 'completed', resolved_by: by || '', resolved_at: new Date().toISOString() }; write(LS.reminders, list); }
+    return list[i];
+  },
+  async syncReminderForAction(actionId, patch) {
+    const list = read(LS.reminders, []);
+    let hit = false;
+    const next = list.map(r => (r.action_id === actionId && r.status === 'pending') ? (hit = true, { ...r, ...patch }) : r);
+    if (hit) write(LS.reminders, next);
+  },
   async listDevices() { return read(LS.devices, []); },
   async getDevice(id) { return read(LS.devices, []).find(d => d.id === id) || null; },
   async registerDevice({ id, code, ua, meta }) {
@@ -423,6 +458,22 @@ const supaDb = {
     try { await localDb.deleteMistake(id); } catch {}
     return ok;
   },
+  // ── Reminders — every call tolerates a not-yet-migrated DB (missing table ⇒ no-op) ──
+  async listReminders(profile) {
+    try { const c = await client(); const { data } = await c.from('reminders').select('*').eq('profile', profile).eq('status', 'pending').order('due_at'); return data || []; } catch { return []; }
+  },
+  async addReminder(rem) {
+    try { const c = await client(); const { data, error } = await c.from('reminders').insert(rem).select().single(); if (error) throw error; return data; } catch { return null; }
+  },
+  async snoozeReminder(id, minutes) {
+    try { const c = await client(); const { data } = await c.from('reminders').update({ snoozed_until: new Date(Date.now() + (minutes || 5) * 60000).toISOString() }).eq('id', id).select().maybeSingle(); return data; } catch { return null; }
+  },
+  async resolveReminder(id, resolution, by) {
+    try { const c = await client(); const { data } = await c.from('reminders').update({ status: 'resolved', resolution: resolution || 'completed', resolved_by: by || '', resolved_at: new Date().toISOString() }).eq('id', id).select().maybeSingle(); return data; } catch { return null; }
+  },
+  async syncReminderForAction(actionId, patch) {
+    try { const c = await client(); await c.from('reminders').update(patch).eq('action_id', actionId).eq('status', 'pending'); } catch {}
+  },
   async listDevices() {
     try { const c = await client(); const { data } = await c.from('devices').select('*').order('created_at'); return data || []; } catch { return []; }
   },
@@ -456,7 +507,7 @@ const supaDb = {
       _subStarted = true;
       client().then(c => {
         _subCh = c.channel('sl-changes');
-        ['reports', 'actions', 'security_log', 'devices', 'mistakes', 'roster'].forEach(t =>
+        ['reports', 'actions', 'security_log', 'devices', 'mistakes', 'roster', 'reminders'].forEach(t =>
           _subCh.on('postgres_changes', { event: '*', schema: 'public', table: t }, (p) => { const tb = (p && p.table) || t; _subCbs.forEach(f => { try { f(tb); } catch {} }); }));
         _subCh.subscribe();
       });

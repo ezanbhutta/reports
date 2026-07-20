@@ -44,6 +44,7 @@ tabs in the same browser — great for a demo).
 
 ## Notes
 - **One profile per report.** A CSR covering two profiles files two reports.
+- **Reminders.** Logging key activities (inquiries, follow-ups, assignments, deliveries, offers, frustrated/disputed clients…) schedules a reminder for the **same profile 12 hours later** — it pops on whoever holds that profile's open report then (any shift, any person) and stays until resolved: snooze 5 min, mark **Already done**, or mark **Completed/Solved**. Configure which activities remind (and the delay) in `src/config.js` (`REMINDERS`). Requires re-running `supabase/schema.sql` once (adds the `reminders` table).
 - **Hand-off note** routes by profile — the next CSR on that profile sees it at login and taps *Noted*.
 - **No edits after submit** — enforced in the app and by an RLS policy.
 - **Manager login uses Supabase Auth** (email + password) — no password or hash is shipped in the app bundle. Create manager accounts in Supabase (**Authentication → Users → Add user**, tick *Auto Confirm*) and disable public sign-ups.
