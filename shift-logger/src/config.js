@@ -69,6 +69,13 @@ export const DEFAULT_ROSTER = [
 // A roster entry is a designer when its role isn't a CSR/Manager role.
 export const isDesigner = r => !!r && r.role !== 'CSR' && r.role !== 'Manager';
 
+// Services we offer (dropdown on the "New order" action)
+export const SERVICES = [
+  'Logo Design', 'Social Media Kit', 'Stationery Design Kit', 'Brand Guideline',
+  'Logo Animation', 'PowerPoint Deck', 'Packaging', 'Website Design',
+  'Post Design', 'Marketing Materials', 'Canva', 'Other',
+];
+
 // What can be shared to a client in chat (multi-select on the "Shared to client" action)
 export const SHARE_ELEMENTS = [
   'Initial draft', 'Revision', 'Final files', 'Brand guidelines',
@@ -103,13 +110,18 @@ export const ACTIONS = [
   { key: 'new_order', label: 'New order', group: 'orders',
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
               { name: 'project', label: 'Project name', type: 'text' },
-              { name: 'service', label: 'Service', type: 'text' },
+              { name: 'service', label: 'Service', type: 'select', options: SERVICES },
+              { name: 'service_other', label: 'Other — please specify', type: 'text', required: true, showIf: v => v.service === 'Other' },
               { name: 'value', label: 'Price', type: 'text' } ] },
   { key: 'order_assigned', label: 'Order Assigned to Designer', group: 'orders',
     fields: [ { name: 'client', label: 'Project name', type: 'text', required: true },
               { name: 'order_type', label: 'Order type', type: 'segment', options: ['Organic', 'Inorganic'], required: true },
               { name: 'designer', label: 'Designer', type: 'designer', required: true },
               { name: 'due', label: 'Due date', type: 'date' } ] },
+  { key: 'files_assigned', label: 'Files Assigned to Designer', group: 'orders',
+    fields: [ { name: 'project', label: 'Project name', type: 'text', required: true },
+              { name: 'client', label: 'Client name', type: 'text', required: true },
+              { name: 'designer', label: 'Designer', type: 'designer', required: true } ] },
   { key: 'order_completed', label: 'Order completed', group: 'orders',
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
               { name: 'project', label: 'Project name', type: 'text', required: true },
@@ -194,7 +206,7 @@ export const CHECKLIST = [
 // Short labels for KPI tiles / summaries
 export const KPI_LABEL = {
   inquiry: 'Inquiries', lead_followup: 'Lead F/U', client_conversation: 'Conversations', new_order: 'New orders',
-  order_assigned: 'Orders assigned', order_completed: 'Completed',
+  order_assigned: 'Orders assigned', files_assigned: 'Files assigned', order_completed: 'Completed',
   revision_assigned: 'Rev. assigned', project_delivered: 'Delivered', shared: 'Shared',
   followup_client: 'Follow-ups', followup_designer: 'Designer F/U', update_followup: 'Update F/U', upsell: 'Upsells', offer: 'Offers',
   review_request: 'Reviews',
