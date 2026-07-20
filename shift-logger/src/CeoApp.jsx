@@ -455,7 +455,7 @@ function RemindersPanel({ reminders, reload }) {
 
       {sorted.length === 0
         ? <Card className="p-5"><span style={{ color: C.dim, fontSize: 13 }}>{reminders.length === 0 ? 'No reminders yet — they appear as the team logs qualifying activity.' : 'Nothing matches this filter.'}</span></Card>
-        : sorted.map(({ r, s }) => { const meta = STATE_META[s]; const rule = REMINDERS[r.action_type] || {}; const sub = [ACTION_BY_KEY[r.action_type]?.label || r.action_type, r.client, r.project && 'Project: ' + r.project, r.note].filter(Boolean).join(' · '); return (
+        : sorted.map(({ r, s }) => { const meta = STATE_META[s]; const rule = REMINDERS[r.action_type] || {}; const sub = [(ACTION_BY_KEY[r.action_type] || ACTION_BY_KEY[rule.on])?.label || r.action_type, r.client, r.project && 'Project: ' + r.project, r.note].filter(Boolean).join(' · '); return (
           <div key={r.id} className="glass-soft rounded-xl" style={{ marginBottom: 8, padding: '12px 14px', borderLeft: `3px solid ${meta.color}` }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
               <div style={{ minWidth: 0 }}>

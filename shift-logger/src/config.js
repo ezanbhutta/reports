@@ -209,7 +209,10 @@ export const ACTION_BY_KEY = Object.fromEntries(ACTIONS.map(a => [a.key, a]));
 // Owner-defined rules. Each rule: logging that activity books a reminder for
 // the SAME PROFILE delayMinutes later — it pops on whoever covers the profile
 // then (any shift, any person) and stays until resolved. Snooze (5 min) is
-// always available. Per rule:
+// always available. The map key is the rule's id; by default it's also the
+// activity that triggers it. Per rule:
+//   on       — trigger activity, when it differs from the key (lets ONE
+//              activity book several independent reminders).
 //   when     — optional condition on the logged entry; the reminder is only
 //              booked when it returns true (re-checked if the entry is edited).
 //   cancelOn — if THAT activity is logged for the same client + profile before
@@ -256,6 +259,18 @@ export const REMINDERS = {
     buttons: [
       { key: 'next_shift', label: 'Next shift', kind: 'snooze', minutes: 8 * 60, variant: 'subtle', hint: 'Will assign in the next shift — reminds again in 8 hours' },
       { key: 'assigned',   label: 'Assigned',   kind: 'resolve', variant: 'ok', hint: 'Order assigned to a designer' },
+    ],
+  },
+  // New order → also an immediate potential-upsell nudge: what's missing / what
+  // else would help this client — especially a Website. (Second rule on the
+  // same activity; the order's service shows as context for spotting the gap.)
+  new_order_upsell: {
+    on: 'new_order',
+    title: r => `Potential upsell for ${r.client || 'the client'} — what’s missing? Especially a Website`,
+    delayMinutes: 0,
+    buttons: [
+      { key: 'no_need',     label: 'No need',     kind: 'resolve', variant: 'subtle' },
+      { key: 'upsell_done', label: 'Upsell done', kind: 'resolve', variant: 'ok' },
     ],
   },
   // Order completed → 30 min later, ask the client for a Public Review.

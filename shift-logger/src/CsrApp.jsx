@@ -49,6 +49,10 @@ const reminderNote = d => d.designer ? 'Designer: ' + d.designer
   : (d.stage || d.update_type || d.completion || d.agenda || d.service || (d.rating ? '★ ' + d.rating : ''));
 // Rule titles may be static text or a function of the reminder row (to name the item/client).
 const remTitle = (rule, r) => typeof rule.title === 'function' ? rule.title(r) : (rule.title || 'Follow up');
+// All rules an activity type triggers (a rule's key doubles as its trigger unless it sets `on`).
+const rulesFor = type => Object.entries(REMINDERS).filter(([key, rule]) => (rule.on || key) === type);
+// The action definition behind a reminder row (rule keys may alias another activity via `on`).
+const remActionDef = r => ACTION_BY_KEY[r.action_type] || ACTION_BY_KEY[(REMINDERS[r.action_type] || {}).on];
 function LiveClock() {
   const fmt = () => new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Karachi', hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }).format(new Date());
   const [t, setT] = useState(fmt());
@@ -229,22 +233,23 @@ export default function CsrApp({ boundProfile }) {
       })
       .catch(() => setActions(prev => prev.map(x => x.id === tempId ? { ...x, _failed: true, _payload: payload } : x)));
   }
-  // A rule activity books a follow-through reminder for THIS PROFILE, its rule's delay
-  // out — it pops for whoever is covering the profile then (any shift, any person).
+  // A rule activity books its follow-through reminders (one per matching rule) for THIS
+  // PROFILE — each pops for whoever is covering the profile then (any shift, any person).
   function scheduleReminder(a) {
-    const rule = REMINDERS[a.type];
-    if (!rule || !report) return;
-    if (rule.when && !rule.when(a)) return;   // rule condition (e.g. the rating threshold) not met
+    if (!report) return;
     const d = a.details || {};
-    // Delay and note may depend on the logged entry (e.g. which follow-up attempt it was).
-    const delayM = (typeof rule.delayMinutes === 'function' ? rule.delayMinutes(a) : rule.delayMinutes) ?? 720;
-    db.addReminder({
-      action_id: a.id, profile: report.profile, action_type: a.type,
-      client: a.type === 'order_assigned' ? '' : (a.client || ''),
-      project: projectOf(a),
-      note: rule.note ? rule.note(a) : reminderNote(d),
-      csr_name: report.csr_name,
-      due_at: new Date(Math.max(Date.now() + delayM * 60000, new Date(REMINDERS_START_AT).getTime())).toISOString(),
+    rulesFor(a.type).forEach(([key, rule]) => {
+      if (rule.when && !rule.when(a)) return;   // rule condition (e.g. the rating threshold) not met
+      // Delay and note may depend on the logged entry (e.g. which follow-up attempt it was).
+      const delayM = (typeof rule.delayMinutes === 'function' ? rule.delayMinutes(a) : rule.delayMinutes) ?? 720;
+      db.addReminder({
+        action_id: a.id, profile: report.profile, action_type: key,
+        client: a.type === 'order_assigned' ? '' : (a.client || ''),
+        project: projectOf(a),
+        note: rule.note ? rule.note(a) : reminderNote(d),
+        csr_name: report.csr_name,
+        due_at: new Date(Math.max(Date.now() + delayM * 60000, new Date(REMINDERS_START_AT).getTime())).toISOString(),
+      });
     });
   }
   // Logging an activity can auto-clear pending reminders it satisfies — e.g. a "Review
@@ -256,19 +261,19 @@ export default function CsrApp({ boundProfile }) {
       if (rule.cancelOn === a.type) db.cancelRemindersFor(report.profile, type, a.client, report.csr_name);
     });
   }
-  // Keep a pending reminder in step when its source entry is edited — and re-evaluate a
-  // conditional rule: threshold newly met → book one (addReminder skips entries that ever
-  // had a reminder); no longer met → clear the pending one.
+  // Keep pending reminders in step when their source entry is edited — and re-evaluate
+  // conditional rules: threshold newly met → book (idempotent per entry + rule); no
+  // longer met → clear that rule's pending reminder.
   function syncReminder(actionId, typeKey, client, details) {
-    const rule = REMINDERS[typeKey];
-    if (!rule) return;
     const a = { id: actionId, type: typeKey, client, details };
-    if (rule.when && !rule.when(a)) { db.cancelRemindersForAction(actionId); return; }
-    if (rule.when) scheduleReminder(a);
-    db.syncReminderForAction(actionId, {
-      client: typeKey === 'order_assigned' ? '' : (client || ''),
-      project: projectOf(a),
-      note: rule.note ? rule.note(a) : reminderNote(details),
+    rulesFor(typeKey).forEach(([key, rule]) => {
+      if (rule.when && !rule.when(a)) { db.cancelRemindersForAction(actionId, key); return; }
+      if (rule.when) scheduleReminder(a);
+      db.syncReminderForAction(actionId, {
+        client: typeKey === 'order_assigned' ? '' : (client || ''),
+        project: projectOf(a),
+        note: rule.note ? rule.note(a) : reminderNote(details),
+      }, key);
     });
   }
   function snoozeRem(r, minutes = REMINDER_SNOOZE_MINUTES) {
@@ -470,7 +475,7 @@ export default function CsrApp({ boundProfile }) {
                 <div style={{ fontSize: 11.5, color: C.muted }}>From earlier activity on {report.profile} — they stay here until resolved.</div>
               </div>
             </div>
-            {dueReminders.map(r => { const rule = REMINDERS[r.action_type] || {}; const col = groupColor(ACTION_BY_KEY[r.action_type]?.group); const sub = [ACTION_BY_KEY[r.action_type]?.label, r.client, r.project && 'Project: ' + r.project, r.note].filter(Boolean).join(' · '); return (
+            {dueReminders.map(r => { const rule = REMINDERS[r.action_type] || {}; const def = remActionDef(r); const col = groupColor(def?.group); const sub = [def?.label, r.client, r.project && 'Project: ' + r.project, r.note].filter(Boolean).join(' · '); return (
               <div key={r.id} className="glass-soft rounded-xl" style={{ padding: '11px 13px', marginTop: 9, borderLeft: `3px solid ${col}` }}>
                 <div style={{ fontSize: 13.5, fontWeight: 800, color: C.ink }}>{remTitle(rule, r)}</div>
                 {sub && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>{sub}</div>}
