@@ -37,6 +37,7 @@ const greeting = () => { const h = pktHour(); return h >= 5 && h < 12 ? 'Good mo
 const SHIFT_ICON = { Morning: Sunrise, Evening: Sunset, Night: Moon };
 const hourLabel = iso => new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Karachi', hour: 'numeric', hour12: true }).format(new Date(iso));
 const agoHours = iso => { const h = Math.floor((Date.now() - new Date(iso).getTime()) / 36e5); return h < 1 ? 'less than an hour ago' : h + 'h ago'; };
+const dueAgo = iso => { const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000); if (m < 1) return 'due now'; if (m < 60) return `due ${m}m ago`; const h = Math.floor(m / 60); return h < 24 ? `due ${h}h ago` : `due ${Math.floor(h / 24)}d ago`; };
 // Fallback buttons for a reminder whose rule no longer defines any (e.g. rows from an older rule set).
 const DEFAULT_REM_BUTTONS = [
   { key: 'already_done', label: 'Already done', kind: 'resolve', variant: 'subtle' },
@@ -166,6 +167,18 @@ export default function CsrApp({ boundProfile }) {
   // Alert-rules (e.g. frustrated client) render as the standing red caution box, apart from normal reminders.
   const remAlerts = useMemo(() => dueReminders.filter(r => (REMINDERS[r.action_type] || {}).alert), [dueReminders]);
   const remNormal = useMemo(() => dueReminders.filter(r => !(REMINDERS[r.action_type] || {}).alert), [dueReminders]);
+  // Inbox-style progressive disclosure: a busy morning shows 3 reminders + "show more",
+  // so the primary "Log an activity" action is never buried.
+  const [showAllRem, setShowAllRem] = useState(false);
+  // Forgiving interactions: every resolve/snooze offers a 5s Undo via a bottom toast.
+  const [remToast, setRemToast] = useState(null);   // { text, undo }
+  const toastTimer = useRef();
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
+  function showRemToast(text, undo) {
+    clearTimeout(toastTimer.current);
+    setRemToast({ text, undo });
+    toastTimer.current = setTimeout(() => setRemToast(null), 5000);
+  }
 
   async function startReport() {
     if (!name || !profile) return;
@@ -287,23 +300,39 @@ export default function CsrApp({ boundProfile }) {
     const until = new Date(Date.now() + minutes * 60000).toISOString();
     setReminders(prev => (prev || []).map(x => x.id === r.id ? { ...x, snoozed_until: until } : x));   // optimistic
     db.snoozeReminder(r.id, minutes);
+    showRemToast(`Snoozed — back ${minutes >= 60 ? 'in ' + Math.round(minutes / 60) + 'h' : 'at ' + timePKT(until)}`, () => {
+      setReminders(prev => (prev || []).map(x => x.id === r.id ? { ...x, snoozed_until: null } : x));
+      db.snoozeReminder(r.id, 0);
+    });
   }
-  function resolveRem(r, resolution) {
-    setReminders(prev => (prev || []).filter(x => x.id !== r.id));   // optimistic — gone for good
+  function resolveRem(r, resolution, label) {
+    setReminders(prev => (prev || []).filter(x => x.id !== r.id));   // optimistic
     db.resolveReminder(r.id, resolution, report ? report.csr_name : '');
+    showRemToast(label || 'Done', () => {
+      setReminders(prev => (prev || []).some(x => x.id === r.id) ? prev : [...(prev || []), r]);
+      db.unresolveReminder(r.id);
+    });
   }
   // A chain button: resolve this reminder AND book the next stage of the chain,
   // its delay counted from the click (e.g. "1st F/U done" → the 2nd F/U reminder).
+  // Undo restores this one and clears the freshly booked stage.
   function chainRem(r, b) {
-    resolveRem(r, b.key);
+    setReminders(prev => (prev || []).filter(x => x.id !== r.id));   // optimistic
+    db.resolveReminder(r.id, b.key, report ? report.csr_name : '');
     const next = REMINDERS[b.next];
-    if (!next) return;
-    const delayM = (typeof next.delayMinutes === 'function' ? next.delayMinutes(r) : next.delayMinutes) ?? 720;
-    db.addReminder({
-      action_id: r.action_id, profile: r.profile, action_type: b.next,
-      client: r.client || '', project: r.project || '', note: r.note || '',
-      csr_name: r.csr_name || '',
-      due_at: new Date(Math.max(Date.now() + delayM * 60000, new Date(REMINDERS_START_AT).getTime())).toISOString(),
+    if (next) {
+      const delayM = (typeof next.delayMinutes === 'function' ? next.delayMinutes(r) : next.delayMinutes) ?? 720;
+      db.addReminder({
+        action_id: r.action_id, profile: r.profile, action_type: b.next,
+        client: r.client || '', project: r.project || '', note: r.note || '',
+        csr_name: r.csr_name || '',
+        due_at: new Date(Math.max(Date.now() + delayM * 60000, new Date(REMINDERS_START_AT).getTime())).toISOString(),
+      });
+    }
+    showRemToast(next ? `${b.label} — next follow-up booked` : b.label, () => {
+      setReminders(prev => (prev || []).some(x => x.id === r.id) ? prev : [...(prev || []), r]);
+      db.unresolveReminder(r.id);
+      if (next) db.cancelRemindersForAction(r.action_id, b.next);
     });
   }
   function retryAction(a) {
@@ -460,6 +489,17 @@ export default function CsrApp({ boundProfile }) {
           Couldn't submit — your entries are safe. Tap to dismiss &amp; try again.
         </div>
       )}
+      {/* Undo toast — every reminder action is reversible for 5s (forgiving by design) */}
+      {remToast && (
+        <div className="pop" role="status" style={{ position: 'fixed', left: '50%', bottom: 20, transform: 'translateX(-50%)', zIndex: 90, display: 'inline-flex', alignItems: 'center', gap: 11, padding: '10px 10px 10px 16px', borderRadius: 99, background: C.ink, color: '#fff', fontSize: 12.5, fontWeight: 600, boxShadow: '0 16px 40px rgba(22,10,51,.35)', whiteSpace: 'nowrap', maxWidth: '92vw' }}>
+          <Check size={14} style={{ color: '#34D399', flex: '0 0 auto' }} />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{remToast.text}</span>
+          {remToast.undo && (
+            <button type="button" className="press" onClick={() => { try { remToast.undo(); } catch {} clearTimeout(toastTimer.current); setRemToast(null); }}
+              style={{ border: 'none', background: 'rgba(255,255,255,.16)', color: '#fff', fontWeight: 800, fontSize: 12, padding: '6px 13px', borderRadius: 99, cursor: 'pointer', flex: '0 0 auto' }}>Undo</button>
+          )}
+        </div>
+      )}
       <Header>
         <Brand small />
         <div style={{ display: 'flex', gap: 8 }}>
@@ -486,53 +526,65 @@ export default function CsrApp({ boundProfile }) {
           </div>
         )}
 
-        {/* standing red caution — frustrated clients on this profile; stays until marked Solved */}
+        {/* standing red caution — frustrated/disputed clients; breathes until marked Solved */}
         {remAlerts.length > 0 && (
-          <div className="glow-red rounded-2xl" style={{ marginBottom: 16, padding: '14px 16px', background: C.coralBg, border: `1.5px solid ${C.coral}` }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 9, background: C.coral, color: '#fff', flex: '0 0 auto' }}><AlertTriangle size={16} /></span>
+          <div className="glow-red pop rounded-2xl" style={{ marginBottom: 16, background: '#fff', border: `1px solid ${C.coral}55`, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: `linear-gradient(180deg, ${C.coralBg}, rgba(253,233,233,.35))` }}>
+              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 9, background: C.coral, color: '#fff', flex: '0 0 auto', boxShadow: '0 6px 14px rgba(239,68,68,.35)' }}><AlertTriangle size={15} /></span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 800, fontSize: 14.5, color: C.coral }}>Caution — client alert{remAlerts.length > 1 ? 's' : ''}</div>
-                <div style={{ fontSize: 11.5, color: C.muted }}>Treat with extra care. This stays here until marked Solved.</div>
+                <div style={{ fontWeight: 800, fontSize: 14, color: C.coral }}>Handle with care</div>
+                <div style={{ fontSize: 11, color: C.muted }}>Stays here until marked Solved — every shift sees it.</div>
               </div>
+              <span className="mono" style={{ fontSize: 12, fontWeight: 800, color: '#fff', background: C.coral, borderRadius: 9, padding: '2px 9px', flex: '0 0 auto' }}>{remAlerts.length}</span>
             </div>
             {remAlerts.map(r => { const rule = REMINDERS[r.action_type] || {}; return (
-              <div key={r.id} className="rounded-xl" style={{ marginTop: 9, padding: '11px 13px', background: 'rgba(255,255,255,.8)', border: `1px solid ${C.coral}55` }}>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: C.ink }}>{remTitle(rule, r)}</div>
-                {r.note && <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{r.note}</div>}
-                <div style={{ fontSize: 10.5, color: C.dim, marginTop: 2 }}>{[r.project && 'Project: ' + r.project, 'Logged by ' + (r.csr_name || '—'), agoHours(r.created_at)].filter(Boolean).join(' · ')}</div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 7, marginTop: 8 }}>
-                  {(rule.buttons || []).map(b => (
-                    <Btn key={b.key} variant={b.variant || 'ok'} title={b.hint} onClick={() => resolveRem(r, b.key)} style={{ padding: '7px 14px', fontSize: 12 }}><Check size={13} />{b.label}</Btn>
-                  ))}
+              <div key={r.id} className="pop" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderTop: '1px solid rgba(239,68,68,.10)' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 800, color: C.ink, lineHeight: 1.35 }}>{remTitle(rule, r)}</div>
+                  {r.note && <div style={{ fontSize: 12, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>{r.note}</div>}
+                  <div style={{ fontSize: 10.5, color: C.dim, marginTop: 3 }}>{[r.project && 'Project: ' + r.project, 'By ' + (r.csr_name || '—'), agoHours(r.created_at)].filter(Boolean).join(' · ')}</div>
                 </div>
+                {(rule.buttons || []).map(b => (
+                  <Btn key={b.key} className="press" variant={b.variant || 'ok'} title={b.hint} onClick={() => resolveRem(r, b.key, b.label)} style={{ padding: '8px 15px', fontSize: 12, flex: '0 0 auto' }}><Check size={13} />{b.label}</Btn>
+                ))}
               </div>); })}
           </div>
         )}
 
-        {/* reminders — follow-throughs from earlier activity on this profile (stay until resolved) */}
+        {/* reminders — an inbox: flush rows, overdue timing, 3 visible + expand, undo on every action */}
         {!locked && remNormal.length > 0 && (
-          <Card strong className="p-5" style={{ marginBottom: 16, borderLeft: `3px solid ${C.amber}` }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 9, background: C.amberBg, color: C.amber, flex: '0 0 auto' }}><BellRing size={16} /></span>
+          <Card strong className="pop" style={{ marginBottom: 16, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: '1px solid rgba(124,41,255,.10)' }}>
+              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 9, background: C.amberBg, color: C.amber, flex: '0 0 auto' }}><BellRing size={15} /></span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.ink }}>Reminders <span className="mono" style={{ marginLeft: 4, fontSize: 12, fontWeight: 800, color: '#fff', background: C.amber, borderRadius: 9, padding: '1px 8px' }}>{remNormal.length}</span></div>
-                <div style={{ fontSize: 11.5, color: C.muted }}>From earlier activity on {report.profile} — they stay here until resolved.</div>
+                <span style={{ fontWeight: 800, fontSize: 14.5, color: C.ink }}>Reminders</span>
+                <span className="mono" style={{ marginLeft: 8, fontSize: 12, fontWeight: 800, color: '#fff', background: C.amber, borderRadius: 9, padding: '1px 8px', verticalAlign: 1 }}>{remNormal.length}</span>
               </div>
+              <span style={{ fontSize: 10.5, color: C.dim, flex: '0 0 auto' }}>stay until resolved</span>
             </div>
-            {remNormal.map(r => { const rule = REMINDERS[r.action_type] || {}; const def = remActionDef(r); const col = groupColor(def?.group); const sub = [def?.label, r.client, r.project && 'Project: ' + r.project, r.note].filter(Boolean).join(' · '); return (
-              <div key={r.id} className="glass-soft rounded-xl" style={{ padding: '11px 13px', marginTop: 9, borderLeft: `3px solid ${col}` }}>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: C.ink }}>{remTitle(rule, r)}</div>
-                {sub && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>{sub}</div>}
-                <div style={{ fontSize: 10.5, color: C.dim, marginTop: 2 }}>Logged by {r.csr_name || '—'} · {agoHours(r.created_at)}</div>
-                <div style={{ display: 'flex', gap: 7, marginTop: 9, flexWrap: 'wrap' }}>
-                  <Btn variant="ghost" onClick={() => snoozeRem(r)} title={`Back in ${REMINDER_SNOOZE_MINUTES} min`} style={{ padding: '7px 12px', fontSize: 12 }}><Clock size={13} />Snooze</Btn>
+            {(showAllRem ? remNormal : remNormal.slice(0, 3)).map(r => { const rule = REMINDERS[r.action_type] || {}; const def = remActionDef(r); const col = groupColor(def?.group); const sub = [def?.label, r.client, r.project && 'Project: ' + r.project, r.note].filter(Boolean).join(' · '); return (
+              <div key={r.id} className="pop" style={{ padding: '12px 16px', borderTop: '1px solid rgba(124,41,255,.07)' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 9, background: col, flex: '0 0 auto', marginTop: 5 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 800, color: C.ink, lineHeight: 1.35 }}>{remTitle(rule, r)}</div>
+                    {sub && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>{sub}</div>}
+                    <div style={{ fontSize: 10.5, color: C.dim, marginTop: 3 }}>{['By ' + (r.csr_name || '—'), agoHours(r.created_at), dueAgo(r.due_at)].join(' · ')}</div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 9, paddingLeft: 17, flexWrap: 'wrap' }}>
+                  <Btn className="press" variant="ghost" onClick={() => snoozeRem(r)} title={`Back in ${REMINDER_SNOOZE_MINUTES} min`} style={{ padding: '6px 11px', fontSize: 11.5 }}><Clock size={12} />Snooze</Btn>
                   <div style={{ flex: 1 }} />
                   {(rule.buttons || DEFAULT_REM_BUTTONS).map(b => (
-                    <Btn key={b.key} variant={b.variant || 'subtle'} title={b.hint} onClick={() => b.kind === 'snooze' ? snoozeRem(r, b.minutes) : b.kind === 'chain' ? chainRem(r, b) : resolveRem(r, b.key)} style={{ padding: '7px 12px', fontSize: 12 }}>{b.variant === 'ok' && <Check size={13} />}{b.label}</Btn>
+                    <Btn key={b.key} className="press" variant={b.variant || 'subtle'} title={b.hint} onClick={() => b.kind === 'snooze' ? snoozeRem(r, b.minutes) : b.kind === 'chain' ? chainRem(r, b) : resolveRem(r, b.key, b.label)} style={{ padding: '6px 11px', fontSize: 11.5 }}>{b.variant === 'ok' && <Check size={12} />}{b.label}</Btn>
                   ))}
                 </div>
               </div>); })}
+            {remNormal.length > 3 && (
+              <button type="button" className="press" onClick={() => setShowAllRem(v => !v)} style={{ display: 'block', width: '100%', padding: 11, border: 'none', borderTop: '1px solid rgba(124,41,255,.07)', background: 'rgba(124,41,255,.04)', color: C.violetDim, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                {showAllRem ? 'Show less' : `Show ${remNormal.length - 3} more`}
+              </button>
+            )}
           </Card>
         )}
 
