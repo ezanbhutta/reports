@@ -548,12 +548,12 @@ export default function CsrApp({ boundProfile }) {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px]" style={{ gap: 20, alignItems: 'start' }}>
-          {/* ── Attention rail on the right: reminders take the top when present, alerts beneath ── */}
-          <div ref={railRef} className="lg:order-2 rail-sticky" style={{ minWidth: 0, scrollMarginTop: 74, display: 'flex', flexDirection: 'column' }}>
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_640px]" style={{ gap: 20, alignItems: 'start' }}>
+          {/* ── Attention zone: reminders left · alerts at their right; either alone takes the full spot ── */}
+          <div ref={railRef} className="xl:order-2 rail-sticky grid grid-cols-1 md:grid-cols-2" style={{ minWidth: 0, scrollMarginTop: 74, gap: '0 16px', alignItems: 'start', alignContent: 'start' }}>
 
         {handoff && !handoffSeen && (
-          <div onClick={() => setShowHandoff(true)} className="lift reveal d1" style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 16, padding: '12px 14px', borderRadius: 14, cursor: 'pointer', background: C.amberBg, border: `1px solid ${C.amber}55` }}>
+          <div onClick={() => setShowHandoff(true)} className="lift reveal d1 md:col-span-2" style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 16, padding: '12px 14px', borderRadius: 14, cursor: 'pointer', background: C.amberBg, border: `1px solid ${C.amber}55` }}>
             <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 9, background: C.amber, color: '#fff', flex: '0 0 auto' }}><StickyNote size={16} /></span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 800, fontSize: 13, color: C.ink }}>Unread note from the last shift</div>
@@ -565,7 +565,7 @@ export default function CsrApp({ boundProfile }) {
 
         {/* client alerts — deep-crimson card with a slow orbiting light ring; unmissable until Solved */}
         {remAlerts.length > 0 && (
-          <div className="alert-frame glow-red reveal d1" style={{ marginBottom: 16, order: remNormal.length > 0 ? 2 : 0 }}>
+          <div className={`alert-frame glow-red reveal d1 order-2${remNormal.length > 0 ? '' : ' md:col-span-2'}`} style={{ marginBottom: 16 }}>
             <div className="alert-core" style={{ color: '#fff' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '13px 16px 11px' }}>
                 <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 9, background: 'rgba(255,255,255,.2)', color: '#fff', flex: '0 0 auto' }}><AlertTriangle size={15} /></span>
@@ -592,7 +592,7 @@ export default function CsrApp({ boundProfile }) {
 
         {/* reminders — an inbox: flush rows, overdue timing, 3 visible + expand, undo on every action */}
         {!locked && remNormal.length > 0 && (
-          <Card strong className="reveal d2" style={{ marginBottom: 16, overflow: 'hidden', order: 1 }}>
+          <Card strong className={`reveal d2 order-1${remAlerts.length > 0 ? '' : ' md:col-span-2'}`} style={{ marginBottom: 16, overflow: 'hidden' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: '1px solid rgba(124,41,255,.10)', background: 'linear-gradient(180deg, rgba(245,158,11,.09), rgba(245,158,11,0))' }}>
               <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 9, background: C.amberBg, color: C.amber, flex: '0 0 auto' }}><BellRing size={15} /></span>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -629,7 +629,7 @@ export default function CsrApp({ boundProfile }) {
 
         {/* all clear — the state worth earning */}
         {!locked && remAlerts.length === 0 && remNormal.length === 0 && !(handoff && !handoffSeen) && (
-          <Card className="p-5 reveal d2" style={{ marginBottom: 16, textAlign: 'center', order: 3 }}>
+          <Card className="p-5 reveal d2 order-3 md:col-span-2" style={{ marginBottom: 16, textAlign: 'center' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, borderRadius: 12, background: C.mintBg, color: C.mint, marginBottom: 8 }}><Check size={18} strokeWidth={2.6} /></span>
             <div style={{ fontWeight: 800, fontSize: 13.5, color: C.ink }}>All caught up</div>
             <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>Nothing needs your attention on {report.profile} right now.</div>
@@ -638,7 +638,7 @@ export default function CsrApp({ boundProfile }) {
         </div>
 
         {/* ── Main work area — on the left ── */}
-        <div className="lg:order-1" style={{ minWidth: 0 }}>
+        <div className="xl:order-1" style={{ minWidth: 0 }}>
 
         {/* primary action */}
         {!locked ? (
