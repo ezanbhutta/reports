@@ -87,6 +87,8 @@ select.gi {
 .scroll-y::-webkit-scrollbar-track { background: transparent; }
 /* ── Attention system ───────────────────────────────────────────── */
 /* Breathing glow for the alert card (urgent, never anxious) */
+/* Sticky attention column on desktop — stays in sight while they scroll the work area */
+@media (min-width: 1024px) { .rail-sticky { position: sticky; top: 74px; } }
 /* Breathing glow for the alert card — hairline red ring + soft bloom that swells gently */
 @keyframes glowRed {
   0%, 100% { box-shadow: 0 0 0 1px rgba(239,68,68,.30), 0 6px 22px rgba(239,68,68,.14); }
