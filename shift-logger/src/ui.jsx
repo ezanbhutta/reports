@@ -275,7 +275,7 @@ export function Field({ field, value, onChange }) {
   return (
     <div>
       <Label>{label}{required && <span style={{ color: C.violet }}> *</span>}</Label>
-      {type === 'text' && <input className="gi" value={value || ''} onChange={e => onChange(e.target.value)} placeholder={label} autoComplete="off" />}
+      {type === 'text' && <input className="gi" value={value || ''} onChange={e => onChange(e.target.value)} placeholder={field.placeholder || label} autoComplete="off" />}
       {type === 'date' && <input type="date" className="gi" value={value || ''} onChange={e => onChange(e.target.value)} />}
       {type === 'select' && (
         <select className="gi" value={value || ''} onChange={e => onChange(e.target.value)}>

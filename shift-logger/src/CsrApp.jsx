@@ -203,6 +203,9 @@ export default function CsrApp({ boundProfile }) {
     const { action, values, editId } = form;
     const miss = action.fields.filter(f => f.required && (!f.showIf || f.showIf(values)) && !(Array.isArray(values[f.name]) ? values[f.name].length : values[f.name]));
     if (miss.length) return setForm({ ...form, error: 'Fill: ' + miss.map(m => m.label).join(', ') });
+    // Format checks (e.g. "Remind me in" must be a number + m/h) — only on filled fields.
+    const bad = action.fields.filter(f => (!f.showIf || f.showIf(values)) && f.validate && values[f.name] && !f.validate(values[f.name]));
+    if (bad.length) return setForm({ ...form, error: bad[0].errorMsg || 'Check: ' + bad.map(b => b.label).join(', ') });
     const client = values.client || '';
     const details = { ...values }; delete details.client;
     // Review received: the overall rating is the auto-computed average of the three star scores (format 0.0)

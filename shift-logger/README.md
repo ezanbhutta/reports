@@ -53,6 +53,7 @@ tabs in the same browser — great for a demo).
   6. **Lead follow-up chain** — logging the **1st** → 12 h later remind the **2nd**; the **2nd** → 24 h later remind the **3rd**; the **3rd** → 48 h later remind the **4th & last**. A "4th+" entry books nothing. Buttons: **In discussion** · **Followed up** · **Order taken**.
   7. **New order** → **immediately**: assign the order to a designer. Buttons: **Next shift** (reminds again in 8 h) · **Assigned**.
   8. **New order** (second reminder) → **immediately**: potential upsell — what's missing / what else would help, **especially a Website** (the order's service shows as context). Buttons: **No need** · **Upsell done**.
+  9. **Revision assigned to designer** → after the time the CSR types in the form's **"Remind me in"** box (`30m`, `2h`, `5 h`, …): check whether the revision is done. No time entered ⇒ no reminder. Buttons: **Noted** only (plus Snooze).
 - **Hand-off note** routes by profile — the next CSR on that profile sees it at login and taps *Noted*.
 - **No edits after submit** — enforced in the app and by an RLS policy.
 - **Manager login uses Supabase Auth** (email + password) — no password or hash is shipped in the app bundle. Create manager accounts in Supabase (**Authentication → Users → Add user**, tick *Auto Confirm*) and disable public sign-ups.

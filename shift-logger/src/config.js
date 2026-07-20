@@ -132,7 +132,9 @@ export const ACTIONS = [
   { key: 'revision_assigned', label: 'Revision assigned to designer', group: 'revisions',
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
               { name: 'project', label: 'Project name', type: 'text' },
-              { name: 'designer', label: 'Designer', type: 'designer', required: true } ] },
+              { name: 'designer', label: 'Designer', type: 'designer', required: true },
+              { name: 'remind_in', label: 'Remind me in', type: 'text', placeholder: 'e.g. 30m = 30 minutes · 2h = 2 hours',
+                validate: v => parseRemindTime(v) != null, errorMsg: 'Remind me in: a number + m or h — e.g. 30m, 2h' } ] },
 
   // Project delivered = the formal deliverable — initial draft / final files only.
   { key: 'project_delivered', label: 'Project delivered', group: 'deliveries',
@@ -204,6 +206,15 @@ export const ACTIONS = [
 ];
 
 export const ACTION_BY_KEY = Object.fromEntries(ACTIONS.map(a => [a.key, a]));
+
+// "Remind me in" free-text → minutes. Accepts 30m · 45 m · 2h · 5 H · 1.5h; null if invalid.
+export const parseRemindTime = v => {
+  const m = /^\s*(\d+(?:\.\d+)?)\s*([mh])\s*$/i.exec(String(v || ''));
+  if (!m) return null;
+  const n = parseFloat(m[1]);
+  if (!n || n <= 0) return null;
+  return Math.round(m[2].toLowerCase() === 'h' ? n * 60 : n);
+};
 
 // ── Reminder system ──────────────────────────────────────────────
 // Owner-defined rules. Each rule: logging that activity books a reminder for
@@ -304,6 +315,17 @@ export const REMINDERS = {
     buttons: [
       { key: 'no_need',     label: 'No need',     kind: 'resolve', variant: 'subtle' },
       { key: 'upsell_done', label: 'Upsell done', kind: 'resolve', variant: 'ok' },
+    ],
+  },
+  // Revision assigned → the CSR picks the check-in time in the form ("Remind me
+  // in", e.g. 30m / 2h); the reminder asks whether the revision is done. No
+  // time entered ⇒ no reminder.
+  revision_assigned: {
+    title: r => `Check if ${r.client ? r.client + '’s' : 'the'} revision is done`,
+    when: a => parseRemindTime(a.details && a.details.remind_in) != null,
+    delayMinutes: a => parseRemindTime(a.details.remind_in),
+    buttons: [
+      { key: 'noted', label: 'Noted', kind: 'resolve', variant: 'ok' },
     ],
   },
   // A deliverable went out (formal delivery) → 15h later, follow up on that
