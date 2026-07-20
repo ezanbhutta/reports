@@ -93,8 +93,6 @@ select.gi {
   50%      { box-shadow: 0 0 0 1px rgba(239,68,68,.52), 0 10px 34px rgba(239,68,68,.30); }
 }
 .glow-red { animation: glowRed 2.8s ease-in-out infinite; }
-/* Sticky attention zone on very wide screens — always in sight while they work */
-@media (min-width: 1280px) { .rail-sticky { position: sticky; top: 74px; } }
 /* Page-load choreography — content rises in a staggered sequence */
 @keyframes riseIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 .reveal { opacity: 0; animation: riseIn .5s cubic-bezier(.2,.7,.3,1) forwards; }
