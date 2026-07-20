@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Plus, Search, ChevronLeft, LogOut, Pencil, ClipboardList, Check, Clock, Sunrise, Sunset, Moon, Zap, ArrowRightLeft, ShieldCheck, RotateCcw, StickyNote, X, Trash2, Laptop, AlertTriangle, BellRing } from 'lucide-react';
-import { C, SHIFTS, PROFILES, ACTIONS, ACTION_BY_KEY, GROUPS, CHECKLIST, KPI_LABEL, isDesigner, REMINDERS, REMINDER_SNOOZE_MINUTES } from './config.js';
+import { C, SHIFTS, PROFILES, ACTIONS, ACTION_BY_KEY, GROUPS, CHECKLIST, KPI_LABEL, isDesigner, REMINDERS, REMINDER_SNOOZE_MINUTES, REMINDERS_START_AT } from './config.js';
 import { db, todayPKT, timePKT } from './store.js';
 import { Btn, Card, Pill, Modal, Label, Field, actionSummary, Logo, ConfirmDelete, CopyButton, useLive } from './ui.jsx';
 
@@ -242,7 +242,7 @@ export default function CsrApp({ boundProfile }) {
       project: projectOf(a),
       note: d.designer ? 'Designer: ' + d.designer : (d.stage || d.update_type || d.completion || (d.rating ? '★ ' + d.rating : '')),
       csr_name: report.csr_name,
-      due_at: new Date(Date.now() + (rule.delayMinutes || 720) * 60000).toISOString(),
+      due_at: new Date(Math.max(Date.now() + (rule.delayMinutes || 720) * 60000, new Date(REMINDERS_START_AT).getTime())).toISOString(),
     });
   }
   // Logging an activity can auto-clear pending reminders it satisfies — e.g. a "Review

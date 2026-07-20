@@ -219,6 +219,10 @@ export const ACTION_BY_KEY = Object.fromEntries(ACTIONS.map(a => [a.key, a]));
 //              prefilled with the reminder's client/project and closes the
 //              reminder once the entry is saved.
 export const REMINDER_SNOOZE_MINUTES = 5;
+// Launch floor: no rule-booked reminder falls due before this moment (PKT) — one
+// booked earlier is floored to it, so the system's first pop-ups start exactly
+// then. Once this time has passed, the floor is inert (pure rule delays apply).
+export const REMINDERS_START_AT = '2026-07-21T10:00:00+05:00';
 export const REMINDERS = {
   // Order completed → 30 min later, ask the client for a Public Review.
   // Auto-clears if a "Review received" for the same client + profile lands first.
