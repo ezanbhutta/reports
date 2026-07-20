@@ -178,6 +178,7 @@ const localDb = {
   },
   async addReminder(rem) {
     const list = read(LS.reminders, []);
+    if (rem.action_id && list.some(r => r.action_id === rem.action_id)) return null;   // one reminder per source entry — ever (edits must not resurrect a resolved one)
     const row = { id: uid(), status: 'pending', snoozed_until: null, resolution: '', resolved_by: '', resolved_at: null, created_at: new Date().toISOString(), ...rem };
     list.push(row); write(LS.reminders, list);
     return row;
@@ -210,6 +211,13 @@ const localDb = {
     let hit = false;
     const next = list.map(r => (r.status === 'pending' && r.profile === profile && r.action_type === actionType && String(r.client || '').trim().toLowerCase() === cl)
       ? (hit = true, { ...r, status: 'resolved', resolution: 'auto_cleared', resolved_by: by || '', resolved_at: new Date().toISOString() }) : r);
+    if (hit) write(LS.reminders, next);
+  },
+  async cancelRemindersForAction(actionId) {
+    const list = read(LS.reminders, []);
+    let hit = false;
+    const next = list.map(r => (r.action_id === actionId && r.status === 'pending')
+      ? (hit = true, { ...r, status: 'resolved', resolution: 'auto_cleared', resolved_at: new Date().toISOString() }) : r);
     if (hit) write(LS.reminders, next);
   },
   async listDevices() { return read(LS.devices, []); },
@@ -475,7 +483,12 @@ const supaDb = {
     try { const c = await client(); const { data } = await c.from('reminders').select('*').eq('profile', profile).eq('status', 'pending').order('due_at'); return data || []; } catch { return []; }
   },
   async addReminder(rem) {
-    try { const c = await client(); const { data, error } = await c.from('reminders').insert(rem).select().single(); if (error) throw error; return data; } catch { return null; }
+    try {
+      const c = await client();
+      // One reminder per source entry — ever (an edit must not resurrect a resolved one).
+      if (rem.action_id) { const { data: ex } = await c.from('reminders').select('id').eq('action_id', rem.action_id).limit(1); if (ex && ex.length) return null; }
+      const { data, error } = await c.from('reminders').insert(rem).select().single(); if (error) throw error; return data;
+    } catch { return null; }
   },
   async snoozeReminder(id, minutes) {
     try { const c = await client(); const { data } = await c.from('reminders').update({ snoozed_until: new Date(Date.now() + (minutes || 5) * 60000).toISOString() }).eq('id', id).select().maybeSingle(); return data; } catch { return null; }
@@ -497,6 +510,9 @@ const supaDb = {
       await c.from('reminders').update({ status: 'resolved', resolution: 'auto_cleared', resolved_by: by || '', resolved_at: new Date().toISOString() })
         .eq('profile', profile).eq('action_type', actionType).eq('status', 'pending').ilike('client', cl);
     } catch {}
+  },
+  async cancelRemindersForAction(actionId) {
+    try { const c = await client(); await c.from('reminders').update({ status: 'resolved', resolution: 'auto_cleared', resolved_at: new Date().toISOString() }).eq('action_id', actionId).eq('status', 'pending'); } catch {}
   },
   async allReminders() {
     // Every PENDING reminder must show (paged past the 1000-row cap); resolved is

@@ -210,6 +210,8 @@ export const ACTION_BY_KEY = Object.fromEntries(ACTIONS.map(a => [a.key, a]));
 // the SAME PROFILE delayMinutes later — it pops on whoever covers the profile
 // then (any shift, any person) and stays until resolved. Snooze (5 min) is
 // always available. Per rule:
+//   when     — optional condition on the logged entry; the reminder is only
+//              booked when it returns true (re-checked if the entry is edited).
 //   cancelOn — if THAT activity is logged for the same client + profile before
 //              the reminder is resolved, the reminder clears itself (not needed).
 //   buttons  — the resolve buttons, in order. kind 'resolve' closes the
@@ -228,6 +230,17 @@ export const REMINDERS = {
       { key: 'no_need',      label: 'No need',      kind: 'resolve', variant: 'subtle' },
       { key: 'msg_sent',     label: 'Msg sent',     kind: 'resolve', variant: 'solid' },
       { key: 'review_given', label: 'Review given', kind: 'form', form: 'review_received', variant: 'ok' },
+    ],
+  },
+  // Public review received with a 4.7–5.0 average → exactly 24h later, ask that
+  // client for a Private Review. Only for top ratings (checked on the stored,
+  // displayed 0.0 average — what the CSR and CEO see).
+  review_received: {
+    title: 'Ask the client for a Private Review',
+    delayMinutes: 24 * 60,
+    when: a => { const r = Number(a.details && a.details.rating); return r >= 4.7 && r <= 5; },
+    buttons: [
+      { key: 'msg_sent', label: 'Msg sent', kind: 'resolve', variant: 'ok' },
     ],
   },
 };
