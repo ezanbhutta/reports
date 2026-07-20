@@ -46,7 +46,7 @@ const DEFAULT_REM_BUTTONS = [
 // shared elements with "Other" spelled out, completion type, or the ★ rating).
 const reminderNote = d => d.designer ? 'Designer: ' + d.designer
   : (Array.isArray(d.elements) && d.elements.length) ? d.elements.map(e => e === 'Other' && d.other_text ? d.other_text : e).join(', ')
-  : (d.stage || d.update_type || d.completion || d.what || d.agenda || d.service || d.scope || (d.rating ? '★ ' + d.rating : ''));
+  : (d.stage || d.update_type || d.completion || d.what || d.reason || d.agenda || d.service || d.scope || (d.rating ? '★ ' + d.rating : ''));
 // Rule titles may be static text or a function of the reminder row (to name the item/client).
 const remTitle = (rule, r) => typeof rule.title === 'function' ? rule.title(r) : (rule.title || 'Follow up');
 // All rules an activity type triggers (a rule's key doubles as its trigger unless it sets
@@ -492,7 +492,7 @@ export default function CsrApp({ boundProfile }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 9, background: C.coral, color: '#fff', flex: '0 0 auto' }}><AlertTriangle size={16} /></span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 800, fontSize: 14.5, color: C.coral }}>Caution — frustrated client{remAlerts.length > 1 ? 's' : ''}</div>
+                <div style={{ fontWeight: 800, fontSize: 14.5, color: C.coral }}>Caution — client alert{remAlerts.length > 1 ? 's' : ''}</div>
                 <div style={{ fontSize: 11.5, color: C.muted }}>Treat with extra care. This stays here until marked Solved.</div>
               </div>
             </div>

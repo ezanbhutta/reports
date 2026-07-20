@@ -344,6 +344,16 @@ export const REMINDERS = {
       { key: 'solved', label: 'Solved', kind: 'resolve', variant: 'ok', hint: 'Client calmed / issue fixed — removes the caution' },
     ],
   },
+  // Disputed client → same standing RED caution box: the dispute is open and
+  // the client is on the verge of cancelling. Stays until Solved.
+  disputed: {
+    alert: true,
+    title: r => `${r.client || 'A client'}’s dispute is OPEN — on the verge of cancelling, treat cautiously`,
+    delayMinutes: 0,
+    buttons: [
+      { key: 'solved', label: 'Solved', kind: 'resolve', variant: 'ok', hint: 'Dispute closed — removes the caution' },
+    ],
+  },
   // Offer shared (new or existing client) → button-driven follow-up chain:
   // +2h the 1st follow-up; "1st F/U done" books the 2nd (+16h from the click);
   // "2nd F/U done" books the 3rd (+36h); "3rd F/U done" or "Order placed" at

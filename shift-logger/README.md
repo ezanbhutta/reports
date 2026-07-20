@@ -55,7 +55,7 @@ tabs in the same browser — great for a demo).
   8. **New order** (second reminder) → **immediately**: potential upsell — what's missing / what else would help, **especially a Website** (the order's service shows as context). Buttons: **No need** · **Upsell done**.
   9. **Revision assigned to designer** → after the time the CSR types in the form's **"Remind me in"** box (`30m`, `2h`, `5 h`, …): check whether the revision is done. No time entered ⇒ no reminder. Buttons: **Noted** only (plus Snooze).
   10. **Offer** → button-driven follow-up chain: **+2 h** the 1st follow-up; tapping **1st F/U done** books the 2nd (**+16 h** from the tap); **2nd F/U done** books the 3rd (**+36 h**); **3rd F/U done** ends the chain. **Order placed** at any stage ends it too.
-  11. **Frustrated client** → a standing **red glowing caution box** on the profile ("<client> is frustrated — handle with caution", what happened shown). It persists across shifts and only disappears when someone taps **Solved**.
+  11. **Frustrated client** and **Disputed client** → a standing **red glowing caution box** on the profile (frustrated: "handle with caution"; disputed: "dispute is OPEN — on the verge of cancelling"), with what happened / the reason shown. It persists across shifts and only disappears when someone taps **Solved**.
 - **Hand-off note** routes by profile — the next CSR on that profile sees it at login and taps *Noted*.
 - **No edits after submit** — enforced in the app and by an RLS policy.
 - **Manager login uses Supabase Auth** (email + password) — no password or hash is shipped in the app bundle. Create manager accounts in Supabase (**Authentication → Users → Add user**, tick *Auto Confirm*) and disable public sign-ups.
