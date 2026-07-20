@@ -49,7 +49,7 @@ tabs in the same browser — great for a demo).
   2. **Review received with a 4.7–5.0 average** → exactly 24 h later: ask that client for a **Private Review** (shows client + project + the ★ average). Buttons: **Msg sent**.
   3. **Project delivered** or **Shared to client (chat)** → 15 h later: follow up on **that specific item** (draft/files/shared elements) with **that client** — the reminder names both. Buttons: **Responded** (client already replied) · **Followed up**.
   4. **Files Assigned to Designer** → **immediately**: suggest an upsell to that client (the CSR knows what to offer). Buttons: **No need** · **Upsell done**.
-  5. **New inquiry** → 25 min later: send the prospect their **1st follow-up** (shows what they wanted). Buttons: **In discussion** · **Followed up** · **Order taken** (opens the New order form prefilled and resolves on save).
+  5. **New inquiry** → 25 min later: send the prospect their **1st follow-up** (shows what they wanted). Buttons: **In discussion** · **Followed up** · **Order taken**.
 - **Hand-off note** routes by profile — the next CSR on that profile sees it at login and taps *Noted*.
 - **No edits after submit** — enforced in the app and by an RLS policy.
 - **Manager login uses Supabase Auth** (email + password) — no password or hash is shipped in the app bundle. Create manager accounts in Supabase (**Authentication → Users → Add user**, tick *Auto Confirm*) and disable public sign-ups.
