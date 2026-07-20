@@ -110,8 +110,8 @@ export const ACTIONS = [
   { key: 'new_order', label: 'New order', group: 'orders',
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
               { name: 'project', label: 'Project name', type: 'text' },
-              { name: 'service', label: 'Service', type: 'select', options: SERVICES },
-              { name: 'service_other', label: 'Other — please specify', type: 'text', required: true, showIf: v => v.service === 'Other' },
+              { name: 'service', label: 'Services (pick any)', type: 'multiselect', options: SERVICES },
+              { name: 'service_other', label: 'Other — please specify', type: 'text', required: true, showIf: v => Array.isArray(v.service) && v.service.includes('Other') },
               { name: 'value', label: 'Price', type: 'text' } ] },
   { key: 'order_assigned', label: 'Order Assigned to Designer', group: 'orders',
     fields: [ { name: 'client', label: 'Project name', type: 'text', required: true },
@@ -264,11 +264,11 @@ export const REMINDERS = {
       { key: 'order_taken',   label: 'Order taken',   kind: 'resolve', variant: 'ok' },
     ],
   },
-  // New order → immediately nudge to assign it to a designer. "Next shift"
+  // New order → 30 min later, nudge to assign it to a designer. "Next shift"
   // pushes the reminder 8 hours (they'll assign on the following shift).
   new_order: {
     title: r => `Assign ${r.client ? r.client + '’s' : 'the new'} order to a designer`,
-    delayMinutes: 0,
+    delayMinutes: 30,
     buttons: [
       { key: 'next_shift', label: 'Next shift', kind: 'snooze', minutes: 8 * 60, variant: 'subtle', hint: 'Will assign in the next shift — reminds again in 8 hours' },
       { key: 'assigned',   label: 'Assigned',   kind: 'resolve', variant: 'ok', hint: 'Order assigned to a designer' },
