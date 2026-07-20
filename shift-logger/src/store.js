@@ -200,6 +200,9 @@ const localDb = {
     const next = list.map(r => (r.action_id === actionId && r.status === 'pending') ? (hit = true, { ...r, ...patch }) : r);
     if (hit) write(LS.reminders, next);
   },
+  async allReminders() {
+    return read(LS.reminders, []).sort((a, b) => (a.due_at || '').localeCompare(b.due_at || ''));
+  },
   async listDevices() { return read(LS.devices, []); },
   async getDevice(id) { return read(LS.devices, []).find(d => d.id === id) || null; },
   async registerDevice({ id, code, ua, meta }) {
@@ -473,6 +476,21 @@ const supaDb = {
   },
   async syncReminderForAction(actionId, patch) {
     try { const c = await client(); await c.from('reminders').update(patch).eq('action_id', actionId).eq('status', 'pending'); } catch {}
+  },
+  async allReminders() {
+    // Every PENDING reminder must show (paged past the 1000-row cap); resolved is
+    // history — the most recent 300 is plenty for the console.
+    try {
+      const c = await client();
+      const size = 1000; const pending = [];
+      for (let from = 0; ; from += size) {
+        const { data, error } = await c.from('reminders').select('*').eq('status', 'pending').order('due_at').range(from, from + size - 1);
+        if (error || !data || !data.length) break;
+        pending.push(...data); if (data.length < size) break;
+      }
+      const { data: resolved } = await c.from('reminders').select('*').neq('status', 'pending').order('resolved_at', { ascending: false }).limit(300);
+      return [...pending, ...(resolved || [])];
+    } catch { return []; }
   },
   async listDevices() {
     try { const c = await client(); const { data } = await c.from('devices').select('*').order('created_at'); return data || []; } catch { return []; }
