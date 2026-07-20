@@ -203,6 +203,15 @@ const localDb = {
   async allReminders() {
     return read(LS.reminders, []).sort((a, b) => (a.due_at || '').localeCompare(b.due_at || ''));
   },
+  async cancelRemindersFor(profile, actionType, clientName, by) {
+    const cl = String(clientName || '').trim().toLowerCase();
+    if (!cl) return;
+    const list = read(LS.reminders, []);
+    let hit = false;
+    const next = list.map(r => (r.status === 'pending' && r.profile === profile && r.action_type === actionType && String(r.client || '').trim().toLowerCase() === cl)
+      ? (hit = true, { ...r, status: 'resolved', resolution: 'auto_cleared', resolved_by: by || '', resolved_at: new Date().toISOString() }) : r);
+    if (hit) write(LS.reminders, next);
+  },
   async listDevices() { return read(LS.devices, []); },
   async getDevice(id) { return read(LS.devices, []).find(d => d.id === id) || null; },
   async registerDevice({ id, code, ua, meta }) {
@@ -476,6 +485,18 @@ const supaDb = {
   },
   async syncReminderForAction(actionId, patch) {
     try { const c = await client(); await c.from('reminders').update(patch).eq('action_id', actionId).eq('status', 'pending'); } catch {}
+  },
+  async cancelRemindersFor(profile, actionType, clientName, by) {
+    // Same client + same profile logged the satisfying activity ⇒ the pending
+    // reminder is no longer needed. Case-insensitive on the client username
+    // (ilike; % and _ escaped so they can't act as wildcards).
+    const cl = String(clientName || '').trim().replace(/[%_]/g, '\\$&');
+    if (!cl) return;
+    try {
+      const c = await client();
+      await c.from('reminders').update({ status: 'resolved', resolution: 'auto_cleared', resolved_by: by || '', resolved_at: new Date().toISOString() })
+        .eq('profile', profile).eq('action_type', actionType).eq('status', 'pending').ilike('client', cl);
+    } catch {}
   },
   async allReminders() {
     // Every PENDING reminder must show (paged past the 1000-row cap); resolved is

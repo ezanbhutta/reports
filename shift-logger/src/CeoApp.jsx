@@ -428,13 +428,13 @@ function RemindersPanel({ reminders, reload }) {
     due:       { color: C.coral,  label: r => 'overdue ' + inFmt(now - new Date(r.due_at).getTime()) },
     snoozed:   { color: C.cyan,   label: r => 'snoozed · back in ' + inFmt(new Date(r.snoozed_until).getTime() - now) },
     scheduled: { color: C.violet, label: r => 'due in ' + inFmt(new Date(r.due_at).getTime() - now) },
-    resolved:  { color: C.mint,   label: r => r.resolution === 'already_done' ? 'already done' : 'completed' },
+    resolved:  { color: C.mint,   label: r => (r.resolution || 'completed').replace(/_/g, ' ') },
   };
   return (
     <>
       <div className="mb-4">
         <h2 className="disp text-lg font-bold" style={{ color: C.ink }}>Reminders</h2>
-        <p className="mt-1 text-xs" style={{ color: C.muted }}>Follow-throughs booked by logged activity — each belongs to a profile and pops for whoever covers it 12 hours later, staying until resolved. This is the full ledger across every profile.</p>
+        <p className="mt-1 text-xs" style={{ color: C.muted }}>Follow-throughs booked by logged activity — each belongs to a profile and pops for whoever covers it when it falls due, staying until resolved (or auto-cleared when the follow-up gets logged first). This is the full ledger across every profile.</p>
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
