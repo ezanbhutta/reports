@@ -46,7 +46,7 @@ const DEFAULT_REM_BUTTONS = [
 // shared elements with "Other" spelled out, completion type, or the ★ rating).
 const reminderNote = d => d.designer ? 'Designer: ' + d.designer
   : (Array.isArray(d.elements) && d.elements.length) ? d.elements.map(e => e === 'Other' && d.other_text ? d.other_text : e).join(', ')
-  : (d.stage || d.update_type || d.completion || d.agenda || d.service || d.scope || (d.rating ? '★ ' + d.rating : ''));
+  : (d.stage || d.update_type || d.completion || d.what || d.agenda || d.service || d.scope || (d.rating ? '★ ' + d.rating : ''));
 // Rule titles may be static text or a function of the reminder row (to name the item/client).
 const remTitle = (rule, r) => typeof rule.title === 'function' ? rule.title(r) : (rule.title || 'Follow up');
 // All rules an activity type triggers (a rule's key doubles as its trigger unless it sets
@@ -163,6 +163,9 @@ export default function CsrApp({ boundProfile }) {
     const now = Date.now();
     return (reminders || []).filter(r => r.status === 'pending' && new Date(r.due_at).getTime() <= now && (!r.snoozed_until || new Date(r.snoozed_until).getTime() <= now));
   }, [reminders, remTick]); // eslint-disable-line react-hooks/exhaustive-deps -- remTick forces the time-based re-check
+  // Alert-rules (e.g. frustrated client) render as the standing red caution box, apart from normal reminders.
+  const remAlerts = useMemo(() => dueReminders.filter(r => (REMINDERS[r.action_type] || {}).alert), [dueReminders]);
+  const remNormal = useMemo(() => dueReminders.filter(r => !(REMINDERS[r.action_type] || {}).alert), [dueReminders]);
 
   async function startReport() {
     if (!name || !profile) return;
@@ -483,17 +486,41 @@ export default function CsrApp({ boundProfile }) {
           </div>
         )}
 
+        {/* standing red caution — frustrated clients on this profile; stays until marked Solved */}
+        {remAlerts.length > 0 && (
+          <div className="glow-red rounded-2xl" style={{ marginBottom: 16, padding: '14px 16px', background: C.coralBg, border: `1.5px solid ${C.coral}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 9, background: C.coral, color: '#fff', flex: '0 0 auto' }}><AlertTriangle size={16} /></span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 800, fontSize: 14.5, color: C.coral }}>Caution — frustrated client{remAlerts.length > 1 ? 's' : ''}</div>
+                <div style={{ fontSize: 11.5, color: C.muted }}>Treat with extra care. This stays here until marked Solved.</div>
+              </div>
+            </div>
+            {remAlerts.map(r => { const rule = REMINDERS[r.action_type] || {}; return (
+              <div key={r.id} className="rounded-xl" style={{ marginTop: 9, padding: '11px 13px', background: 'rgba(255,255,255,.8)', border: `1px solid ${C.coral}55` }}>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: C.ink }}>{remTitle(rule, r)}</div>
+                {r.note && <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{r.note}</div>}
+                <div style={{ fontSize: 10.5, color: C.dim, marginTop: 2 }}>{[r.project && 'Project: ' + r.project, 'Logged by ' + (r.csr_name || '—'), agoHours(r.created_at)].filter(Boolean).join(' · ')}</div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 7, marginTop: 8 }}>
+                  {(rule.buttons || []).map(b => (
+                    <Btn key={b.key} variant={b.variant || 'ok'} title={b.hint} onClick={() => resolveRem(r, b.key)} style={{ padding: '7px 14px', fontSize: 12 }}><Check size={13} />{b.label}</Btn>
+                  ))}
+                </div>
+              </div>); })}
+          </div>
+        )}
+
         {/* reminders — follow-throughs from earlier activity on this profile (stay until resolved) */}
-        {!locked && dueReminders.length > 0 && (
+        {!locked && remNormal.length > 0 && (
           <Card strong className="p-5" style={{ marginBottom: 16, borderLeft: `3px solid ${C.amber}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 9, background: C.amberBg, color: C.amber, flex: '0 0 auto' }}><BellRing size={16} /></span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.ink }}>Reminders <span className="mono" style={{ marginLeft: 4, fontSize: 12, fontWeight: 800, color: '#fff', background: C.amber, borderRadius: 9, padding: '1px 8px' }}>{dueReminders.length}</span></div>
+                <div style={{ fontWeight: 800, fontSize: 15, color: C.ink }}>Reminders <span className="mono" style={{ marginLeft: 4, fontSize: 12, fontWeight: 800, color: '#fff', background: C.amber, borderRadius: 9, padding: '1px 8px' }}>{remNormal.length}</span></div>
                 <div style={{ fontSize: 11.5, color: C.muted }}>From earlier activity on {report.profile} — they stay here until resolved.</div>
               </div>
             </div>
-            {dueReminders.map(r => { const rule = REMINDERS[r.action_type] || {}; const def = remActionDef(r); const col = groupColor(def?.group); const sub = [def?.label, r.client, r.project && 'Project: ' + r.project, r.note].filter(Boolean).join(' · '); return (
+            {remNormal.map(r => { const rule = REMINDERS[r.action_type] || {}; const def = remActionDef(r); const col = groupColor(def?.group); const sub = [def?.label, r.client, r.project && 'Project: ' + r.project, r.note].filter(Boolean).join(' · '); return (
               <div key={r.id} className="glass-soft rounded-xl" style={{ padding: '11px 13px', marginTop: 9, borderLeft: `3px solid ${col}` }}>
                 <div style={{ fontSize: 13.5, fontWeight: 800, color: C.ink }}>{remTitle(rule, r)}</div>
                 {sub && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>{sub}</div>}

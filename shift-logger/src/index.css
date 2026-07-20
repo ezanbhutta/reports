@@ -85,6 +85,9 @@ select.gi {
 .scroll-y::-webkit-scrollbar-thumb { background: rgba(124,41,255,.28); border-radius: 8px; }
 .scroll-y::-webkit-scrollbar-thumb:hover { background: rgba(124,41,255,.45); }
 .scroll-y::-webkit-scrollbar-track { background: transparent; }
+/* Standing red caution card (frustrated client) — soft pulsing glow */
+@keyframes glowRed { 0%, 100% { box-shadow: 0 0 14px rgba(239,68,68,.25); } 50% { box-shadow: 0 0 26px rgba(239,68,68,.55); } }
+.glow-red { animation: glowRed 2s ease-in-out infinite; }
 @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
 .pop { animation: pop .18s ease both; }
 /* Single-pass ticker — each item shown once, scrolls right→left then loops */

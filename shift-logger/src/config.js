@@ -236,6 +236,8 @@ export const parseRemindTime = v => {
 //              the click) — for button-driven follow-up chains. hint = tooltip.
 //   chained  — the rule is a chain stage: booked only by a 'chain' button,
 //              never by logging (its `on` is just for display label/colour).
+//   alert    — renders as a standing RED caution box (not a normal reminder
+//              card): no snooze, only its buttons dismiss it.
 export const REMINDER_SNOOZE_MINUTES = 5;
 // Launch floor: no rule-booked reminder falls due before this moment (PKT) — one
 // booked earlier is floored to it, so the system's first pop-ups start exactly
@@ -330,6 +332,16 @@ export const REMINDERS = {
     delayMinutes: a => parseRemindTime(a.details.remind_in),
     buttons: [
       { key: 'noted', label: 'Noted', kind: 'resolve', variant: 'ok' },
+    ],
+  },
+  // Frustrated client → a standing RED glowing caution box on the profile:
+  // appears immediately and stays across shifts until someone taps Solved.
+  frustrated: {
+    alert: true,
+    title: r => `${r.client || 'A client'} is frustrated — handle with caution`,
+    delayMinutes: 0,
+    buttons: [
+      { key: 'solved', label: 'Solved', kind: 'resolve', variant: 'ok', hint: 'Client calmed / issue fixed — removes the caution' },
     ],
   },
   // Offer shared (new or existing client) → button-driven follow-up chain:
