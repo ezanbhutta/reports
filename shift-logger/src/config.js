@@ -247,6 +247,16 @@ export const REMINDERS = {
       { key: 'msg_sent', label: 'Msg sent', kind: 'resolve', variant: 'ok' },
     ],
   },
+  // Final files assigned to the designer → an immediate nudge to upsell that
+  // client (the CSR knows what to offer).
+  files_assigned: {
+    title: r => `Suggest an upsell to ${r.client || 'the client'}`,
+    delayMinutes: 0,
+    buttons: [
+      { key: 'no_need',     label: 'No need',     kind: 'resolve', variant: 'subtle' },
+      { key: 'upsell_done', label: 'Upsell done', kind: 'resolve', variant: 'ok' },
+    ],
+  },
   // A deliverable went out (formal delivery) → 15h later, follow up on that
   // specific item with that client. Title is built from the reminder itself
   // (the item lives in its note, captured at booking).
