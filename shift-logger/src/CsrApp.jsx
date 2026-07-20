@@ -46,11 +46,12 @@ const DEFAULT_REM_BUTTONS = [
 // shared elements with "Other" spelled out, completion type, or the ★ rating).
 const reminderNote = d => d.designer ? 'Designer: ' + d.designer
   : (Array.isArray(d.elements) && d.elements.length) ? d.elements.map(e => e === 'Other' && d.other_text ? d.other_text : e).join(', ')
-  : (d.stage || d.update_type || d.completion || d.agenda || d.service || (d.rating ? '★ ' + d.rating : ''));
+  : (d.stage || d.update_type || d.completion || d.agenda || d.service || d.scope || (d.rating ? '★ ' + d.rating : ''));
 // Rule titles may be static text or a function of the reminder row (to name the item/client).
 const remTitle = (rule, r) => typeof rule.title === 'function' ? rule.title(r) : (rule.title || 'Follow up');
-// All rules an activity type triggers (a rule's key doubles as its trigger unless it sets `on`).
-const rulesFor = type => Object.entries(REMINDERS).filter(([key, rule]) => (rule.on || key) === type);
+// All rules an activity type triggers (a rule's key doubles as its trigger unless it sets
+// `on`). Chain stages (`chained`) are booked only by a chain button, never by logging.
+const rulesFor = type => Object.entries(REMINDERS).filter(([key, rule]) => !rule.chained && (rule.on || key) === type);
 // The action definition behind a reminder row (rule keys may alias another activity via `on`).
 const remActionDef = r => ACTION_BY_KEY[r.action_type] || ACTION_BY_KEY[(REMINDERS[r.action_type] || {}).on];
 function LiveClock() {
@@ -288,6 +289,20 @@ export default function CsrApp({ boundProfile }) {
     setReminders(prev => (prev || []).filter(x => x.id !== r.id));   // optimistic — gone for good
     db.resolveReminder(r.id, resolution, report ? report.csr_name : '');
   }
+  // A chain button: resolve this reminder AND book the next stage of the chain,
+  // its delay counted from the click (e.g. "1st F/U done" → the 2nd F/U reminder).
+  function chainRem(r, b) {
+    resolveRem(r, b.key);
+    const next = REMINDERS[b.next];
+    if (!next) return;
+    const delayM = (typeof next.delayMinutes === 'function' ? next.delayMinutes(r) : next.delayMinutes) ?? 720;
+    db.addReminder({
+      action_id: r.action_id, profile: r.profile, action_type: b.next,
+      client: r.client || '', project: r.project || '', note: r.note || '',
+      csr_name: r.csr_name || '',
+      due_at: new Date(Math.max(Date.now() + delayM * 60000, new Date(REMINDERS_START_AT).getTime())).toISOString(),
+    });
+  }
   function retryAction(a) {
     if (!a || !a._payload || !report) return;
     setActions(prev => prev.map(x => x.id === a.id ? { ...x, _failed: false } : x));
@@ -487,7 +502,7 @@ export default function CsrApp({ boundProfile }) {
                   <Btn variant="ghost" onClick={() => snoozeRem(r)} title={`Back in ${REMINDER_SNOOZE_MINUTES} min`} style={{ padding: '7px 12px', fontSize: 12 }}><Clock size={13} />Snooze</Btn>
                   <div style={{ flex: 1 }} />
                   {(rule.buttons || DEFAULT_REM_BUTTONS).map(b => (
-                    <Btn key={b.key} variant={b.variant || 'subtle'} title={b.hint} onClick={() => b.kind === 'snooze' ? snoozeRem(r, b.minutes) : resolveRem(r, b.key)} style={{ padding: '7px 12px', fontSize: 12 }}>{b.variant === 'ok' && <Check size={13} />}{b.label}</Btn>
+                    <Btn key={b.key} variant={b.variant || 'subtle'} title={b.hint} onClick={() => b.kind === 'snooze' ? snoozeRem(r, b.minutes) : b.kind === 'chain' ? chainRem(r, b) : resolveRem(r, b.key)} style={{ padding: '7px 12px', fontSize: 12 }}>{b.variant === 'ok' && <Check size={13} />}{b.label}</Btn>
                   ))}
                 </div>
               </div>); })}

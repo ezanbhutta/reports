@@ -231,7 +231,11 @@ export const parseRemindTime = v => {
 //   buttons  — the resolve buttons, in order; each closes the reminder with its
 //              key recorded as the resolution (visible in the CEO ledger).
 //              kind 'snooze' + minutes instead re-books it that far out (e.g.
-//              "Next shift" = remind again in 8 hours). hint = hover tooltip.
+//              "Next shift" = remind again in 8 hours). kind 'chain' + next
+//              resolves AND books the `next` rule's reminder (its delay from
+//              the click) — for button-driven follow-up chains. hint = tooltip.
+//   chained  — the rule is a chain stage: booked only by a 'chain' button,
+//              never by logging (its `on` is just for display label/colour).
 export const REMINDER_SNOOZE_MINUTES = 5;
 // Launch floor: no rule-booked reminder falls due before this moment (PKT) — one
 // booked earlier is floored to it, so the system's first pop-ups start exactly
@@ -326,6 +330,36 @@ export const REMINDERS = {
     delayMinutes: a => parseRemindTime(a.details.remind_in),
     buttons: [
       { key: 'noted', label: 'Noted', kind: 'resolve', variant: 'ok' },
+    ],
+  },
+  // Offer shared (new or existing client) → button-driven follow-up chain:
+  // +2h the 1st follow-up; "1st F/U done" books the 2nd (+16h from the click);
+  // "2nd F/U done" books the 3rd (+36h); "3rd F/U done" or "Order placed" at
+  // any stage ends the chain for that client.
+  offer: {
+    title: r => `Send the 1st follow-up on the offer to ${r.client || 'the client'}`,
+    delayMinutes: 2 * 60,
+    buttons: [
+      { key: 'order_placed', label: 'Order placed', kind: 'resolve', variant: 'ok', hint: 'Offer converted — no more reminders' },
+      { key: 'fu1_done',     label: '1st F/U done', kind: 'chain', next: 'offer_fu2', variant: 'solid', hint: 'Books the 2nd follow-up reminder (16h)' },
+    ],
+  },
+  offer_fu2: {
+    on: 'offer', chained: true,
+    title: r => `Send the 2nd follow-up on the offer to ${r.client || 'the client'}`,
+    delayMinutes: 16 * 60,
+    buttons: [
+      { key: 'order_placed', label: 'Order placed', kind: 'resolve', variant: 'ok', hint: 'Offer converted — no more reminders' },
+      { key: 'fu2_done',     label: '2nd F/U done', kind: 'chain', next: 'offer_fu3', variant: 'solid', hint: 'Books the 3rd follow-up reminder (36h)' },
+    ],
+  },
+  offer_fu3: {
+    on: 'offer', chained: true,
+    title: r => `Send the 3rd follow-up on the offer to ${r.client || 'the client'}`,
+    delayMinutes: 36 * 60,
+    buttons: [
+      { key: 'order_placed', label: 'Order placed', kind: 'resolve', variant: 'ok', hint: 'Offer converted' },
+      { key: 'fu3_done',     label: '3rd F/U done', kind: 'resolve', variant: 'solid', hint: 'Chain ends — no more reminders for this offer' },
     ],
   },
   // A deliverable went out (formal delivery) → 15h later, follow up on that
