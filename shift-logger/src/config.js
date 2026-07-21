@@ -134,7 +134,7 @@ export const ACTIONS = [
               { name: 'project', label: 'Project name', type: 'text' },
               { name: 'designer', label: 'Designer', type: 'designer', required: true },
               { name: 'remind_in', label: 'Remind me in', type: 'text', placeholder: 'e.g. 30m = 30 minutes · 2h = 2 hours',
-                validate: v => parseRemindTime(v) != null, errorMsg: 'Remind me in: a number + m or h — e.g. 30m, 2h' } ] },
+                validate: v => parseRemindTime(v) != null, errorMsg: '“Remind me in” just needs a number + m or h — like 30m or 2h.' } ] },
 
   // Project delivered = the formal deliverable — initial draft / final files only.
   { key: 'project_delivered', label: 'Project delivered', group: 'deliveries',
