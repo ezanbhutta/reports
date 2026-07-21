@@ -206,7 +206,7 @@ export default function CsrApp({ boundProfile }) {
     if (!name || !profile) return;
     const existing = resumable || await Promise.resolve(db.openReportFor(name, profile)).catch(() => null); // resume instead of duplicating
     const rep = existing || await db.createReport({ csr_name: name, shift, profile, date: todayPKT() });
-    if (!rep) { window.alert('Could not start the report — check your connection and try again.'); return; }
+    if (!rep) { window.alert("Hmm, the report didn't start — probably a connection blip, nothing you did. Give it another try in a moment."); return; }
     setReport(rep); setActions([]); setHandoff(null); setHandoffSeen(false); setShowHandoff(false); setView('dashboard');
     db.listActions(rep.id).then(a => { if (Array.isArray(a)) setActions(a); }); // load prior entries when resuming
     // incoming note for THIS shift — pop it and require acknowledgement
@@ -241,10 +241,10 @@ export default function CsrApp({ boundProfile }) {
   function saveForm() {
     const { action, values, editId } = form;
     const miss = action.fields.filter(f => f.required && (!f.showIf || f.showIf(values)) && !(Array.isArray(values[f.name]) ? values[f.name].length : values[f.name]));
-    if (miss.length) return setForm({ ...form, error: 'Fill: ' + miss.map(m => m.label).join(', ') });
+    if (miss.length) return setForm({ ...form, error: 'Almost there — just add ' + miss.map(m => m.label).join(', ') + ' and it’s ready.' });
     // Format checks (e.g. "Remind me in" must be a number + m/h) — only on filled fields.
     const bad = action.fields.filter(f => (!f.showIf || f.showIf(values)) && f.validate && values[f.name] && !f.validate(values[f.name]));
-    if (bad.length) return setForm({ ...form, error: bad[0].errorMsg || 'Check: ' + bad.map(b => b.label).join(', ') });
+    if (bad.length) return setForm({ ...form, error: bad[0].errorMsg || 'One small thing — ' + bad.map(b => b.label).join(', ') + ' looks a little off. Easy fix.' });
     const client = values.client || '';
     const details = { ...values }; delete details.client;
     // Review received: the overall rating is the auto-computed average of the three star scores (format 0.0)
@@ -402,7 +402,7 @@ export default function CsrApp({ boundProfile }) {
       <Shell center>
         {flash && (
           <div className="pop" style={{ position: 'fixed', top: 18, left: '50%', transform: 'translateX(-50%)', zIndex: 80, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 99, background: `linear-gradient(180deg, #34D399, ${C.mint})`, color: '#fff', fontWeight: 700, fontSize: 13, boxShadow: '0 12px 28px rgba(16,185,129,.32)' }}>
-            <Check size={16} /> Report submitted — ready for the next person
+            <Check size={16} /> Report submitted — thank you for a great shift. Enjoy a well-earned break ☕
           </div>
         )}
         <div className="pop w-full" style={{ maxWidth: 940 }}>
@@ -448,7 +448,7 @@ export default function CsrApp({ boundProfile }) {
                   <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.2em', textTransform: 'uppercase', color: C.dim, marginTop: 2 }}>CSR Shift Logger</div>
                 </div>
 
-                <h1 className="disp" style={{ fontSize: 25, fontWeight: 700, color: C.ink, margin: 0 }}>Start your report</h1>
+                <h1 className="disp" style={{ fontSize: 25, fontWeight: 700, color: C.ink, margin: 0 }}>Good to see you 👋</h1>
 
                 <Label>Your name</Label>
                 <select value={name} onChange={e => { setName(e.target.value); const r = names.find(x => x.name === e.target.value); if (r?.shift) setShift(r.shift); if (r?.profile) setProfile(r.profile); }}
@@ -487,7 +487,7 @@ export default function CsrApp({ boundProfile }) {
                 {resumable && <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 16, padding: '9px 12px', borderRadius: 12, background: C.mintBg, color: C.mint, fontSize: 12, fontWeight: 700 }}>
                   <RotateCcw size={13} /> Unsubmitted report from {timePKT(resumable.start_at)} — you'll pick up where you left off.
                 </div>}
-                <Btn onClick={startReport} disabled={!name || !profile} className="lift" style={{ width: '100%', marginTop: resumable ? 10 : 20, padding: 14, fontSize: 14.5 }}>{resumable ? 'Resume report →' : 'Start my report →'}</Btn>
+                <Btn onClick={startReport} disabled={!name || !profile} className="lift" style={{ width: '100%', marginTop: resumable ? 10 : 20, padding: 14, fontSize: 14.5 }}>{resumable ? 'Pick up where I left off →' : "Let's start my shift →"}</Btn>
 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(124,41,255,.1)', fontSize: 11, color: C.dim }}>
                   <Clock size={11} /> {todayPKT()} · check-in {timePKT()} PKT · auto
@@ -516,7 +516,7 @@ export default function CsrApp({ boundProfile }) {
     <Shell>
       {oops && (
         <div className="pop" onClick={() => setOops(false)} style={{ position: 'fixed', top: 18, left: '50%', transform: 'translateX(-50%)', zIndex: 80, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 99, background: C.coral, color: '#fff', fontWeight: 700, fontSize: 13, boxShadow: '0 12px 28px rgba(239,68,68,.32)', cursor: 'pointer' }}>
-          Couldn't submit — your entries are safe. Tap to dismiss &amp; try again.
+          No stress — that submit didn't stick, but all your work is safe. Tap to close &amp; try again.
         </div>
       )}
       {/* Undo toast — every reminder action is reversible for 5s (forgiving by design) */}
@@ -659,7 +659,7 @@ export default function CsrApp({ boundProfile }) {
               <span className="flex items-center justify-center rounded-xl" style={{ width: 36, height: 36, background: 'rgba(255,255,255,.22)', flex: '0 0 auto' }}><Plus size={20} strokeWidth={2.6} /></span>
               <span style={{ textAlign: 'left', minWidth: 0 }}>
                 <span style={{ display: 'block', fontWeight: 800, fontSize: 15.5 }}>Log an activity</span>
-                <span style={{ display: 'block', fontSize: 11, opacity: .85, fontWeight: 600 }}>Search 20+ actions or pick a quick one below</span>
+                <span style={{ display: 'block', fontSize: 11, opacity: .85, fontWeight: 600 }}>What just happened? Two taps and it's saved</span>
               </span>
               <span className="hidden sm:flex" style={{ marginLeft: 'auto', alignItems: 'center', gap: 5, fontSize: 11, opacity: .9, background: 'rgba(255,255,255,.18)', padding: '5px 9px', borderRadius: 8, flex: '0 0 auto' }}><Search size={12} /> {MOD_K}</span>
             </button>
@@ -671,7 +671,7 @@ export default function CsrApp({ boundProfile }) {
           </Card>
         ) : (
           <Card className="p-5 reveal d2" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10, color: C.mint, fontWeight: 700, fontSize: 13.5 }}>
-            <Check size={17} /> Report submitted &amp; locked — no more edits.
+            <Check size={17} /> All wrapped up — your report is in, and it's appreciated. Nothing more to do here.
           </Card>
         )}
 
@@ -683,7 +683,7 @@ export default function CsrApp({ boundProfile }) {
           </div>
           <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', alignItems: 'center' }}>
             {tickerItems.length === 0
-              ? <span style={{ paddingLeft: 18, fontSize: 12, color: C.dim }}>Your activity will scroll here as you log…</span>
+              ? <span style={{ paddingLeft: 18, fontSize: 12, color: C.dim }}>Your work will show up here as you log it — one step at a time.</span>
               : <div className="marquee">
                   {tickerItems.map((it, i) => (
                     <span key={i} style={{ padding: '0 18px' }}>
@@ -703,8 +703,8 @@ export default function CsrApp({ boundProfile }) {
           </div>
           {actions.length === 0 && (
             <div style={{ textAlign: 'center', padding: '26px 0', color: C.dim }}>
-              <div style={{ fontSize: 13 }}>Nothing logged yet.</div>
-              <div style={{ fontSize: 12, marginTop: 2 }}>Tap <b style={{ color: C.violetDim }}>Log an activity</b> to add your first one.</div>
+              <div style={{ fontSize: 13 }}>A fresh page.</div>
+              <div style={{ fontSize: 12, marginTop: 2 }}>Whenever the first thing happens, tap <b style={{ color: C.violetDim }}>Log an activity</b> — no rush.</div>
             </div>
           )}
           <div className="scroll-y" style={{ maxHeight: 460, overflowY: 'auto', paddingRight: 6 }}>
@@ -723,12 +723,12 @@ export default function CsrApp({ boundProfile }) {
                         <span className="truncate" style={{ fontSize: 13.5, fontWeight: 800, color: C.ink, minWidth: 0 }}>{proj || labelTxt}</span>
                         {proj && !failed && <CopyButton text={proj} title="Copy project name" />}
                       </div>
-                      <div className="truncate" style={{ fontSize: 11.5, color: failed ? C.coral : C.muted, fontWeight: failed ? 700 : 400 }}>{failed ? 'Not saved — tap to retry' : (sub || '—')}</div>
+                      <div className="truncate" style={{ fontSize: 11.5, color: failed ? C.coral : C.muted, fontWeight: failed ? 700 : 400 }}>{failed ? "Didn't save — tap to retry, nothing's lost" : (sub || '—')}</div>
                     </div>
                     {failed
                       ? <span style={{ fontSize: 10.5, color: C.coral, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4, fontWeight: 700 }}><RotateCcw size={12} /> Retry</span>
                       : <span style={{ fontSize: 10.5, color: C.dim, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 3 }}>{timePKT(a.created_at)}{!locked && <Pencil size={10} style={{ color: C.violetLine }} />}</span>}
-                    {!locked && !failed && <button onClick={e => { e.stopPropagation(); setDelEntry(a.id); }} title="Delete entry" style={{ flex: '0 0 auto', border: 'none', background: 'rgba(244,63,94,.10)', width: 28, height: 28, borderRadius: 8, color: C.coral, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={13} /></button>}
+                    {!locked && !failed && <button className="hush-btn" onClick={e => { e.stopPropagation(); setDelEntry(a.id); }} title="Delete entry" style={{ flex: '0 0 auto', border: 'none', background: 'rgba(244,63,94,.10)', width: 28, height: 28, borderRadius: 8, color: C.coral, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={13} /></button>}
                   </div>
                 ); })}
               </div>
@@ -744,9 +744,9 @@ export default function CsrApp({ boundProfile }) {
           </div>
           <p style={{ fontSize: 11.5, color: C.muted, margin: '4px 0 10px' }}>Saved automatically as you type — pending tasks, client moods, follow-ups.</p>
           {locked ? (
-            <div className="glass-soft rounded-xl" style={{ padding: '11px 13px', fontSize: 13, color: noteDraft ? C.ink : C.dim, whiteSpace: 'pre-wrap' }}>{noteDraft || 'No note left.'}</div>
+            <div className="glass-soft rounded-xl" style={{ padding: '11px 13px', fontSize: 13, color: noteDraft ? C.ink : C.dim, whiteSpace: 'pre-wrap' }}>{noteDraft || 'No note this time.'}</div>
           ) : (<>
-            <textarea value={noteDraft} onChange={e => setNoteDraft(e.target.value)} rows={3} placeholder="Anything the next CSR should know…" className="gi" style={{ resize: 'vertical' }} />
+            <textarea value={noteDraft} onChange={e => setNoteDraft(e.target.value)} rows={3} placeholder="Leave a friendly heads-up for whoever's next — pending bits, client moods, wins…" className="gi" style={{ resize: 'vertical' }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: C.dim }}>For which shift?</span>
               {SHIFTS.filter(s => s.key !== report.shift).map(s => { const on = noteShifts.includes(s.key); return (
@@ -756,15 +756,15 @@ export default function CsrApp({ boundProfile }) {
         </Card>
 
         {!locked && <Btn variant="ok" onClick={tryWrapUp} className="lift" style={{ width: '100%', marginTop: 14, padding: 13, fontSize: 14, textAlign: 'center' }}>Wrap up &amp; submit my report</Btn>}
-        {!locked && <button onClick={() => setDel(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, margin: '12px auto 0', background: 'none', border: 'none', cursor: 'pointer', color: C.coral, fontSize: 12, fontWeight: 700 }}><Trash2 size={13} /> Wrong report? Delete it</button>}
+        {!locked && <button onClick={() => setDel(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, margin: '12px auto 0', background: 'none', border: 'none', cursor: 'pointer', color: C.coral, fontSize: 12, fontWeight: 700 }}><Trash2 size={13} /> Started by mistake? No worries — delete it</button>}
         </div>
         </div>
       </div>
 
-      {ceoCloseNote && ceoCloseNote.length > 0 && !showHandoff && <Modal title="Heads up from management" onClose={dismissCeoCloseNote} width={400}>
+      {ceoCloseNote && ceoCloseNote.length > 0 && !showHandoff && <Modal title="A friendly heads-up" onClose={dismissCeoCloseNote} width={400}>
         <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
           <div style={{ width: 40, height: 40, borderRadius: 12, flex: '0 0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.amberBg, color: C.amber }}><AlertTriangle size={20} /></div>
-          <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.5, margin: 0 }}>{ceoCloseNote.length === 1 ? 'A report you left open was closed by the CEO because it was still open.' : 'Reports you left open were closed by the CEO because they were still open.'} Please remember to <b style={{ color: C.ink }}>wrap up and submit</b> your report at the end of every shift — be attentive.</p>
+          <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.5, margin: 0 }}>{ceoCloseNote.length === 1 ? 'A report stayed open after your shift, so management closed it for you.' : 'A few reports stayed open after your shifts, so management closed them for you.'} No harm done — a quick <b style={{ color: C.ink }}>wrap up &amp; submit</b> at the end of each shift keeps everything tidy.</p>
         </div>
         <div style={{ display: 'grid', gap: 6 }}>
           {ceoCloseNote.map(r => <div key={r.id} className="glass-soft rounded-xl" style={{ padding: '8px 12px', fontSize: 12.5, color: C.ink }}><b>{r.profile}</b> · {r.date} · {r.shift}</div>)}
@@ -774,7 +774,7 @@ export default function CsrApp({ boundProfile }) {
       {showHandoff && handoff && <Modal title="Note from the last shift" subtitle={`for ${report.profile} · left by ${handoff.csr_name}`} onClose={() => setShowHandoff(false)} width={400}>
         <div className="glass-soft rounded-xl" style={{ padding: 13, fontSize: 13.5, color: C.ink, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{handoff.note_for_next}</div>
         <Btn variant="ok" onClick={ackHandoff} className="lift" style={{ width: '100%', marginTop: 14 }}>Noted ✓</Btn>
-        <div style={{ fontSize: 11, color: C.dim, textAlign: 'center', marginTop: 8 }}>Closing without “Noted” keeps it flagged unread.</div>
+        <div style={{ fontSize: 11, color: C.dim, textAlign: 'center', marginTop: 8 }}>Tapping “Noted” lets the last shift know their note landed — until then it stays marked unread.</div>
       </Modal>}
 
       {picker && <CommandPalette onClose={() => setPicker(false)} onPick={openForm} />}
@@ -835,12 +835,12 @@ function CommandPalette({ onClose, onPick }) {
     <Modal title={undefined} onClose={onClose} width={480}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '2px 2px 12px' }}>
         <Search size={18} style={{ color: C.violet }} />
-        <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)} onKeyDown={onKey} placeholder="Search activities…"
+        <input ref={inputRef} value={q} onChange={e => setQ(e.target.value)} onKeyDown={onKey} placeholder="What did you just do? Type to find it…"
           style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 16, color: C.ink }} />
         <span style={{ color: C.dim, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}><X size={18} /></span>
       </div>
       <div ref={listRef} className="no-scrollbar" style={{ maxHeight: '56vh', overflow: 'auto', borderTop: '1px solid rgba(124,41,255,.1)', paddingTop: 6 }}>
-        {flat.length === 0 && <div style={{ color: C.dim, fontSize: 13, padding: 14 }}>No match for “{q}”.</div>}
+        {flat.length === 0 && <div style={{ color: C.dim, fontSize: 13, padding: 14 }}>Nothing matching “{q}” — try another word.</div>}
         {sections.map((s, si) => (
           <div key={si}>
             <GroupLabel color={s.color}>{s.label}</GroupLabel>
@@ -875,8 +875,8 @@ function WrapUp({ onClose, onSubmit, note, shifts }) {
     onSubmit(checklist);
   };
   return (
-    <Modal title="Wrap up & submit" subtitle="Submitting checks you out and locks the report" onClose={onClose} width={440}>
-      <Label>Tick what's done</Label>
+    <Modal title="The home stretch" subtitle="Tick off what you finished, submit, and you're done — thank you for today" onClose={onClose} width={440}>
+      <Label>Tick off what you got done</Label>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
         {CHECKLIST.map(item => { const on = done[item]; const needsNum = COUNT_ITEMS.includes(item); return (
           <div key={item} className="glass-soft rounded-xl" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px' }}>
@@ -889,7 +889,7 @@ function WrapUp({ onClose, onSubmit, note, shifts }) {
           </div>); })}
       </div>
       <Label>Note for the next shift</Label>
-      <div className="glass-soft rounded-xl" style={{ padding: '11px 13px', fontSize: 12.5, color: note ? C.ink : C.dim, whiteSpace: 'pre-wrap' }}>{note || 'No note added (write one on the dashboard).'}</div>
+      <div className="glass-soft rounded-xl" style={{ padding: '11px 13px', fontSize: 12.5, color: note ? C.ink : C.dim, whiteSpace: 'pre-wrap' }}>{note || 'No note this time — you can add one on the dashboard.'}</div>
       {note && shifts && shifts.length > 0 && <div style={{ fontSize: 11, color: C.dim, marginTop: 6 }}>Goes to: <b style={{ color: C.violetDim }}>{shifts.join(' · ')}</b></div>}
       <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
         <Btn variant="ghost" onClick={onClose} style={{ flex: 1 }}>Back</Btn>

@@ -63,6 +63,11 @@ input, select, textarea, button { font-family: inherit; }
 .copy-btn { opacity: .38; transition: opacity .14s ease, background-color .14s ease, color .14s ease; }
 .copy-btn:hover, .copy-btn:focus-visible { opacity: 1; background: rgba(124,41,255,.10); color: #5E1FD8; }
 .lift:hover .copy-btn, .glass-soft:hover .copy-btn { opacity: .7; }
+/* Hushed destructive affordance: the row's delete button stays faint until the row
+   is hovered — the option is there without a constant red presence on every row. */
+.hush-btn { opacity: .4; transition: opacity .14s ease; }
+.hush-btn:hover, .hush-btn:focus-visible { opacity: 1; }
+.glass-soft:hover .hush-btn, .lift:hover .hush-btn { opacity: .8; }
 .gi { /* input */
   background: #fff;
   border: 1px solid var(--border);
