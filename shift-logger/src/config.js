@@ -327,7 +327,8 @@ export const REMINDERS = {
     when: a => parseRemindTime(a.details && a.details.remind_in) != null,
     delayMinutes: a => parseRemindTime(a.details.remind_in),
     buttons: [
-      { key: 'noted', label: 'Noted', kind: 'resolve', variant: 'ok' },
+      { key: 'noted',         label: 'Noted',         kind: 'resolve', variant: 'subtle' },
+      { key: 'revision_done', label: 'Revision done', kind: 'resolve', variant: 'ok', hint: 'The revision is finished' },
     ],
   },
   // Frustrated client → a standing RED glowing caution box on the profile:
