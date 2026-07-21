@@ -37,7 +37,8 @@ const greeting = () => { const h = pktHour(); return h >= 5 && h < 12 ? 'Good mo
 const SHIFT_ICON = { Morning: Sunrise, Evening: Sunset, Night: Moon };
 const hourLabel = iso => new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Karachi', hour: 'numeric', hour12: true }).format(new Date(iso));
 const agoHours = iso => { const h = Math.floor((Date.now() - new Date(iso).getTime()) / 36e5); return h < 1 ? 'less than an hour ago' : h + 'h ago'; };
-const dueAgo = iso => { const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000); if (m < 1) return 'due now'; if (m < 60) return `due ${m}m ago`; const h = Math.floor(m / 60); return h < 24 ? `due ${h}h ago` : `due ${Math.floor(h / 24)}d ago`; };
+// Calm phrasing: the reminder "waits" — time is information, never an accusation.
+const dueAgo = iso => { const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000); if (m < 1) return 'ready now'; if (m < 60) return `waiting ${m}m`; const h = Math.floor(m / 60); return h < 24 ? `waiting ${h}h` : `waiting ${Math.floor(h / 24)}d`; };
 // Fallback buttons for a reminder whose rule no longer defines any (e.g. rows from an older rule set).
 const DEFAULT_REM_BUTTONS = [
   { key: 'already_done', label: 'Already done', kind: 'resolve', variant: 'subtle' },
@@ -58,15 +59,16 @@ const remTitle = (rule, r) => typeof rule.title === 'function' ? rule.title(r) :
 const rulesFor = type => Object.entries(REMINDERS).filter(([key, rule]) => !rule.chained && (rule.on || key) === type);
 // The action definition behind a reminder row (rule keys may alias another activity via `on`).
 const remActionDef = r => ACTION_BY_KEY[r.action_type] || ACTION_BY_KEY[(REMINDERS[r.action_type] || {}).on];
-// Overdue ring — a progress ring that fills as a due reminder ages (full ≈ 4h overdue,
-// amber → red), with the activity's group colour at its centre. Ambient urgency at a glance.
+// Waiting ring — fills gently as a reminder waits (full ≈ 4h). Calm technology: the ring
+// is ambient information in the brand violet, warming to amber only when very late —
+// never red, red is reserved for client alerts.
 function OverdueRing({ due, color }) {
   const frac = Math.min(Math.max((Date.now() - new Date(due).getTime()) / (240 * 60000), 0), 1);
   const R = 8, CIRC = 2 * Math.PI * R;
   return (
     <svg width="22" height="22" viewBox="0 0 22 22" style={{ flex: '0 0 auto', marginTop: 1 }} aria-hidden="true">
       <circle cx="11" cy="11" r={R} fill="none" stroke="rgba(124,41,255,.14)" strokeWidth="2.4" />
-      <circle cx="11" cy="11" r={R} fill="none" stroke={frac >= 1 ? C.coral : C.amber} strokeWidth="2.4" strokeLinecap="round"
+      <circle cx="11" cy="11" r={R} fill="none" stroke={frac >= 1 ? C.amber : 'rgba(124,41,255,.55)'} strokeWidth="2.4" strokeLinecap="round"
         strokeDasharray={`${Math.max(frac * CIRC, 0.8)} ${CIRC}`} transform="rotate(-90 11 11)" />
       <circle cx="11" cy="11" r="3.4" fill={color} />
     </svg>
@@ -189,6 +191,8 @@ export default function CsrApp({ boundProfile }) {
   const [showAllRem, setShowAllRem] = useState(false);
   // Forgiving interactions: every resolve/snooze offers a 5s Undo via a bottom toast.
   const [remToast, setRemToast] = useState(null);   // { text, undo }
+  // Positive reinforcement: count reminders handled this session — progress, not pressure.
+  const [remDone, setRemDone] = useState(0);
   const railRef = useRef(null);                     // the attention rail — header bell scrolls to it
   const toastTimer = useRef();
   useEffect(() => () => clearTimeout(toastTimer.current), []);
@@ -327,9 +331,11 @@ export default function CsrApp({ boundProfile }) {
   }
   function resolveRem(r, resolution, label) {
     setReminders(prev => (prev || []).filter(x => x.id !== r.id));   // optimistic
+    setRemDone(n => n + 1);
     db.resolveReminder(r.id, resolution, report ? report.csr_name : '');
-    showRemToast(label || 'Done', () => {
+    showRemToast(`Nice — ${label || 'done'} ✓`, () => {
       setReminders(prev => (prev || []).some(x => x.id === r.id) ? prev : [...(prev || []), r]);
+      setRemDone(n => Math.max(0, n - 1));
       db.unresolveReminder(r.id);
     });
   }
@@ -338,6 +344,7 @@ export default function CsrApp({ boundProfile }) {
   // Undo restores this one and clears the freshly booked stage.
   function chainRem(r, b) {
     setReminders(prev => (prev || []).filter(x => x.id !== r.id));   // optimistic
+    setRemDone(n => n + 1);
     db.resolveReminder(r.id, b.key, report ? report.csr_name : '');
     const next = REMINDERS[b.next];
     if (next) {
@@ -351,8 +358,9 @@ export default function CsrApp({ boundProfile }) {
         if (row && row.id) setReminders(prev => (prev || []).some(x => x.id === row.id) ? prev : [...(prev || []), row]);
       }).catch(() => {});
     }
-    showRemToast(next ? `${b.label} — next follow-up booked` : b.label, () => {
+    showRemToast(next ? `Nice — ${b.label} ✓ · next follow-up booked` : `Nice — ${b.label} ✓`, () => {
       setReminders(prev => (prev || []).some(x => x.id === r.id) ? prev : [...(prev || []), r]);
+      setRemDone(n => Math.max(0, n - 1));
       db.unresolveReminder(r.id);
       if (next) db.cancelRemindersForAction(r.action_id, b.next);
     });
@@ -528,7 +536,7 @@ export default function CsrApp({ boundProfile }) {
           {dueReminders.length > 0 && (
             <button type="button" className="press" title="Jump to what needs you"
               onClick={() => railRef.current && railRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 12, border: 'none', cursor: 'pointer', background: remAlerts.length ? C.coralBg : C.amberBg, color: remAlerts.length ? C.coral : C.amber, fontWeight: 800, fontSize: 12 }}>
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 12, border: 'none', cursor: 'pointer', background: remAlerts.length ? C.coralBg : 'rgba(124,41,255,.10)', color: remAlerts.length ? C.coral : C.violetDim, fontWeight: 800, fontSize: 12 }}>
               <BellRing size={13} /><span className="mono">{dueReminders.length}</span>
             </button>
           )}
@@ -543,8 +551,9 @@ export default function CsrApp({ boundProfile }) {
           <h1 className="disp" style={{ fontSize: 24, fontWeight: 700, color: C.ink, margin: 0 }}>{greeting()}, {report.csr_name.split(' ')[0]}</h1>
           <p style={{ fontSize: 13, color: C.muted, marginTop: 3 }}>
             Logging for <b style={{ color: C.violetDim }}>{report.profile}</b> · {report.shift} shift · in since {timePKT(report.start_at)} PKT
-            {remAlerts.length > 0 && <> · <b style={{ color: C.coral }}>{remAlerts.length} client alert{remAlerts.length > 1 ? 's' : ''}</b></>}
-            {remNormal.length > 0 && <> · <b style={{ color: C.amber }}>{remNormal.length} reminder{remNormal.length > 1 ? 's' : ''} waiting</b></>}
+            {remAlerts.length > 0 && <> · <b style={{ color: C.coral }}>{remAlerts.length} client{remAlerts.length > 1 ? 's' : ''} to handle with care</b></>}
+            {remNormal.length > 0 && <> · <b style={{ color: C.violetDim }}>{remNormal.length} follow-up{remNormal.length > 1 ? 's' : ''} ready when you are</b></>}
+            {remAlerts.length === 0 && remNormal.length === 0 && <> · <b style={{ color: C.mint }}>all clear</b></>}
           </p>
         </div>
 
@@ -588,16 +597,18 @@ export default function CsrApp({ boundProfile }) {
           </div>
         )}
 
-        {/* reminders — an inbox: flush rows, overdue timing, 3 visible + expand, undo on every action */}
+        {/* reminders — a friendly "up next" list, not a debt ledger: calm violet, 3 visible
+            + expand, positive count of what's been handled, undo on every action */}
         {!locked && remNormal.length > 0 && (
           <Card strong className={`reveal d2 order-1${remAlerts.length > 0 ? '' : ' md:col-span-2 lg:col-span-1'}`} style={{ marginBottom: 16, overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: '1px solid rgba(124,41,255,.10)', background: 'linear-gradient(180deg, rgba(245,158,11,.09), rgba(245,158,11,0))' }}>
-              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 9, background: C.amberBg, color: C.amber, flex: '0 0 auto' }}><BellRing size={15} /></span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: '1px solid rgba(124,41,255,.10)', background: 'linear-gradient(180deg, rgba(124,41,255,.07), rgba(124,41,255,0))' }}>
+              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 9, background: 'rgba(124,41,255,.10)', color: C.violetDim, flex: '0 0 auto' }}><BellRing size={15} /></span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ fontWeight: 800, fontSize: 14.5, color: C.ink }}>Reminders</span>
-                <span className="mono" style={{ marginLeft: 8, fontSize: 12, fontWeight: 800, color: '#fff', background: C.amber, borderRadius: 9, padding: '1px 8px', verticalAlign: 1 }}>{remNormal.length}</span>
+                <span style={{ fontWeight: 800, fontSize: 14.5, color: C.ink }}>Up next</span>
+                <span className="mono" style={{ marginLeft: 8, fontSize: 12, fontWeight: 800, color: C.violetDim, background: 'rgba(124,41,255,.10)', borderRadius: 9, padding: '1px 8px', verticalAlign: 1 }}>{remNormal.length}</span>
+                {remDone > 0 && <span className="mono" style={{ marginLeft: 6, fontSize: 11, fontWeight: 800, color: C.mint, background: C.mintBg, borderRadius: 9, padding: '1px 8px', verticalAlign: 1 }}>{remDone} handled ✓</span>}
               </div>
-              <span style={{ fontSize: 10.5, color: C.dim, flex: '0 0 auto' }}>stay until resolved</span>
+              <span style={{ fontSize: 10.5, color: C.dim, flex: '0 0 auto' }}>one at a time — they'll wait</span>
             </div>
             {(showAllRem ? remNormal : remNormal.slice(0, 3)).map((r, ri) => { const rule = REMINDERS[r.action_type] || {}; const def = remActionDef(r); const col = groupColor(def?.group); const sub = [def?.label, r.client, r.project && 'Project: ' + r.project, r.note].filter(Boolean).join(' · '); return (
               <div key={r.id} className={`reveal d${(ri % 3) + 2}`} style={{ padding: '12px 16px', borderTop: '1px solid rgba(124,41,255,.07)' }}>
@@ -619,7 +630,7 @@ export default function CsrApp({ boundProfile }) {
               </div>); })}
             {remNormal.length > 3 && (
               <button type="button" className="press" onClick={() => setShowAllRem(v => !v)} style={{ display: 'block', width: '100%', padding: 11, border: 'none', borderTop: '1px solid rgba(124,41,255,.07)', background: 'rgba(124,41,255,.04)', color: C.violetDim, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
-                {showAllRem ? 'Show less' : `Show ${remNormal.length - 3} more`}
+                {showAllRem ? 'Show less' : `${remNormal.length - 3} more when you're ready`}
               </button>
             )}
           </Card>
@@ -630,7 +641,9 @@ export default function CsrApp({ boundProfile }) {
           <Card className="p-5 reveal d2 order-3 md:col-span-2 lg:col-span-1" style={{ marginBottom: 16, textAlign: 'center' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, borderRadius: 12, background: C.mintBg, color: C.mint, marginBottom: 8 }}><Check size={18} strokeWidth={2.6} /></span>
             <div style={{ fontWeight: 800, fontSize: 13.5, color: C.ink }}>All caught up</div>
-            <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>Nothing needs your attention on {report.profile} right now.</div>
+            <div style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>
+              {remDone > 0 ? <>You handled {remDone} follow-up{remDone > 1 ? 's' : ''} — nothing waiting on {report.profile}. Nice work.</> : <>Nothing waiting on {report.profile} — enjoy the calm.</>}
+            </div>
           </Card>
         )}
         </div>
