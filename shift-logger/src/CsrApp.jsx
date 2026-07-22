@@ -302,7 +302,16 @@ export default function CsrApp({ boundProfile }) {
   function autoClearReminders(a) {
     if (!report || !a.client) return;
     Object.entries(REMINDERS).forEach(([type, rule]) => {
-      if (rule.cancelOn === a.type) db.cancelRemindersFor(report.profile, type, a.client, report.csr_name);
+      if (rule.cancelOn !== a.type) return;
+      if (rule.cancelMatchProject) {
+        // Only clear when the SAME project name is named (e.g. a revision on the
+        // exact item that was delivered/shared). No project on the trigger ⇒ skip.
+        const proj = String((a.details && a.details.project) || '').trim();
+        if (!proj) return;
+        db.cancelRemindersFor(report.profile, type, a.client, report.csr_name, proj);
+      } else {
+        db.cancelRemindersFor(report.profile, type, a.client, report.csr_name);
+      }
     });
   }
   // Keep pending reminders in step when their source entry is edited — and re-evaluate

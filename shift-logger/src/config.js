@@ -229,6 +229,10 @@ export const parseRemindTime = v => {
 //              booked when it returns true (re-checked if the entry is edited).
 //   cancelOn — if THAT activity is logged for the same client + profile before
 //              the reminder is resolved, the reminder clears itself (not needed).
+//   cancelMatchProject — used with cancelOn: also require the SAME project name
+//              to match. The cancel is skipped if the triggering entry has no
+//              project (can't confirm it's the same one). Used by the
+//              delivered/shared follow-ups (cleared by a revision on that item).
 //   buttons  — the resolve buttons, in order; each closes the reminder with its
 //              key recorded as the resolution (visible in the CEO ledger).
 //              kind 'snooze' + minutes instead re-books it that far out (e.g.
@@ -390,6 +394,7 @@ export const REMINDERS = {
   project_delivered: {
     title: r => `Follow up on the ${(r.note || 'delivery').toLowerCase()} delivered to ${r.client || 'the client'}`,
     delayMinutes: 15 * 60,
+    cancelOn: 'revision_assigned', cancelMatchProject: true,
     buttons: [
       { key: 'responded',   label: 'Responded',   kind: 'resolve', variant: 'subtle' },
       { key: 'followed_up', label: 'Followed up', kind: 'resolve', variant: 'ok' },
@@ -399,6 +404,7 @@ export const REMINDERS = {
   shared: {
     title: r => `Follow up on the ${r.note ? r.note.toLowerCase() : 'items'} shared with ${r.client || 'the client'}`,
     delayMinutes: 15 * 60,
+    cancelOn: 'revision_assigned', cancelMatchProject: true,
     buttons: [
       { key: 'responded',   label: 'Responded',   kind: 'resolve', variant: 'subtle' },
       { key: 'followed_up', label: 'Followed up', kind: 'resolve', variant: 'ok' },
