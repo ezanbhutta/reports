@@ -46,10 +46,11 @@ logged.
 | 10 | **Project delivered** / **Shared in chat** | after **15h** | Follow up on that item | Responded · Followed up |
 | 11 | **Frustrated client** | **immediately** (red) | Handle with caution | Solved |
 | 12 | **Disputed client** | **immediately** (red) | Dispute open — treat cautiously | Solved |
+| 13 | **Custom reminder** | **your chosen date + time** | Your own heading + note | Done |
 
 ---
 
-## The 12 logics in detail
+## The 13 logics in detail
 
 ### 1. New inquiry → 1st follow-up
 - **Trigger:** logging **New inquiry**.
@@ -169,6 +170,16 @@ logged.
 - **Message:** "*[client]*'s dispute is OPEN — on the verge of cancelling, treat
   cautiously." *(shows the reason.)*
 - **Persists across every shift** until someone taps **Solved**. No snooze.
+
+### 13. Custom reminder → set it yourself
+- **Trigger:** logging a **Custom reminder** — you type a **heading**, an optional
+  **note**, and pick an exact **date + time** (12-hour, with **AM / PM**).
+- **Delay:** whatever you chose — it pops for the profile at that moment. (Must be
+  a future time.)
+- **Reminder:** your **heading** as the title, your **note** below it.
+- **Buttons:** **Done** (plus Snooze).
+- *Not automatic — the CSR creates it on purpose, for anything the rules don't
+  cover.*
 
 ---
 

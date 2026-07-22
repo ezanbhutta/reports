@@ -284,14 +284,16 @@ export default function CsrApp({ boundProfile }) {
       if (rule.when && !rule.when(a)) return;   // rule condition (e.g. the rating threshold) not met
       // Delay and note may depend on the logged entry (e.g. which follow-up attempt it was).
       const delayM = (typeof rule.delayMinutes === 'function' ? rule.delayMinutes(a) : rule.delayMinutes) ?? 720;
-      Promise.resolve(db.addReminder({
+      const rem = {
         action_id: a.id, profile: report.profile, action_type: key,
         client: a.type === 'order_assigned' ? '' : (a.client || ''),
         project: projectOf(a),
         note: rule.note ? rule.note(a) : reminderNote(d),
         csr_name: report.csr_name,
         due_at: new Date(Date.now() + delayM * 60000).toISOString(),
-      })).then(row => {   // surface instantly for the person who logged it — don't wait for realtime
+      };
+      if (rule.heading) rem.heading = rule.heading(a);   // custom reminder only — keeps other inserts unchanged
+      Promise.resolve(db.addReminder(rem)).then(row => {   // surface instantly for the person who logged it — don't wait for realtime
         if (row && row.id) setReminders(prev => (prev || []).some(x => x.id === row.id) ? prev : [...(prev || []), row]);
       }).catch(() => {});
     });
@@ -329,11 +331,13 @@ export default function CsrApp({ boundProfile }) {
     rulesFor(typeKey).forEach(([key, rule]) => {
       if (rule.when && !rule.when(a)) { db.cancelRemindersForAction(actionId, key); return; }
       if (rule.when) scheduleReminder(a);
-      db.syncReminderForAction(actionId, {
+      const patch = {
         client: typeKey === 'order_assigned' ? '' : (client || ''),
         project: projectOf(a),
         note: rule.note ? rule.note(a) : reminderNote(details),
-      }, key);
+      };
+      if (rule.heading) patch.heading = rule.heading(a);   // keep an edited custom heading in step
+      db.syncReminderForAction(actionId, patch, key);
     });
   }
   function snoozeRem(r, minutes = REMINDER_SNOOZE_MINUTES) {

@@ -503,7 +503,13 @@ const supaDb = {
       // One reminder per source entry PER RULE (edits must not resurrect a CSR-resolved one).
       // auto_cleared rows don't block: an undo or a re-met threshold may legitimately re-book.
       if (rem.action_id) { const { data: ex } = await c.from('reminders').select('id').eq('action_id', rem.action_id).eq('action_type', rem.action_type).or('status.eq.pending,resolution.neq.auto_cleared').limit(1); if (ex && ex.length) return null; }
-      const { data, error } = await c.from('reminders').insert(rem).select().single(); if (error) throw error; return data;
+      const { data, error } = await c.from('reminders').insert(rem).select().single();
+      if (error) {
+        // If the `heading` column isn't migrated yet, still book the reminder without it.
+        if (rem.heading !== undefined) { const { heading, ...rest } = rem; const r2 = await c.from('reminders').insert(rest).select().single(); if (r2.error) throw r2.error; return r2.data; }
+        throw error;
+      }
+      return data;
     } catch { return null; }
   },
   async snoozeReminder(id, minutes) {
