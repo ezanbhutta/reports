@@ -258,6 +258,7 @@ create table if not exists reminders (
   client        text default '',
   project       text default '',
   note          text default '',           -- extra context (e.g. "Designer: X", delivery stage)
+  heading       text default '',           -- custom-reminder title (owner-typed heading)
   csr_name      text default '',           -- who logged the source activity
   due_at        timestamptz not null,
   snoozed_until timestamptz,
@@ -267,6 +268,8 @@ create table if not exists reminders (
   resolved_at   timestamptz,
   created_at    timestamptz default now()
 );
+-- Added later — safe on existing installs (custom-reminder heading).
+alter table reminders add column if not exists heading text default '';
 create index if not exists reminders_profile_idx on reminders (profile, status, due_at);
 do $$ begin alter publication supabase_realtime add table reminders; exception when duplicate_object then null; end $$;
 alter table reminders enable row level security;

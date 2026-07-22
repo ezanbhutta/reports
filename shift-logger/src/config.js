@@ -173,6 +173,15 @@ export const ACTIONS = [
               { name: 'kind', label: 'New or existing client', type: 'segment', options: ['New', 'Existing'] },
               { name: 'scope', label: 'Scope of work', type: 'text' },
               { name: 'value', label: 'Offer value', type: 'text', required: true } ] },
+  // A manual, one-off reminder the CSR sets themselves — own heading, note, and
+  // an exact date + time (12-hour, AM/PM). Books a reminder that pops at that time.
+  { key: 'custom_reminder', label: 'Custom reminder', group: 'followups',
+    fields: [ { name: 'heading', label: 'Reminder heading', type: 'text', required: true },
+              { name: 'note', label: 'Note', type: 'text' },
+              { name: 'remind_at', label: 'Remind me on', type: 'datetime', required: true,
+                validate: v => { const t = new Date(v).getTime(); return isFinite(t) && t > Date.now(); },
+                errorMsg: 'Pick a date & time in the future.' } ] },
+
   { key: 'review_request', label: 'Review request', group: 'followups',
     fields: [ { name: 'client', label: 'Client name', type: 'text', required: true },
               { name: 'project', label: 'Project name', type: 'text' },
@@ -420,6 +429,17 @@ export const REMINDERS = {
       { key: 'followed_up', label: 'Followed up', kind: 'resolve', variant: 'ok' },
     ],
   },
+  // Custom reminder → a manual reminder that pops at the exact date + time the CSR
+  // chose. Its title is the owner-typed heading; the note carries their note.
+  custom_reminder: {
+    title: r => r.heading || 'Reminder',
+    heading: a => (a.details && a.details.heading) || '',
+    note: a => (a.details && a.details.note) || '',
+    delayMinutes: a => { const t = a.details && a.details.remind_at ? new Date(a.details.remind_at).getTime() : NaN; return isFinite(t) ? Math.round((t - Date.now()) / 60000) : 720; },
+    buttons: [
+      { key: 'done', label: 'Done', kind: 'resolve', variant: 'ok' },
+    ],
+  },
 };
 
 // End-of-shift checklist
@@ -433,7 +453,7 @@ export const KPI_LABEL = {
   order_assigned: 'Orders assigned', files_assigned: 'Files assigned', order_completed: 'Completed',
   revision_assigned: 'Rev. assigned', project_delivered: 'Delivered', shared: 'Shared',
   followup_client: 'Follow-ups', followup_designer: 'Designer F/U', update_followup: 'Update F/U', upsell: 'Upsells', offer: 'Offers',
-  review_request: 'Reviews', review_received: 'Reviews received',
+  review_request: 'Reviews', review_received: 'Reviews received', custom_reminder: 'Custom reminders',
   meeting: 'Meetings', frustrated: 'Frustrated', disputed: 'Disputed', extension: 'Extensions', spam: 'Spam',
 };
 

@@ -269,6 +269,55 @@ export const Label = ({ children }) => (
   <div style={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.12em', color: C.dim, margin: '13px 0 5px' }}>{children}</div>
 );
 
+// Date + time picker with an explicit AM/PM toggle (native datetime-local hides
+// AM/PM in many locales). Emits a local-time ISO string; '' until a date is set.
+const DT_HOURS = Array.from({ length: 12 }, (_, i) => String(i + 1));
+const DT_MINS = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));   // 00,05,…,55
+const dtParse = v => {
+  const d = v ? new Date(v) : null;
+  if (!d || isNaN(d.getTime())) return { date: '', hour: '9', minute: '00', ampm: 'AM' };
+  const p = n => String(n).padStart(2, '0');
+  let h = d.getHours(); const ampm = h >= 12 ? 'PM' : 'AM'; let h12 = h % 12; if (h12 === 0) h12 = 12;
+  return { date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`, hour: String(h12), minute: p(Math.round(d.getMinutes() / 5) * 5 % 60), ampm };
+};
+const dtCompose = (date, hour, minute, ampm) => {
+  if (!date) return '';
+  let h = parseInt(hour, 10) % 12; if (ampm === 'PM') h += 12;
+  const [y, m, dd] = date.split('-').map(Number);
+  const dt = new Date(y, (m || 1) - 1, dd || 1, h, parseInt(minute, 10) || 0, 0, 0);
+  return isNaN(dt.getTime()) ? '' : dt.toISOString();
+};
+function DateTimePick({ value, onChange }) {
+  const init = dtParse(value);
+  const [date, setDate] = useState(init.date);
+  const [hour, setHour] = useState(init.hour);
+  const [minute, setMinute] = useState(init.minute);
+  const [ampm, setAmpm] = useState(init.ampm);
+  // Re-seed only from a real incoming value (e.g. editing an entry) — never reset the
+  // time back to defaults while the user is still choosing a date.
+  useEffect(() => { if (!value) return; const p = dtParse(value); setDate(p.date); setHour(p.hour); setMinute(p.minute); setAmpm(p.ampm); }, [value]);
+  const push = (d, h, mi, ap) => onChange(dtCompose(d, h, mi, ap));
+  const selStyle = { width: 'auto', flex: '0 0 auto', paddingRight: 30 };
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+      <input type="date" className="gi" style={{ flex: '1 1 140px' }} value={date}
+        onChange={e => { setDate(e.target.value); push(e.target.value, hour, minute, ampm); }} />
+      <select className="gi" style={selStyle} value={hour} onChange={e => { setHour(e.target.value); push(date, e.target.value, minute, ampm); }} aria-label="Hour">
+        {DT_HOURS.map(h => <option key={h} value={h}>{h}</option>)}
+      </select>
+      <span style={{ color: C.dim, fontWeight: 800 }}>:</span>
+      <select className="gi" style={selStyle} value={minute} onChange={e => { setMinute(e.target.value); push(date, hour, e.target.value, ampm); }} aria-label="Minute">
+        {DT_MINS.map(m => <option key={m} value={m}>{m}</option>)}
+      </select>
+      <div style={{ display: 'inline-flex', borderRadius: 10, overflow: 'hidden', border: `1px solid ${C.surfaceLine}` }}>
+        {['AM', 'PM'].map(x => { const on = ampm === x; return (
+          <button type="button" key={x} aria-pressed={on} onClick={() => { setAmpm(x); push(date, hour, minute, x); }}
+            style={{ padding: '9px 12px', fontSize: 12.5, fontWeight: 800, cursor: 'pointer', border: 'none', background: on ? C.violet : C.surface, color: on ? '#fff' : C.muted }}>{x}</button>); })}
+      </div>
+    </div>
+  );
+}
+
 // Multi-select dropdown: a compact trigger that opens a checkable list — pick several,
 // it stays open, closes on outside click. In-flow (not an overlay) so it never clips
 // inside the scrollable form modal.
@@ -315,6 +364,7 @@ export function Field({ field, value, onChange }) {
       <Label>{label}{required && <span style={{ color: C.violet }}> *</span>}</Label>
       {type === 'text' && <input className="gi" value={value || ''} onChange={e => onChange(e.target.value)} placeholder={field.placeholder || label} autoComplete="off" />}
       {type === 'date' && <input type="date" className="gi" value={value || ''} onChange={e => onChange(e.target.value)} />}
+      {type === 'datetime' && <DateTimePick value={value} onChange={onChange} />}
       {type === 'select' && (
         <select className="gi" value={value || ''} onChange={e => onChange(e.target.value)}>
           {/* keep a legacy value (stored before this field became a dropdown) selectable when editing */}
@@ -353,6 +403,7 @@ export function Field({ field, value, onChange }) {
 
 export function actionSummary(action) {
   const d = action.details || {};
+  if (d.heading) return [d.heading, d.note].filter(Boolean).join(' — ');   // custom reminder
   if (Array.isArray(d.elements)) return d.elements.join(', ');
   if (d.rating) return '★ ' + d.rating;
   const v = d.agenda || d.what || d.reason || d.stage || d.update_type || d.designer || d.service || d.scope || d.project || d.kind || d.note || (d.attempt ? d.attempt + ' follow-up' : '') || d.value || '';
