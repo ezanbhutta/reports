@@ -166,8 +166,8 @@ function Login({ onSignedIn }) {
 // whole nav on each realtime update — restarting transitions and dropping keyboard focus).
 function Tab({ icon: Icon, label, badge, active, onClick }) {
   return (
-    <button type="button" onClick={onClick} className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-all"
-      style={active ? { background: C.violet, color: '#fff', boxShadow: '0 6px 16px rgba(114,41,255,.28)' } : { background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }}><Icon size={14} />{label}
+    <button type="button" onClick={onClick} aria-label={label} title={label} className="flex items-center gap-1.5 rounded-xl px-3 md:px-4 py-2 text-xs font-bold transition-all"
+      style={active ? { background: C.violet, color: '#fff', boxShadow: '0 6px 16px rgba(114,41,255,.28)' } : { background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }}><Icon size={14} /><span className="hidden md:inline">{label}</span>
       {badge > 0 && <span className="mono" style={{ marginLeft: 1, minWidth: 16, height: 16, padding: '0 4px', borderRadius: 9, fontSize: 10, fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: active ? 'rgba(255,255,255,.25)' : C.coral, color: '#fff' }}>{badge}</span>}</button>
   );
 }
@@ -293,14 +293,14 @@ function Authed({ user, onSignOut }) {
   return (
     <div style={{ minHeight: '100vh' }}>
       <div className="glass" style={{ position: 'sticky', top: 0, zIndex: 30, borderRadius: 0, borderLeft: 'none', borderRight: 'none', borderTop: 'none', backdropFilter: 'none', WebkitBackdropFilter: 'none', background: 'rgba(255,255,255,.92)' }}>
-        <div className="mx-auto flex max-w-[1500px] items-center justify-between px-6 py-3.5">
+        <div className="mx-auto flex max-w-[1500px] flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 md:px-6 py-3.5">
           <div className="flex items-center gap-3">
             <Logo size={32} />
             <div><div className="disp" style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>CEO Console <span style={{ fontSize: 11, fontWeight: 700, color: C.mint }}>· <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 9, background: C.mint, boxShadow: `0 0 0 3px ${C.mintBg}` }} /> live</span></div>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.18em', textTransform: 'uppercase', color: C.dim }}>HaseebMadeIt · Operations</div></div>
           </div>
           <div className="flex items-center gap-2"><button type="button" onClick={() => setSearchOpen(true)} title="Search reports, clients, projects, dates, issues (Ctrl/⌘ + K)" className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition-all" style={{ background: 'rgba(255,255,255,.6)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }}><Search size={14} /><span className="hidden md:inline">Search…</span></button><Tab icon={BarChart3} label="Live" active={view === 'live'} onClick={() => setView('live')} /><Tab icon={BellRing} label="Reminders" badge={dueRem} active={view === 'reminders'} onClick={() => setView('reminders')} /><Tab icon={ClipboardList} label="Mistakes" badge={openMistakes} active={view === 'mistakes'} onClick={() => setView('mistakes')} /><Tab icon={Users} label="Roster" active={view === 'roster'} onClick={() => setView('roster')} /><Tab icon={ShieldAlert} label="Security" badge={unseen} active={view === 'security'} onClick={() => setView('security')} />
-            <button onClick={onSignOut} title={user && user.email ? `Signed in as ${user.email}` : 'Sign out'} className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-all" style={{ background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }}><LogOut size={14} />Sign out</button></div>
+            <button onClick={onSignOut} aria-label="Sign out" title={user && user.email ? `Signed in as ${user.email}` : 'Sign out'} className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-all" style={{ background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }}><LogOut size={14} /><span className="hidden md:inline">Sign out</span></button></div>
         </div>
       </div>
       <main className="mx-auto max-w-[1500px] px-6 py-6">

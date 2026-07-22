@@ -5,7 +5,7 @@
 html, body, #root { height: 100%; margin: 0; }
 :root {
   --bg: #FAFAFE; --raised: #F4F2FA; --card: #FFFFFF; --ink: #160A33;
-  --muted: #534A78; --dim: #8B82A8; --border: #E8E5F3; --line: #F0EDF8;
+  --muted: #534A78; --dim: #787091; --border: #E8E5F3; --line: #F0EDF8;
   --surface: rgba(255,255,255,.6); --surface-line: rgba(124,41,255,.16); --violet-dim: #5E1FD8;
 }
 body {
@@ -110,6 +110,14 @@ select.gi {
 @media (prefers-reduced-motion: reduce) {
   .glow-red { animation: none; box-shadow: 0 0 0 1px rgba(239,68,68,.45), 0 8px 28px rgba(239,68,68,.22); }
   .reveal { animation: none; opacity: 1; }
+  /* Honour the motion preference everywhere: stop the auto-scrolling tickers and
+     the entrance/press transforms (keep shadow feedback, drop the movement). */
+  .marquee, .loopx { animation: none; }
+  .pop { animation: none; }
+  .lift { transition: box-shadow .16s ease; }
+  .lift:hover { transform: none; }
+  .press:active { transform: none; }
+  * { scroll-behavior: auto !important; }
 }
 @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
 .pop { animation: pop .18s ease both; }
