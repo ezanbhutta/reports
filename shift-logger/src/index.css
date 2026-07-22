@@ -12,32 +12,37 @@ body {
   font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
   color: #160A33;
+  /* Comfortable reading rhythm — a hair of negative tracking + generous leading. */
+  line-height: 1.5; letter-spacing: -0.005em;
+  /* Quiet luxury atmosphere — one soft violet dawn settling into warm paper white. */
   background:
-    radial-gradient(60rem 48rem at 50% -14%, rgba(124,77,255,.045), transparent 62%),
-    #FBFBFD;
+    radial-gradient(72rem 50rem at 50% -20%, rgba(124,77,255,.05), transparent 62%),
+    radial-gradient(38rem 32rem at 92% 4%, rgba(124,77,255,.02), transparent 60%),
+    linear-gradient(180deg, #FCFBFE 0%, #FAFAFD 100%);
   background-attachment: fixed;
 }
 * { box-sizing: border-box; }
 /* Numbers stay column-aligned via tabular figures, but use the main font (no coding-mono look). */
 .mono { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-feature-settings: 'tnum' 1; font-variant-numeric: tabular-nums; }
-.disp { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; letter-spacing: -0.02em; }
+.disp { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; letter-spacing: -0.028em; }
 input, select, textarea, button { font-family: inherit; }
 ::selection { background: rgba(124,77,255,.22); }
 
-/* ── Surfaces · sleek + minimal: flat fills, hairline borders, restrained shadow ── */
+/* ── Surfaces · quiet luxury: soft paper-white fills, a hairline edge, and a
+   diffuse ambient shadow that reads as light in a room, never a drop-shadow ── */
 .glass {
-  background: rgba(255,255,255,.78);
-  -webkit-backdrop-filter: blur(12px) saturate(140%);
-  backdrop-filter: blur(12px) saturate(140%);
+  background: rgba(255,255,255,.82);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
   border: 1px solid var(--border);
-  box-shadow: 0 1px 2px rgba(22,10,51,.035), 0 6px 18px rgba(22,10,51,.04);
+  box-shadow: 0 1px 2px rgba(22,10,51,.03), 0 6px 16px -6px rgba(22,10,51,.06), 0 22px 48px -24px rgba(22,10,51,.10);
 }
 .glass-2 {
-  background: rgba(255,255,255,.95);
-  -webkit-backdrop-filter: blur(16px) saturate(150%);
-  backdrop-filter: blur(16px) saturate(150%);
+  background: rgba(255,255,255,.96);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
   border: 1px solid var(--border);
-  box-shadow: 0 8px 30px rgba(22,10,51,.12);
+  box-shadow: 0 2px 6px rgba(22,10,51,.05), 0 30px 70px -32px rgba(22,10,51,.22);
 }
 .glass-soft {
   /* List-item card. No backdrop-filter: many-per-list inside scroll containers, and
@@ -56,8 +61,8 @@ input, select, textarea, button { font-family: inherit; }
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
-.lift { transition: transform .16s cubic-bezier(.2,.7,.3,1), box-shadow .16s ease; }
-.lift:hover { transform: translateY(-1px); box-shadow: 0 1px 2px rgba(22,10,51,.04), 0 8px 20px rgba(22,10,51,.08); }
+.lift { transition: transform .22s cubic-bezier(.22,.61,.36,1), box-shadow .22s cubic-bezier(.22,.61,.36,1); }
+.lift:hover { transform: translateY(-3px); box-shadow: 0 2px 6px -2px rgba(22,10,51,.05), 0 26px 56px -26px rgba(22,10,51,.16); }
 /* Subtle inline copy button: faint by default, full + tinted on hover/focus.
    Lifts to half-opacity when its surrounding card/row is hovered, as a hint. */
 .copy-btn { opacity: .38; transition: opacity .14s ease, background-color .14s ease, color .14s ease; }
@@ -100,13 +105,13 @@ select.gi {
   50%      { box-shadow: 0 0 0 1px rgba(239,68,68,.52), 0 10px 34px rgba(239,68,68,.30); }
 }
 .glow-red { animation: glowRed 2.8s ease-in-out infinite; }
-/* Page-load choreography — content rises in a staggered sequence */
-@keyframes riseIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-.reveal { opacity: 0; animation: riseIn .5s cubic-bezier(.2,.7,.3,1) forwards; }
-.d1 { animation-delay: .05s; } .d2 { animation-delay: .12s; } .d3 { animation-delay: .2s; } .d4 { animation-delay: .28s; }
+/* Page-load choreography — content settles in, unhurried and staggered. */
+@keyframes riseIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.reveal { opacity: 0; animation: riseIn .66s cubic-bezier(.22,.61,.36,1) forwards; }
+.d1 { animation-delay: .06s; } .d2 { animation-delay: .14s; } .d3 { animation-delay: .24s; } .d4 { animation-delay: .34s; }
 /* Tactile press feedback for tap targets */
-.press { transition: transform .1s ease; }
-.press:active { transform: scale(.96); }
+.press { transition: transform .12s cubic-bezier(.22,.61,.36,1); }
+.press:active { transform: scale(.97); }
 @media (prefers-reduced-motion: reduce) {
   .glow-red { animation: none; box-shadow: 0 0 0 1px rgba(239,68,68,.45), 0 8px 28px rgba(239,68,68,.22); }
   .reveal { animation: none; opacity: 1; }

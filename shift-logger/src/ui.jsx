@@ -191,12 +191,12 @@ export const Chip = ({ active, onClick, children }) => (
 );
 
 export const SectionHeader = ({ eyebrow, title, right, color = C.violet }) => (
-  <div className="mb-3 flex items-end justify-between">
+  <div className="mb-4 flex items-end justify-between gap-3">
     <div>
-      {eyebrow && <div className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color }}>{eyebrow}</div>}
-      <div className="disp text-lg font-bold" style={{ color: C.ink }}>{title}</div>
+      {eyebrow && <div className="text-[10px] font-bold uppercase tracking-[0.22em]" style={{ color, marginBottom: 3 }}>{eyebrow}</div>}
+      <div className="disp font-bold" style={{ fontSize: 21, letterSpacing: '-0.03em', lineHeight: 1.1, color: C.ink }}>{title}</div>
     </div>
-    {right && <span className="text-[10px] uppercase tracking-wider" style={{ color: C.dim }}>{right}</span>}
+    {right && <span className="text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: C.dim, whiteSpace: 'nowrap', paddingBottom: 2 }}>{right}</span>}
   </div>
 );
 

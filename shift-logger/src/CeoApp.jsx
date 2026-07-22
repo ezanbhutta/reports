@@ -303,7 +303,7 @@ function Authed({ user, onSignOut }) {
             <button onClick={onSignOut} aria-label="Sign out" title={user && user.email ? `Signed in as ${user.email}` : 'Sign out'} className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-all" style={{ background: 'rgba(255,255,255,.5)', color: C.muted, border: '1px solid rgba(124,41,255,.14)' }}><LogOut size={14} /><span className="hidden md:inline">Sign out</span></button></div>
         </div>
       </div>
-      <main className="mx-auto max-w-[1500px] px-6 py-6">
+      <main className="mx-auto max-w-[1500px] px-5 md:px-8 py-8">
         {unseen > 0 && view !== 'security' && (
           <div onClick={() => setView('security')} className="lift" style={{ cursor: 'pointer', marginBottom: 20, padding: '13px 18px', borderRadius: 16, display: 'flex', alignItems: 'center', gap: 12, color: '#fff', background: `linear-gradient(135deg, ${C.coral}, #E11D48)`, boxShadow: '0 12px 30px rgba(225,29,72,.28)' }}>
             <ShieldAlert size={20} />
@@ -1086,12 +1086,12 @@ function Console() {
       </Card>
 
       {/* Hero · today at a glance */}
-      <div className="lift rounded-2xl mb-6" style={{ position: 'relative', overflow: 'hidden', padding: '22px 26px', color: '#fff', background: 'linear-gradient(135deg, #1B1140 0%, #3A1D7A 52%, #5E1FD8 120%)', boxShadow: '0 20px 50px rgba(94,31,216,.28)' }}>
+      <div className="rounded-3xl mb-7" style={{ position: 'relative', overflow: 'hidden', padding: '30px 34px', color: '#fff', background: 'linear-gradient(135deg, #17102F 0%, #341B6E 52%, #5A1FD4 122%)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.08), 0 30px 64px -28px rgba(94,31,216,.55)' }}>
         <div style={{ position: 'absolute', width: 260, height: 260, borderRadius: '50%', background: 'rgba(159,102,255,.40)', filter: 'blur(70px)', top: -100, right: 30 }} />
         <div className="relative flex items-end justify-between gap-5" style={{ flexWrap: 'wrap' }}>
           <div>
             <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '.2em', textTransform: 'uppercase', opacity: .68 }}>HaseebMadeIt · Operations · {label}</div>
-            <div className="disp" style={{ fontSize: 30, fontWeight: 700, marginTop: 7, lineHeight: 1.05 }}>{acts.length} {acts.length === 1 ? 'action' : 'actions'} <span style={{ opacity: .6, fontWeight: 600, fontSize: 17 }}>across {filtered.length} {filtered.length === 1 ? 'report' : 'reports'}</span></div>
+            <div className="disp" style={{ fontSize: 35, fontWeight: 700, letterSpacing: '-0.03em', marginTop: 9, lineHeight: 1.03 }}>{acts.length} {acts.length === 1 ? 'action' : 'actions'} <span style={{ opacity: .62, fontWeight: 600, fontSize: 18 }}>across {filtered.length} {filtered.length === 1 ? 'report' : 'reports'}</span></div>
             <div className="flex" style={{ gap: 22, marginTop: 14, flexWrap: 'wrap' }}>
               {[['Open now', online], ['Profiles active', new Set(filtered.map(r => r.profile)).size], ['CSRs on', new Set(filtered.map(r => r.csr_name)).size], ['Needs attention', flags.length + idle.length]].map(([l, v]) => (
                 <div key={l}><div className="mono" style={{ fontSize: 21, fontWeight: 700, lineHeight: 1 }}>{v}</div><div style={{ fontSize: 10, opacity: .7, fontWeight: 600, marginTop: 4, textTransform: 'uppercase', letterSpacing: '.06em' }}>{l}</div></div>
