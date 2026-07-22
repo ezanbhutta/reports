@@ -134,8 +134,8 @@ export const ACTIONS = [
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
               { name: 'project', label: 'Project name', type: 'text' },
               { name: 'designer', label: 'Designer', type: 'designer', required: true },
-              { name: 'remind_in', label: 'Remind me in', type: 'text', placeholder: 'e.g. 30m = 30 minutes · 2h = 2 hours',
-                validate: v => parseRemindTime(v) != null, errorMsg: '“Remind me in” just needs a number + m or h — like 30m or 2h.' } ] },
+              { name: 'remind_in', label: 'Remind me in', type: 'text', placeholder: 'Optional · blank = 24h — e.g. 30m, 2h',
+                validate: v => parseRemindTime(v) != null, errorMsg: '“Remind me in” just needs a number + m or h — like 30m or 2h (or leave it blank for 24h).' } ] },
 
   // Project delivered = the formal deliverable — initial draft / final files only.
   { key: 'project_delivered', label: 'Project delivered', group: 'deliveries',
@@ -334,13 +334,12 @@ export const REMINDERS = {
       { key: 'upsell_done', label: 'Upsell done', kind: 'resolve', variant: 'ok' },
     ],
   },
-  // Revision assigned → the CSR picks the check-in time in the form ("Remind me
-  // in", e.g. 30m / 2h); the reminder asks whether the revision is done. No
-  // time entered ⇒ no reminder.
+  // Revision assigned → the reminder asks whether the revision is done. The CSR
+  // can set the check-in time in the form ("Remind me in", e.g. 30m / 2h); if
+  // they leave it blank it defaults to 24h. Always books a reminder.
   revision_assigned: {
     title: r => `Check if ${r.client ? r.client + '’s' : 'the'} revision is done`,
-    when: a => parseRemindTime(a.details && a.details.remind_in) != null,
-    delayMinutes: a => parseRemindTime(a.details.remind_in),
+    delayMinutes: a => parseRemindTime(a.details && a.details.remind_in) ?? 24 * 60,
     buttons: [
       { key: 'followup_done', label: 'Follow-up done', kind: 'resolve', variant: 'subtle', hint: 'Checked in with the designer on this revision' },
       { key: 'revision_done', label: 'Revision done',  kind: 'resolve', variant: 'ok', hint: 'The revision is finished' },

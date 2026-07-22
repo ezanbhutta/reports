@@ -120,9 +120,9 @@ logged.
 - **Buttons:** **No need** · **Upsell done**
 
 ### 8. Revision assigned → check if done
-- **Trigger:** logging **Revision assigned to designer** **and typing a time** in
-  the form's **"Remind me in"** box (e.g. `30m`, `2h`, `5 h`, `1.5h`).
-- **Delay:** **exactly the time you typed.** Leave the box empty → **no reminder**.
+- **Trigger:** logging **Revision assigned to designer** (always books a reminder).
+- **Delay:** the time you type in the **"Remind me in"** box (e.g. `30m`, `2h`,
+  `5 h`, `1.5h`); **leave it blank → defaults to 24 hours**.
 - **Reminder:** "Check if *[client]*'s revision is done."
 - **Buttons:** **Follow-up done** *(checked in with the designer)* · **Revision
   done** *(the revision is finished)*
