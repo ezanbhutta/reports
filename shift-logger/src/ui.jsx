@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useId } from 'react';
-import { X, AlertTriangle, Copy, Check, Star } from 'lucide-react';
+import { X, AlertTriangle, Copy, Check, Star, ChevronDown } from 'lucide-react';
 import { C } from './config.js';
 import { db } from './store.js';
 
@@ -269,6 +269,44 @@ export const Label = ({ children }) => (
   <div style={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.12em', color: C.dim, margin: '13px 0 5px' }}>{children}</div>
 );
 
+// Multi-select dropdown: a compact trigger that opens a checkable list — pick several,
+// it stays open, closes on outside click. In-flow (not an overlay) so it never clips
+// inside the scrollable form modal.
+function MultiPick({ options, value, onChange, placeholder = 'Select…' }) {
+  const arr = Array.isArray(value) ? value : [];
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+  const toggle = o => onChange(arr.includes(o) ? arr.filter(x => x !== o) : [...arr, o]);
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} className="gi"
+        style={{ display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left', cursor: 'pointer' }}>
+        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: arr.length ? C.ink : C.dim, fontWeight: arr.length ? 600 : 400 }}>
+          {arr.length ? arr.join(', ') : placeholder}
+        </span>
+        {arr.length > 0 && <span className="mono" style={{ fontSize: 11, fontWeight: 800, color: '#fff', background: C.violet, borderRadius: 99, padding: '1px 7px', flex: '0 0 auto' }}>{arr.length}</span>}
+        <ChevronDown size={15} style={{ flex: '0 0 auto', color: C.dim, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .16s ease' }} />
+      </button>
+      {open && (
+        <div className="glass-soft rounded-xl scroll-y" style={{ marginTop: 6, maxHeight: 244, overflowY: 'auto', border: `1px solid ${C.border}` }}>
+          {options.map((o, i) => { const on = arr.includes(o); return (
+            <button type="button" key={o} aria-pressed={on} onClick={() => toggle(o)}
+              style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 12px', border: 'none', borderTop: i ? `1px solid ${C.line}` : 'none', background: on ? C.violetBg : 'transparent', cursor: 'pointer', textAlign: 'left' }}>
+              <span style={{ width: 18, height: 18, flex: '0 0 auto', borderRadius: 6, border: `1.5px solid ${on ? C.violet : C.surfaceLine}`, background: on ? C.violet : 'transparent', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{on && <Check size={12} />}</span>
+              <span style={{ fontSize: 13.5, fontWeight: on ? 700 : 500, color: on ? C.violetDim : C.ink }}>{o}</span>
+            </button>); })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Dynamic field renderer (powers every action form).
 export function Field({ field, value, onChange }) {
   const { type, label, options, required } = field;
@@ -299,7 +337,10 @@ export function Field({ field, value, onChange }) {
           <span className="mono" style={{ marginLeft: 6, fontSize: 12.5, fontWeight: 800, color: v ? C.ink : C.dim }}>{v ? v + '/5' : '—'}</span>
         </div>
       ); })()}
-      {type === 'multiselect' && (
+      {type === 'multiselect' && field.dropdown && (
+        <MultiPick options={options} value={value} onChange={onChange} placeholder={`Select ${label.replace(/\s*\(.*\)\s*$/, '').toLowerCase()}…`} />
+      )}
+      {type === 'multiselect' && !field.dropdown && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
           {options.map(o => { const arr = Array.isArray(value) ? value : []; const on = arr.includes(o); return (
             <button type="button" key={o} aria-pressed={on} onClick={() => onChange(on ? arr.filter(x => x !== o) : [...arr, o])} className="rounded-full"
