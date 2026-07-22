@@ -138,6 +138,9 @@ logged.
 - **Trigger:** logging **Project delivered** (Initial draft / Final files) **or**
   **Shared to client (chat)** (any elements you multi-selected).
 - **Delay:** **15 hours**.
+- **Auto-clears** if a **Revision assigned** for the **same client + same project**
+  is logged before it's resolved — the client came back with a revision, so the
+  follow-up isn't needed. (Needs a project name on the revision to match.)
 - **Reminder:** "Follow up on the *[the specific item]* delivered to / shared with
   *[client]*." *(the reminder names the exact item and client.)*
 - **Buttons:** **Responded** *(client already replied)* · **Followed up**

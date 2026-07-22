@@ -212,12 +212,16 @@ const localDb = {
   async allReminders() {
     return read(LS.reminders, []).sort((a, b) => (a.due_at || '').localeCompare(b.due_at || ''));
   },
-  async cancelRemindersFor(profile, actionType, clientName, by) {
+  async cancelRemindersFor(profile, actionType, clientName, by, project) {
     const cl = String(clientName || '').trim().toLowerCase();
     if (!cl) return;
+    const matchProj = project !== undefined;          // when set, also require same project name
+    const pj = String(project || '').trim().toLowerCase();
     const list = read(LS.reminders, []);
     let hit = false;
-    const next = list.map(r => (r.status === 'pending' && r.profile === profile && r.action_type === actionType && String(r.client || '').trim().toLowerCase() === cl)
+    const next = list.map(r => (r.status === 'pending' && r.profile === profile && r.action_type === actionType
+        && String(r.client || '').trim().toLowerCase() === cl
+        && (!matchProj || String(r.project || '').trim().toLowerCase() === pj))
       ? (hit = true, { ...r, status: 'resolved', resolution: 'auto_cleared', resolved_by: by || '', resolved_at: new Date().toISOString() }) : r);
     if (hit) write(LS.reminders, next);
   },
@@ -516,16 +520,19 @@ const supaDb = {
       await q;
     } catch {}
   },
-  async cancelRemindersFor(profile, actionType, clientName, by) {
+  async cancelRemindersFor(profile, actionType, clientName, by, project) {
     // Same client + same profile logged the satisfying activity ⇒ the pending
     // reminder is no longer needed. Case-insensitive on the client username
-    // (ilike; % and _ escaped so they can't act as wildcards).
+    // (ilike; % and _ escaped so they can't act as wildcards). When `project` is
+    // passed, also require the same project name (used for delivered/shared).
     const cl = String(clientName || '').trim().replace(/[%_]/g, '\\$&');
     if (!cl) return;
     try {
       const c = await client();
-      await c.from('reminders').update({ status: 'resolved', resolution: 'auto_cleared', resolved_by: by || '', resolved_at: new Date().toISOString() })
+      let q = c.from('reminders').update({ status: 'resolved', resolution: 'auto_cleared', resolved_by: by || '', resolved_at: new Date().toISOString() })
         .eq('profile', profile).eq('action_type', actionType).eq('status', 'pending').ilike('client', cl);
+      if (project !== undefined) q = q.ilike('project', String(project || '').trim().replace(/[%_]/g, '\\$&'));
+      await q;
     } catch {}
   },
   async cancelRemindersForAction(actionId, actionType) {
