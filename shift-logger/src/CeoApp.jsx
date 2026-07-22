@@ -408,6 +408,8 @@ function RemindersPanel({ reminders, reload }) {
   const [, setTick] = useState(0);
   // Due-ness moves with the wall clock, not just DB events — re-evaluate every 30s.
   useEffect(() => { const t = setInterval(() => setTick(x => x + 1), 30000); return () => clearInterval(t); }, []);
+  const [roster, setRoster] = useState([]);
+  useEffect(() => { db.getRoster().then(setRoster); }, []);   // to map a resolver → their shift
   const [fProfile, setFProfile] = useState('all');
   const [fStatus, setFStatus] = useState('due');
   const now = Date.now();
@@ -430,6 +432,42 @@ function RemindersPanel({ reminders, reload }) {
     scheduled: { color: C.violet, label: r => 'due in ' + inFmt(new Date(r.due_at).getTime() - now) },
     resolved:  { color: C.mint,   label: r => (r.resolution || 'completed').replace(/_/g, ' ') },
   };
+
+  // ── Team stats: who clears reminders, whose reminders, which shift clears most ──
+  // Based on the resolved history in this ledger (recent). "Cleared" counts only
+  // reminders a person actually resolved — auto-cleared ones (the follow-up got
+  // logged first) and system/CEO actions are left out of the who-cleared tallies.
+  const shiftByName = {}; roster.forEach(p => { if (p && p.name) shiftByName[p.name] = p.shift || ''; });
+  const rank = (rows, keyFn) => { const m = {}; rows.forEach(r => { const k = keyFn(r); if (k) m[k] = (m[k] || 0) + 1; }); return Object.entries(m).sort((a, b) => b[1] - a[1]); };
+  const IGNORE = new Set(['system', 'cleanup', 'CEO']);
+  const clearedManual = reminders.filter(r => r.status !== 'pending' && r.resolution !== 'auto_cleared' && r.resolved_by && !IGNORE.has(r.resolved_by));
+  const topClearers = rank(clearedManual, r => r.resolved_by);        // which CSR clears the most
+  const topRaisers  = rank(reminders, r => r.csr_name);               // whose logged activity raises the most
+  const byShift     = rank(clearedManual, r => shiftByName[r.resolved_by] || 'Other'); // which shift clears the most
+  const leaderBlock = (title, rows, accent = C.violet, star = true, empty = 'No data yet') => {
+    const max = rows.length ? rows[0][1] : 1;
+    return (
+      <div>
+        <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.1em', color: C.dim, marginBottom: 11 }}>{title}</div>
+        {rows.length === 0 ? <div style={{ fontSize: 12, color: C.dim }}>{empty}</div> : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+            {rows.slice(0, 5).map(([name, n], i) => (
+              <div key={name}>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: i === 0 ? 800 : 600, color: C.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{star && i === 0 ? '★ ' : ''}{name}</span>
+                  <span className="mono" style={{ fontSize: 12.5, fontWeight: 800, color: accent, flex: '0 0 auto' }}>{n}</span>
+                </div>
+                <div style={{ height: 5, borderRadius: 99, background: C.line, marginTop: 4, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: Math.round(n / max * 100) + '%', background: accent, borderRadius: 99 }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <>
       <div className="mb-4">
@@ -443,6 +481,18 @@ function RemindersPanel({ reminders, reload }) {
         <StatCard label="Scheduled" value={count('scheduled')} sub="not due yet" accent={C.violet} icon={CalendarDays} />
         <StatCard label="Resolved" value={count('resolved')} sub="recent history" accent={C.mint} icon={ShieldCheck} />
       </div>
+
+      {reminders.length > 0 && (
+        <Card className="p-4" style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: C.ink }}>Team activity</div>
+          <div style={{ fontSize: 11, color: C.muted, margin: '2px 0 15px' }}>Who's staying on top of reminders — from the recent resolved history across every profile.</div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-6">
+            {leaderBlock('Top reminder-clearers', topClearers, C.violet, true, 'Nobody has cleared a reminder yet')}
+            {leaderBlock('Most reminders raised by', topRaisers, C.amber, false, 'No reminders raised yet')}
+            {leaderBlock('Cleared by shift', byShift, C.mint, true, 'No reminders cleared yet')}
+          </div>
+        </Card>
+      )}
 
       <div className="flex items-center gap-2 flex-wrap" style={{ marginBottom: 14 }}>
         {[['due', 'Due now'], ['scheduled', 'Scheduled'], ['resolved', 'Resolved'], ['all', 'All']].map(([s, lbl]) => <Chip key={s} active={fStatus === s} onClick={() => setFStatus(s)}>{lbl}</Chip>)}
