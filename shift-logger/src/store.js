@@ -212,17 +212,20 @@ const localDb = {
   async allReminders() {
     return read(LS.reminders, []).sort((a, b) => (a.due_at || '').localeCompare(b.due_at || ''));
   },
-  async cancelRemindersFor(profile, actionType, clientName, by, project) {
-    const cl = String(clientName || '').trim().toLowerCase();
-    if (!cl) return;
-    const matchProj = project !== undefined;          // when set, also require same project name
-    const pj = String(project || '').trim().toLowerCase();
+  async cancelRemindersFor(profile, actionType, match, by) {
+    // match = { client?, project? } — whichever keys are present are required.
+    const cl = match && match.client !== undefined ? String(match.client || '').trim().toLowerCase() : null;
+    const pj = match && match.project !== undefined ? String(match.project || '').trim().toLowerCase() : null;
+    if (cl === null && pj === null) return;
     const list = read(LS.reminders, []);
     let hit = false;
-    const next = list.map(r => (r.status === 'pending' && r.profile === profile && r.action_type === actionType
-        && String(r.client || '').trim().toLowerCase() === cl
-        && (!matchProj || String(r.project || '').trim().toLowerCase() === pj))
-      ? (hit = true, { ...r, status: 'resolved', resolution: 'auto_cleared', resolved_by: by || '', resolved_at: new Date().toISOString() }) : r);
+    const next = list.map(r => {
+      if (!(r.status === 'pending' && r.profile === profile && r.action_type === actionType)) return r;
+      if (cl !== null && String(r.client || '').trim().toLowerCase() !== cl) return r;
+      if (pj !== null && String(r.project || '').trim().toLowerCase() !== pj) return r;
+      hit = true;
+      return { ...r, status: 'resolved', resolution: 'auto_cleared', resolved_by: by || '', resolved_at: new Date().toISOString() };
+    });
     if (hit) write(LS.reminders, next);
   },
   async cancelRemindersForAction(actionId, actionType) {
@@ -520,18 +523,20 @@ const supaDb = {
       await q;
     } catch {}
   },
-  async cancelRemindersFor(profile, actionType, clientName, by, project) {
-    // Same client + same profile logged the satisfying activity ⇒ the pending
-    // reminder is no longer needed. Case-insensitive on the client username
-    // (ilike; % and _ escaped so they can't act as wildcards). When `project` is
-    // passed, also require the same project name (used for delivered/shared).
-    const cl = String(clientName || '').trim().replace(/[%_]/g, '\\$&');
-    if (!cl) return;
+  async cancelRemindersFor(profile, actionType, match, by) {
+    // The satisfying activity was logged ⇒ the pending reminder is no longer needed.
+    // match = { client?, project? }; whichever keys are present are required.
+    // Case-insensitive (ilike; % and _ escaped so they can't act as wildcards).
+    const esc = s => String(s || '').trim().replace(/[%_]/g, '\\$&');
+    const hasCl = !!(match && match.client !== undefined);
+    const hasPj = !!(match && match.project !== undefined);
+    if (!hasCl && !hasPj) return;
     try {
       const c = await client();
       let q = c.from('reminders').update({ status: 'resolved', resolution: 'auto_cleared', resolved_by: by || '', resolved_at: new Date().toISOString() })
-        .eq('profile', profile).eq('action_type', actionType).eq('status', 'pending').ilike('client', cl);
-      if (project !== undefined) q = q.ilike('project', String(project || '').trim().replace(/[%_]/g, '\\$&'));
+        .eq('profile', profile).eq('action_type', actionType).eq('status', 'pending');
+      if (hasCl) q = q.ilike('client', esc(match.client));
+      if (hasPj) q = q.ilike('project', esc(match.project));
       await q;
     } catch {}
   },

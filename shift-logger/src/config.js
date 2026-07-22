@@ -233,6 +233,9 @@ export const parseRemindTime = v => {
 //              to match. The cancel is skipped if the triggering entry has no
 //              project (can't confirm it's the same one). Used by the
 //              delivered/shared follow-ups (cleared by a revision on that item).
+//   cancelKey — used with cancelOn: match by 'project' instead of the client.
+//              For triggers with no client of their own (e.g. Order Assigned to
+//              Designer, which is keyed by project).
 //   buttons  — the resolve buttons, in order; each closes the reminder with its
 //              key recorded as the resolution (visible in the CEO ledger).
 //              kind 'snooze' + minutes instead re-books it that far out (e.g.
@@ -249,6 +252,7 @@ export const REMINDERS = {
   inquiry: {
     title: r => `Send the 1st follow-up to ${r.client || 'the client'}`,
     delayMinutes: 25,
+    cancelOn: 'new_order',   // they converted → drop the follow-up nudge
     buttons: [
       { key: 'in_discussion', label: 'In discussion', kind: 'resolve', variant: 'subtle' },
       { key: 'followed_up',   label: 'Followed up',   kind: 'resolve', variant: 'solid' },
@@ -263,6 +267,7 @@ export const REMINDERS = {
     when: a => ['1st', '2nd', '3rd'].includes(a.details && a.details.attempt),
     delayMinutes: a => ({ '1st': 12 * 60, '2nd': 24 * 60, '3rd': 48 * 60 })[a.details.attempt],
     note: a => ({ '1st': '2nd follow-up', '2nd': '3rd follow-up', '3rd': '4th & last follow-up' })[a.details.attempt],
+    cancelOn: 'new_order',   // they converted → drop the pending next-follow-up
     buttons: [
       { key: 'in_discussion', label: 'In discussion', kind: 'resolve', variant: 'subtle' },
       { key: 'followed_up',   label: 'Followed up',   kind: 'resolve', variant: 'solid' },
@@ -274,6 +279,7 @@ export const REMINDERS = {
   new_order: {
     title: r => `Assign ${r.client ? r.client + '’s' : 'the new'} order to a designer`,
     delayMinutes: 30,
+    cancelOn: 'order_assigned', cancelKey: 'project',   // once it's actually assigned, drop the nudge
     buttons: [
       { key: 'next_shift', label: 'Next shift', kind: 'snooze', minutes: 8 * 60, variant: 'subtle', hint: 'Will assign in the next shift — reminds again in 8 hours' },
       { key: 'assigned',   label: 'Assigned',   kind: 'resolve', variant: 'ok', hint: 'Order assigned to a designer' },
@@ -288,6 +294,7 @@ export const REMINDERS = {
     when: a => (a.details && a.details.order_via) === 'Direct Order',
     title: r => `Potential upsell for ${r.client || 'the client'} — what’s missing? Especially a Website`,
     delayMinutes: 0,
+    cancelOn: 'upsell',   // an upsell for this client was logged → nudge done
     buttons: [
       { key: 'no_need',     label: 'No need',     kind: 'resolve', variant: 'subtle' },
       { key: 'upsell_done', label: 'Upsell done', kind: 'resolve', variant: 'ok' },
@@ -321,6 +328,7 @@ export const REMINDERS = {
   files_assigned: {
     title: r => `Suggest an upsell to ${r.client || 'the client'}`,
     delayMinutes: 0,
+    cancelOn: 'upsell',   // an upsell for this client was logged → nudge done
     buttons: [
       { key: 'no_need',     label: 'No need',     kind: 'resolve', variant: 'subtle' },
       { key: 'upsell_done', label: 'Upsell done', kind: 'resolve', variant: 'ok' },
@@ -365,6 +373,7 @@ export const REMINDERS = {
   offer: {
     title: r => `Send the 1st follow-up on the offer to ${r.client || 'the client'}`,
     delayMinutes: 2 * 60,
+    cancelOn: 'new_order',   // order placed (logged as a new order) → end the chain
     buttons: [
       { key: 'order_placed', label: 'Order placed', kind: 'resolve', variant: 'ok', hint: 'Offer converted — no more reminders' },
       { key: 'fu1_done',     label: '1st F/U done', kind: 'chain', next: 'offer_fu2', variant: 'solid', hint: 'Books the 2nd follow-up reminder (16h)' },
@@ -374,6 +383,7 @@ export const REMINDERS = {
     on: 'offer', chained: true,
     title: r => `Send the 2nd follow-up on the offer to ${r.client || 'the client'}`,
     delayMinutes: 16 * 60,
+    cancelOn: 'new_order',
     buttons: [
       { key: 'order_placed', label: 'Order placed', kind: 'resolve', variant: 'ok', hint: 'Offer converted — no more reminders' },
       { key: 'fu2_done',     label: '2nd F/U done', kind: 'chain', next: 'offer_fu3', variant: 'solid', hint: 'Books the 3rd follow-up reminder (36h)' },
@@ -383,6 +393,7 @@ export const REMINDERS = {
     on: 'offer', chained: true,
     title: r => `Send the 3rd follow-up on the offer to ${r.client || 'the client'}`,
     delayMinutes: 36 * 60,
+    cancelOn: 'new_order',
     buttons: [
       { key: 'order_placed', label: 'Order placed', kind: 'resolve', variant: 'ok', hint: 'Offer converted' },
       { key: 'fu3_done',     label: '3rd F/U done', kind: 'resolve', variant: 'solid', hint: 'Chain ends — no more reminders for this offer' },

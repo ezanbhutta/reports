@@ -300,18 +300,25 @@ export default function CsrApp({ boundProfile }) {
   // received" for the same client + profile clears the ask-for-review reminder,
   // whether or not it has popped yet.
   function autoClearReminders(a) {
-    if (!report || !a.client) return;
+    if (!report) return;
+    const entryProject = projectOf(a);   // handles order_assigned (project lives in its client field)
     Object.entries(REMINDERS).forEach(([type, rule]) => {
       if (rule.cancelOn !== a.type) return;
-      if (rule.cancelMatchProject) {
-        // Only clear when the SAME project name is named (e.g. a revision on the
-        // exact item that was delivered/shared). No project on the trigger ⇒ skip.
-        const proj = String((a.details && a.details.project) || '').trim();
-        if (!proj) return;
-        db.cancelRemindersFor(report.profile, type, a.client, report.csr_name, proj);
+      let match;
+      if (rule.cancelKey === 'project') {
+        // Match by project only (trigger has no client of its own, e.g. Order Assigned).
+        if (!entryProject) return;
+        match = { project: entryProject };
+      } else if (rule.cancelMatchProject) {
+        // Same client AND same project (e.g. a revision on the exact delivered/shared item).
+        if (!a.client || !entryProject) return;
+        match = { client: a.client, project: entryProject };
       } else {
-        db.cancelRemindersFor(report.profile, type, a.client, report.csr_name);
+        // Same client (e.g. an upsell for this client, or they placed an order).
+        if (!a.client) return;
+        match = { client: a.client };
       }
+      db.cancelRemindersFor(report.profile, type, match, report.csr_name);
     });
   }
   // Keep pending reminders in step when their source entry is edited — and re-evaluate

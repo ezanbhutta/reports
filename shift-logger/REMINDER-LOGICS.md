@@ -54,6 +54,8 @@ logged.
 ### 1. New inquiry → 1st follow-up
 - **Trigger:** logging **New inquiry**.
 - **Delay:** **25 minutes**.
+- **Auto-clears** if a **New order** for the same client is logged first (they
+  converted — no need to chase).
 - **Reminder:** "Send the 1st follow-up to *[client]*."
 - **Buttons:** **In discussion** · **Followed up** · **Order taken**
   *(all three simply close the reminder — no form opens.)*
@@ -65,12 +67,16 @@ logged.
   - Logged **2nd** → remind to do the **3rd** after **24 hours**
   - Logged **3rd** → remind to do the **4th & last** after **48 hours**
   - Logged **4th+** → **books nothing** (the chain ends there)
+- **Auto-clears** if a **New order** for the same client is logged first (they
+  converted).
 - **Reminder:** "Send the *[2nd / 3rd / 4th & last]* follow-up to *[lead]*."
 - **Buttons:** **In discussion** · **Followed up** · **Order taken**
 
 ### 3. New order → assign to designer
 - **Trigger:** logging **New order**.
 - **Delay:** **30 minutes**.
+- **Auto-clears** if **Order Assigned to Designer** for the **same project** is
+  logged first (it's already assigned).
 - **Reminder:** "Assign *[client]*'s order to a designer."
 - **Buttons:**
   - **Next shift** — snoozes the reminder **8 hours** (assign on the next shift)
@@ -82,6 +88,7 @@ logged.
   reminder. This is a **second, separate** reminder — a Direct Order books both #3
   and #4; a Via Chat order books only #3.
 - **Delay:** **immediately**.
+- **Auto-clears** if an **Upsell** for the same client is logged first.
 - **Reminder:** "Potential upsell for *[client]* — what's missing? Especially a
   Website." *(the order's service shows as context.)*
 - **Buttons:** **No need** · **Upsell done**
@@ -108,6 +115,7 @@ logged.
 ### 7. Files Assigned to Designer → upsell
 - **Trigger:** logging **Files Assigned to Designer**.
 - **Delay:** **immediately**.
+- **Auto-clears** if an **Upsell** for the same client is logged first.
 - **Reminder:** "Suggest an upsell to *[client]*." *(the CSR knows what to offer.)*
 - **Buttons:** **No need** · **Upsell done**
 
@@ -121,6 +129,8 @@ logged.
 
 ### 9. Offer → button-driven follow-up chain
 - **Trigger:** logging **Offer** (new or existing client).
+- **Auto-clears** (any stage) if a **New order** for the same client is logged —
+  they placed the order, so the chain ends (same as tapping *Order placed*).
 - **Stage 1:** after **2 hours** → "Send the 1st follow-up on the offer to
   *[client]*."
   - **Order placed** → offer converted, **chain ends** (no more reminders)
