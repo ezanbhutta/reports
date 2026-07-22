@@ -37,7 +37,7 @@ logged.
 | 1 | **New inquiry** | after **25 min** | Send 1st follow-up | In discussion · Followed up · Order taken |
 | 2 | **Lead follow-up** (1st/2nd/3rd) | **12h / 24h / 48h** | Send the next follow-up | In discussion · Followed up · Order taken |
 | 3 | **New order** | after **30 min** | Assign to a designer | Next shift (8h) · Assigned |
-| 4 | **New order** (2nd reminder) | **immediately** | Potential upsell (esp. Website) | No need · Upsell done |
+| 4 | **New order** = *Direct Order* | **immediately** | Potential upsell (esp. Website) | No need · Upsell done |
 | 5 | **Order completed** | after **30 min** | Ask client for **Public Review** | No need · Msg sent · Review given |
 | 6 | **Review received** (avg 4.7–5.0) | after **24h** | Ask client for **Private Review** | Msg sent |
 | 7 | **Files Assigned to Designer** | **immediately** | Suggest an upsell | No need · Upsell done |
@@ -76,9 +76,11 @@ logged.
   - **Next shift** — snoozes the reminder **8 hours** (assign on the next shift)
   - **Assigned** — order assigned; closes it
 
-### 4. New order → potential upsell
-- **Trigger:** logging **New order** (this is a **second, separate** reminder on
-  the same activity — one New order books both #3 and #4).
+### 4. New order → potential upsell (Direct Order only)
+- **Trigger:** logging **New order** **and** marking it **"Direct Order"** (in the
+  new *How the order came in* choice). A **"Via Chat"** order books **no** upsell
+  reminder. This is a **second, separate** reminder — a Direct Order books both #3
+  and #4; a Via Chat order books only #3.
 - **Delay:** **immediately**.
 - **Reminder:** "Potential upsell for *[client]* — what's missing? Especially a
   Website." *(the order's service shows as context.)*

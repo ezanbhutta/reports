@@ -110,7 +110,8 @@ export const ACTIONS = [
   { key: 'new_order', label: 'New order', group: 'orders',
     fields: [ { name: 'client', label: 'Client', type: 'text', required: true },
               { name: 'project', label: 'Project name', type: 'text' },
-              { name: 'service', label: 'Services (pick any)', type: 'multiselect', options: SERVICES },
+              { name: 'order_via', label: 'How the order came in', type: 'segment', options: ['Via Chat', 'Direct Order'], required: true },
+              { name: 'service', label: 'Services (pick any)', type: 'multiselect', dropdown: true, options: SERVICES },
               { name: 'service_other', label: 'Other — please specify', type: 'text', required: true, showIf: v => Array.isArray(v.service) && v.service.includes('Other') },
               { name: 'value', label: 'Price', type: 'text' } ] },
   { key: 'order_assigned', label: 'Order Assigned to Designer', group: 'orders',
@@ -277,8 +278,10 @@ export const REMINDERS = {
   // New order → also an immediate potential-upsell nudge: what's missing / what
   // else would help this client — especially a Website. (Second rule on the
   // same activity; the order's service shows as context for spotting the gap.)
+  // Only for DIRECT orders — chat orders don't get the upsell nudge.
   new_order_upsell: {
     on: 'new_order',
+    when: a => (a.details && a.details.order_via) === 'Direct Order',
     title: r => `Potential upsell for ${r.client || 'the client'} — what’s missing? Especially a Website`,
     delayMinutes: 0,
     buttons: [
