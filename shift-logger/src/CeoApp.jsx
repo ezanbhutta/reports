@@ -412,6 +412,9 @@ function RemindersPanel({ reminders, reload }) {
   useEffect(() => { db.getRoster().then(setRoster); }, []);   // to map a resolver → their shift
   const [fProfile, setFProfile] = useState('all');
   const [fStatus, setFStatus] = useState('due');
+  const [statSort, setStatSort] = useState('cleared');   // Team-activity table sort
+  const [statShift, setStatShift] = useState('all');
+  const [statQ, setStatQ] = useState('');
   const now = Date.now();
   const stateOf = r => r.status !== 'pending' ? 'resolved'
     : new Date(r.due_at).getTime() > now ? 'scheduled'
@@ -433,40 +436,61 @@ function RemindersPanel({ reminders, reload }) {
     resolved:  { color: C.mint,   label: r => (r.resolution || 'completed').replace(/_/g, ' ') },
   };
 
-  // ── Team stats: who clears reminders, whose reminders, which shift clears most ──
-  // Based on the resolved history in this ledger (recent). "Cleared" counts only
-  // reminders a person actually resolved — auto-cleared ones (the follow-up got
-  // logged first) and system/CEO actions are left out of the who-cleared tallies.
+  // ── Team activity: full per-person accountability across the roster ──
+  // Everyone active in the roster appears (even at zero), plus anyone with history.
+  // Metrics respect the profile filter. "Cleared" = reminders a person actually
+  // resolved (auto-cleared / CEO / system excluded).
   const shiftByName = {}; roster.forEach(p => { if (p && p.name) shiftByName[p.name] = p.shift || ''; });
-  const rank = (rows, keyFn) => { const m = {}; rows.forEach(r => { const k = keyFn(r); if (k) m[k] = (m[k] || 0) + 1; }); return Object.entries(m).sort((a, b) => b[1] - a[1]); };
-  const IGNORE = new Set(['system', 'cleanup', 'CEO']);
-  const clearedManual = reminders.filter(r => r.status !== 'pending' && r.resolution !== 'auto_cleared' && r.resolved_by && !IGNORE.has(r.resolved_by));
-  const topClearers = rank(clearedManual, r => r.resolved_by);        // which CSR clears the most
-  const topRaisers  = rank(reminders, r => r.csr_name);               // whose logged activity raises the most
-  const byShift     = rank(clearedManual, r => shiftByName[r.resolved_by] || 'Other'); // which shift clears the most
-  const leaderBlock = (title, rows, accent = C.violet, star = true, empty = 'No data yet') => {
-    const max = rows.length ? rows[0][1] : 1;
-    return (
-      <div>
-        <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.1em', color: C.dim, marginBottom: 11 }}>{title}</div>
-        {rows.length === 0 ? <div style={{ fontSize: 12, color: C.dim }}>{empty}</div> : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-            {rows.slice(0, 5).map(([name, n], i) => (
-              <div key={name}>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-                  <span style={{ fontSize: 12.5, fontWeight: i === 0 ? 800 : 600, color: C.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{star && i === 0 ? '★ ' : ''}{name}</span>
-                  <span className="mono" style={{ fontSize: 12.5, fontWeight: 800, color: accent, flex: '0 0 auto' }}>{n}</span>
-                </div>
-                <div style={{ height: 5, borderRadius: 99, background: C.line, marginTop: 4, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: Math.round(n / max * 100) + '%', background: accent, borderRadius: 99 }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
+  const rosterCsrs = roster.filter(p => p && p.active && p.name && !isDesigner(p));
+  const rosterSet = new Set(rosterCsrs.map(p => p.name));
+  const IGNORE = new Set(['', 'system', 'cleanup', 'CEO']);
+  const scoped = fProfile === 'all' ? reminders : reminders.filter(r => r.profile === fProfile);
+  const isOverdue = r => r.status === 'pending' && new Date(r.due_at).getTime() <= now && !(r.snoozed_until && new Date(r.snoozed_until).getTime() > now);
+  const isClearedBy = r => r.status !== 'pending' && r.resolution !== 'auto_cleared';
+  const nameSet = new Set(rosterCsrs.map(p => p.name));
+  scoped.forEach(r => { [r.csr_name, r.resolved_by].forEach(n => { if (n && !IGNORE.has(n)) nameSet.add(n); }); });
+  const fmtDur = m => m == null ? '—' : m < 60 ? m + 'm' : m < 1440 ? Math.round(m / 60) + 'h' : Math.round(m / 1440) + 'd';
+  const personRows = [...nameSet].map(name => {
+    const raisedAll = scoped.filter(r => r.csr_name === name);
+    const clearedAll = scoped.filter(r => r.resolved_by === name && isClearedBy(r));
+    const ct = clearedAll.map(r => new Date(r.resolved_at).getTime() - new Date(r.due_at).getTime()).filter(x => isFinite(x)).map(x => Math.max(0, x));
+    return {
+      name, shift: shiftByName[name] || '', inRoster: rosterSet.has(name),
+      raised: raisedAll.length,
+      openTheirs: raisedAll.filter(r => r.status === 'pending').length,
+      overdueTheirs: raisedAll.filter(isOverdue).length,
+      cleared: clearedAll.length,
+      alerts: clearedAll.filter(r => r.action_type === 'frustrated' || r.action_type === 'disputed').length,
+      avg: ct.length ? Math.round(ct.reduce((s, x) => s + x, 0) / ct.length / 60000) : null,
+    };
+  });
+  const topClearN = personRows.reduce((mx, p) => Math.max(mx, p.cleared), 0);
+  const SHIFT_ORDER = ['Morning', 'Evening', 'Night'];
+  const shiftAgg = SHIFT_ORDER.map(sh => { const ppl = personRows.filter(p => p.shift === sh); return { shift: sh, cleared: ppl.reduce((s, p) => s + p.cleared, 0), raised: ppl.reduce((s, p) => s + p.raised, 0), overdue: ppl.reduce((s, p) => s + p.overdueTheirs, 0) }; });
+  const STAT_SORT = {
+    name:          (a, b) => a.name.localeCompare(b.name),
+    raised:        (a, b) => b.raised - a.raised,
+    cleared:       (a, b) => b.cleared - a.cleared || b.raised - a.raised,
+    openTheirs:    (a, b) => b.openTheirs - a.openTheirs,
+    overdueTheirs: (a, b) => b.overdueTheirs - a.overdueTheirs,
+    alerts:        (a, b) => b.alerts - a.alerts,
+    avg:           (a, b) => (a.avg == null ? Infinity : a.avg) - (b.avg == null ? Infinity : b.avg),
   };
+  const shownRows = personRows
+    .filter(p => (statShift === 'all' || p.shift === statShift) && (!statQ || p.name.toLowerCase().includes(statQ.toLowerCase())))
+    .sort(STAT_SORT[statSort] || STAT_SORT.cleared);
+  const STAT_COLS = [
+    { key: 'raised', label: 'Raised', hint: 'Reminders their logged activity created' },
+    { key: 'cleared', label: 'Cleared', hint: 'Reminders they resolved (auto-cleared excluded)' },
+    { key: 'openTheirs', label: 'Open', hint: 'Their reminders still pending' },
+    { key: 'overdueTheirs', label: 'Overdue', hint: 'Their pending reminders now overdue' },
+    { key: 'alerts', label: 'Alerts', hint: 'Frustrated / disputed alerts they solved' },
+    { key: 'avg', label: 'Avg clear', hint: 'Average time from due to resolved, for what they cleared' },
+  ];
+  const thBase = { padding: '8px 10px', fontSize: 10, fontWeight: 800, letterSpacing: '.05em', textTransform: 'uppercase', color: C.dim, cursor: 'pointer', whiteSpace: 'nowrap', userSelect: 'none' };
+  const tdL = { padding: '9px 10px', fontSize: 12.5, textAlign: 'left', whiteSpace: 'nowrap' };
+  const tdR = { padding: '9px 10px', fontSize: 12.5, textAlign: 'right', whiteSpace: 'nowrap' };
+  const caret = k => statSort === k ? <span style={{ color: C.violet, marginLeft: 3 }}>▾</span> : null;
 
   return (
     <>
@@ -484,12 +508,68 @@ function RemindersPanel({ reminders, reload }) {
 
       {reminders.length > 0 && (
         <Card className="p-4" style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: C.ink }}>Team activity</div>
-          <div style={{ fontSize: 11, color: C.muted, margin: '2px 0 15px' }}>Who's staying on top of reminders — from the recent resolved history across every profile.</div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-6">
-            {leaderBlock('Top reminder-clearers', topClearers, C.violet, true, 'Nobody has cleared a reminder yet')}
-            {leaderBlock('Most reminders raised by', topRaisers, C.amber, false, 'No reminders raised yet')}
-            {leaderBlock('Cleared by shift', byShift, C.mint, true, 'No reminders cleared yet')}
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: C.ink }}>Team activity</div>
+            <div style={{ fontSize: 10.5, color: C.dim }}>{fProfile === 'all' ? 'All profiles' : fProfile} · recent history · tap a column to sort</div>
+          </div>
+
+          {/* by shift, at a glance */}
+          <div className="grid grid-cols-3 gap-3" style={{ margin: '13px 0 4px' }}>
+            {shiftAgg.map(s => (
+              <div key={s.shift} className="glass-soft rounded-xl" style={{ padding: '10px 12px', borderLeft: `3px solid ${SHIFT_COLOR[s.shift] || C.dim}` }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: C.ink }}>{s.shift}</div>
+                <div style={{ display: 'flex', gap: 12, marginTop: 6, flexWrap: 'wrap' }}>
+                  <span className="mono" style={{ fontSize: 13 }}><b style={{ color: C.mint }}>{s.cleared}</b> <span style={{ color: C.dim, fontSize: 9.5 }}>CLEARED</span></span>
+                  <span className="mono" style={{ fontSize: 13 }}><b style={{ color: C.amber }}>{s.raised}</b> <span style={{ color: C.dim, fontSize: 9.5 }}>RAISED</span></span>
+                  <span className="mono" style={{ fontSize: 13 }}><b style={{ color: s.overdue ? C.coral : C.dim }}>{s.overdue}</b> <span style={{ color: C.dim, fontSize: 9.5 }}>OVERDUE</span></span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* filters */}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '14px 0 10px' }}>
+            {[['all', 'All shifts'], ['Morning', 'Morning'], ['Evening', 'Evening'], ['Night', 'Night']].map(([s, l]) => <Chip key={s} active={statShift === s} onClick={() => setStatShift(s)}>{l}</Chip>)}
+            <div style={{ flex: 1 }} />
+            <Select value={fProfile} onChange={e => setFProfile(e.target.value)}>
+              <option value="all">All profiles</option>
+              {profiles.map(p => <option key={p} value={p}>{p}</option>)}
+            </Select>
+            <input className="gi" style={{ maxWidth: 180, padding: '7px 10px', fontSize: 12.5 }} placeholder="Find a person…" value={statQ} onChange={e => setStatQ(e.target.value)} />
+          </div>
+
+          {/* per-person table */}
+          <div style={{ overflowX: 'auto', border: `1px solid ${C.border}`, borderRadius: 12 }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 660 }}>
+              <thead>
+                <tr style={{ background: C.raised }}>
+                  <th style={{ ...thBase, textAlign: 'left' }} onClick={() => setStatSort('name')}>CSR{caret('name')}</th>
+                  <th style={{ ...thBase, textAlign: 'left', cursor: 'default' }}>Shift</th>
+                  {STAT_COLS.map(c => <th key={c.key} title={c.hint} style={{ ...thBase, textAlign: 'right' }} onClick={() => setStatSort(c.key)}>{c.label}{caret(c.key)}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {shownRows.length === 0
+                  ? <tr><td colSpan={8} style={{ padding: 16, color: C.dim, fontSize: 12.5, textAlign: 'center' }}>No people match this filter.</td></tr>
+                  : shownRows.map(p => { const isTop = p.cleared > 0 && p.cleared === topClearN; return (
+                    <tr key={p.name} style={{ borderTop: `1px solid ${C.line}` }}>
+                      <td style={tdL}>
+                        <span style={{ fontWeight: 700, color: C.ink }}>{isTop ? '★ ' : ''}{p.name}</span>
+                        {!p.inRoster && <span title="Has history but is no longer an active CSR in the roster" style={{ marginLeft: 6, fontSize: 9, fontWeight: 800, color: C.dim, textTransform: 'uppercase', letterSpacing: '.05em' }}>ex-roster</span>}
+                      </td>
+                      <td style={tdL}>{p.shift ? <Pill color={SHIFT_COLOR[p.shift] || C.dim}>{p.shift}</Pill> : <span style={{ color: C.dim }}>—</span>}</td>
+                      <td style={tdR}><span className="mono" style={{ color: p.raised ? C.ink : C.dim }}>{p.raised}</span></td>
+                      <td style={tdR}><span className="mono" style={{ fontWeight: 800, color: p.cleared ? C.mint : C.dim }}>{p.cleared}</span></td>
+                      <td style={tdR}><span className="mono" style={{ color: p.openTheirs ? C.ink : C.dim }}>{p.openTheirs}</span></td>
+                      <td style={tdR}><span className="mono" style={{ fontWeight: p.overdueTheirs ? 800 : 400, color: p.overdueTheirs ? C.coral : C.dim }}>{p.overdueTheirs}</span></td>
+                      <td style={tdR}><span className="mono" style={{ color: p.alerts ? C.coral : C.dim }}>{p.alerts}</span></td>
+                      <td style={tdR}><span className="mono" style={{ color: C.muted }}>{fmtDur(p.avg)}</span></td>
+                    </tr>); })}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ fontSize: 10.5, color: C.dim, marginTop: 10, lineHeight: 1.55 }}>
+            <b style={{ color: C.muted }}>Raised</b> = reminders their activity created · <b style={{ color: C.muted }}>Cleared</b> = reminders they resolved (auto-cleared excluded) · <b style={{ color: C.muted }}>Open / Overdue</b> = their raised reminders still pending · <b style={{ color: C.muted }}>Alerts</b> = frustrated/disputed they solved · <b style={{ color: C.muted }}>Avg clear</b> = time from due to resolved. Every active CSR is listed, even at zero.
           </div>
         </Card>
       )}
