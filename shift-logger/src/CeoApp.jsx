@@ -11,6 +11,8 @@ const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct
 const ymd = (y, m, d) => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 const parseYmd = s => { const [y, m, d] = (s || '').split('-').map(Number); return { y, m: m - 1, d }; };
 const fmtShort = s => { const p = parseYmd(s); return p.y ? `${MON[p.m]} ${p.d}` : '—'; };
+// A timestamp's calendar day in Pakistan time, as YYYY-MM-DD (comparable as a string).
+const pktDay = iso => { const d = iso ? new Date(iso) : null; return d && !isNaN(d.getTime()) ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Karachi', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d) : ''; };
 const groupColor = k => (GROUPS.find(g => g.key === k) || {}).color || C.violet;
 function ago(iso) {
   if (!iso) return '';
@@ -414,7 +416,10 @@ function RemindersPanel({ reminders, reload }) {
   const [fStatus, setFStatus] = useState('due');
   const [statSort, setStatSort] = useState('cleared');   // Team-activity table sort
   const [statShift, setStatShift] = useState('all');
-  const [statQ, setStatQ] = useState('');
+  const [statCsr, setStatCsr] = useState('all');
+  const [statRange, setStatRange] = useState('all');     // all | today | 7d | 30d | custom
+  const [statFrom, setStatFrom] = useState('');
+  const [statTo, setStatTo] = useState('');
   const now = Date.now();
   const stateOf = r => r.status !== 'pending' ? 'resolved'
     : new Date(r.due_at).getTime() > now ? 'scheduled'
@@ -450,9 +455,16 @@ function RemindersPanel({ reminders, reload }) {
   const nameSet = new Set(rosterCsrs.map(p => p.name));
   scoped.forEach(r => { [r.csr_name, r.resolved_by].forEach(n => { if (n && !IGNORE.has(n)) nameSet.add(n); }); });
   const fmtDur = m => m == null ? '—' : m < 60 ? m + 'm' : m < 1440 ? Math.round(m / 60) + 'h' : Math.round(m / 1440) + 'd';
+  // Date window (Pakistan calendar days). Raised counts by when it was created,
+  // cleared by when it was resolved — so each column answers "in this period".
+  const todayY = todayPKT();
+  const dFrom = statRange === 'all' ? '' : statRange === 'today' ? todayY : statRange === '7d' ? addDays(todayY, -6) : statRange === '30d' ? addDays(todayY, -29) : statFrom;
+  const dTo = statRange === 'all' ? '' : statRange === 'custom' ? statTo : todayY;
+  const inRange = iso => { if (!dFrom && !dTo) return true; const d = pktDay(iso); if (!d) return false; if (dFrom && d < dFrom) return false; if (dTo && d > dTo) return false; return true; };
+  const rangeLabel = statRange === 'all' ? 'all history' : statRange === 'today' ? 'today' : statRange === '7d' ? 'last 7 days' : statRange === '30d' ? 'last 30 days' : (dFrom || dTo) ? `${dFrom || '…'} → ${dTo || '…'}` : 'all history';
   const personRows = [...nameSet].map(name => {
-    const raisedAll = scoped.filter(r => r.csr_name === name);
-    const clearedAll = scoped.filter(r => r.resolved_by === name && isClearedBy(r));
+    const raisedAll = scoped.filter(r => r.csr_name === name && inRange(r.created_at));
+    const clearedAll = scoped.filter(r => r.resolved_by === name && isClearedBy(r) && inRange(r.resolved_at));
     const ct = clearedAll.map(r => new Date(r.resolved_at).getTime() - new Date(r.due_at).getTime()).filter(x => isFinite(x)).map(x => Math.max(0, x));
     return {
       name, shift: shiftByName[name] || '', inRoster: rosterSet.has(name),
@@ -477,8 +489,9 @@ function RemindersPanel({ reminders, reload }) {
     avg:           (a, b) => (a.avg == null ? Infinity : a.avg) - (b.avg == null ? Infinity : b.avg),
   };
   const shownRows = personRows
-    .filter(p => (statShift === 'all' || p.shift === statShift) && (!statQ || p.name.toLowerCase().includes(statQ.toLowerCase())))
+    .filter(p => (statShift === 'all' || p.shift === statShift) && (statCsr === 'all' || p.name === statCsr))
     .sort(STAT_SORT[statSort] || STAT_SORT.cleared);
+  const csrNames = [...nameSet].sort((a, b) => a.localeCompare(b));
   const STAT_COLS = [
     { key: 'raised', label: 'Raised', hint: 'Reminders their logged activity created' },
     { key: 'cleared', label: 'Cleared', hint: 'Reminders they resolved (auto-cleared excluded)' },
@@ -510,7 +523,7 @@ function RemindersPanel({ reminders, reload }) {
         <Card className="p-4" style={{ marginBottom: 24 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
             <div style={{ fontSize: 13, fontWeight: 800, color: C.ink }}>Team activity</div>
-            <div style={{ fontSize: 10.5, color: C.dim }}>{fProfile === 'all' ? 'All profiles' : fProfile} · recent history · tap a column to sort</div>
+            <div style={{ fontSize: 10.5, color: C.dim }}>{fProfile === 'all' ? 'All profiles' : fProfile} · {rangeLabel} · tap a column to sort</div>
           </div>
 
           {/* by shift, at a glance */}
@@ -527,15 +540,28 @@ function RemindersPanel({ reminders, reload }) {
             ))}
           </div>
 
-          {/* filters */}
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '14px 0 10px' }}>
+          {/* filters — shift · date range · profile · CSR */}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '14px 0 8px' }}>
             {[['all', 'All shifts'], ['Morning', 'Morning'], ['Evening', 'Evening'], ['Night', 'Night']].map(([s, l]) => <Chip key={s} active={statShift === s} onClick={() => setStatShift(s)}>{l}</Chip>)}
             <div style={{ flex: 1 }} />
+            <Select value={statCsr} onChange={e => setStatCsr(e.target.value)}>
+              <option value="all">All CSRs</option>
+              {csrNames.map(n => <option key={n} value={n}>{n}</option>)}
+            </Select>
             <Select value={fProfile} onChange={e => setFProfile(e.target.value)}>
               <option value="all">All profiles</option>
               {profiles.map(p => <option key={p} value={p}>{p}</option>)}
             </Select>
-            <input className="gi" style={{ maxWidth: 180, padding: '7px 10px', fontSize: 12.5 }} placeholder="Find a person…" value={statQ} onChange={e => setStatQ(e.target.value)} />
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+            {[['all', 'All time'], ['today', 'Today'], ['7d', 'Last 7 days'], ['30d', 'Last 30 days']].map(([s, l]) => <Chip key={s} active={statRange === s} onClick={() => setStatRange(s)}>{l}</Chip>)}
+            <div style={{ flex: 1 }} />
+            <span style={{ fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: C.dim }}>From</span>
+            <input type="date" className="gi" style={{ width: 'auto', padding: '6px 9px', fontSize: 12.5, borderColor: statRange === 'custom' ? C.violetLine : undefined }}
+              value={statRange === 'custom' ? statFrom : (dFrom || '')} onChange={e => { setStatFrom(e.target.value); setStatRange('custom'); }} />
+            <span style={{ fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.06em', color: C.dim }}>To</span>
+            <input type="date" className="gi" style={{ width: 'auto', padding: '6px 9px', fontSize: 12.5, borderColor: statRange === 'custom' ? C.violetLine : undefined }}
+              value={statRange === 'custom' ? statTo : (dTo || '')} onChange={e => { setStatTo(e.target.value); setStatRange('custom'); }} />
           </div>
 
           {/* per-person table */}
@@ -569,7 +595,7 @@ function RemindersPanel({ reminders, reload }) {
             </table>
           </div>
           <div style={{ fontSize: 10.5, color: C.dim, marginTop: 10, lineHeight: 1.55 }}>
-            <b style={{ color: C.muted }}>Raised</b> = reminders their activity created · <b style={{ color: C.muted }}>Cleared</b> = reminders they resolved (auto-cleared excluded) · <b style={{ color: C.muted }}>Open / Overdue</b> = their raised reminders still pending · <b style={{ color: C.muted }}>Alerts</b> = frustrated/disputed they solved · <b style={{ color: C.muted }}>Avg clear</b> = time from due to resolved. Every active CSR is listed, even at zero.
+            <b style={{ color: C.muted }}>Raised</b> = reminders their activity created · <b style={{ color: C.muted }}>Cleared</b> = reminders they resolved (auto-cleared excluded) · <b style={{ color: C.muted }}>Open / Overdue</b> = their raised reminders still pending · <b style={{ color: C.muted }}>Alerts</b> = frustrated/disputed they solved · <b style={{ color: C.muted }}>Avg clear</b> = time from due to resolved. Every active CSR is listed, even at zero. With a date range, <b style={{ color: C.muted }}>Raised</b> counts by the day it was created and <b style={{ color: C.muted }}>Cleared</b> by the day it was resolved (Pakistan time).
           </div>
         </Card>
       )}
